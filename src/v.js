@@ -138,7 +138,7 @@ import setupVdev from './vdev.js'
   class vhtml {
     /** @type {HTMLElement} */
     app = null
-    root = null
+    scoped = null
     vget = vget
     vproxy = vproxy
     __noproxy = true
@@ -158,11 +158,11 @@ import setupVdev from './vdev.js'
       let init = async () => {
         // vget.SetBaseFile(await vget.FetchFile(window.location.pathname))
         let mainParser = await vget.FetchUI(window.location.pathname, {}, true)
-        this.root = mainParser.env?.root || ''
+        this.scoped = mainParser.env?.scoped || ''
         if (mainParser.env?.vdev && window.self !== window.top) {
           setupVdev()
         }
-        this.parseRef('root', this.app, {}, mainParser.env || {}, mainParser, true)
+        this.parseRef('scoped', this.app, {}, mainParser.env || {}, mainParser, true)
       }
       init()
     }
@@ -305,7 +305,7 @@ import setupVdev from './vdev.js'
         if (!vsrc.endsWith('.html')) {
           vsrc = vsrc + '.html'
         }
-        target = await vget.FetchUI(vsrc, env, dom.hasAttribute('root'))
+        target = await vget.FetchUI(vsrc, env, dom.hasAttribute('scoped'))
       }
       env = Object.assign({}, env, target?.env || {})
       // env = target.env
@@ -519,9 +519,9 @@ import setupVdev from './vdev.js'
           href = href.replaceAll('//', '/')
           dom.setAttribute('href', href.slice(1))
         } else if (href) {
-          let root = env?.root
-          if (root) {
-            href = root + href
+          let scoped = env?.scoped
+          if (scoped) {
+            href = scoped + href
           }
           dom.setAttribute('href', href)
         }

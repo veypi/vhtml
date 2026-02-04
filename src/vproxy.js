@@ -214,8 +214,8 @@ function Wrap(data, root = undefined) {
         return listeners
       }
       const value = Reflect.get(target, key, receiver)
-      if (value === rootArg) {
-        return target[rootObj][key]
+      if (value === scopedArg) {
+        return target[scopedObj][key]
       }
       if (typeof key === 'symbol' && stopChecking) {
         return value
@@ -247,8 +247,8 @@ function Wrap(data, root = undefined) {
     },
     set(target, key, newValue, receiver) {
       const oldValue = Reflect.get(target, key, receiver)
-      if (oldValue === rootArg) {
-        target[rootObj][key] = newValue
+      if (oldValue === scopedArg) {
+        target[scopedObj][key] = newValue
         return true
       }
       if (oldValue === newValue) {
@@ -473,10 +473,10 @@ function resolvePath(relativePath, currentPath) {
 
 async function ParseImport(code, scoped, env, src) {
   scoped = scoped || {}
-  let root = env.root || ''
+  let scoped = env.scoped || ''
   let codeCopy = code
   let match;
-  src = src.startsWith('http') ? src : root + src
+  src = src.startsWith('http') ? src : scoped + src
 
   const awaitImportRegex = /await import\(['"]([^'"]+)['"]\)/gm;
   while ((match = awaitImportRegex.exec(code)) !== null) {
@@ -498,8 +498,8 @@ async function ParseImport(code, scoped, env, src) {
     }
     let url = match[2]
     if (!url.startsWith('http') && !url.startsWith('@')) {
-      if (url.startsWith('/') && root) {
-        url = root + url
+      if (url.startsWith('/') && scoped) {
+        url = scoped + url
       } else {
         url = resolvePath(url, src)
       }

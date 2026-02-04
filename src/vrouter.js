@@ -2,7 +2,7 @@ import vproxy from './vproxy.js'
 import vget from './vget.js'
 
 // 解析URL字符串，提取路径、查询参数和hash
-function parseUrlString(urlString, root) {
+function parseUrlString(urlString, scoped) {
   let url
 
   let path
@@ -13,8 +13,8 @@ function parseUrlString(urlString, root) {
     if (url.origin !== window.location.origin) {
       return null
     }
-    if (url.pathname.startsWith(root)) {
-      path = url.pathname.slice(root.length) // 去掉根路径
+    if (url.pathname.startsWith(scoped)) {
+      path = url.pathname.slice(scoped.length) // 去掉根路径
     }
   } else {
     // 相对路径，基于当前origin构建完整URL
@@ -40,7 +40,7 @@ class VRouter {
   #routes = []
   #history = []
   #current = null
-  #root = ''
+  #scoped = ''
   #listeners = []
   #pageCache = new Map()
   #node = null
@@ -59,7 +59,7 @@ class VRouter {
   get current() { return this.#current }
   get query() { return this.#current?.query || {} }
   get params() { return this.#current?.params || {} }
-  get root() { return this.#root }
+  get scoped() { return this.#scoped }
 
   onChange(fc) {
     this.#listeners.push(fc)
@@ -133,8 +133,8 @@ class VRouter {
     }
 
     this.#history.push(this.#current)
-    if (this.#root && !matchedRoute.fullPath.startsWith('http')) {
-      history.pushState({}, '', this.#root + matchedRoute.fullPath)
+    if (this.#scoped && !matchedRoute.fullPath.startsWith('http')) {
+      history.pushState({}, '', this.#scoped + matchedRoute.fullPath)
     } else {
       history.pushState({}, '', matchedRoute.fullPath)
     }
@@ -199,7 +199,7 @@ class VRouter {
 
     if (typeof to === 'string') {
       // 字符串类型：解析可能包含的URL、query、hash
-      const parsed = parseUrlString(to, this.#root)
+      const parsed = parseUrlString(to, this.#scoped)
       if (!parsed) return null // 外部URL或解析失败
 
       path = parsed.path
@@ -208,7 +208,7 @@ class VRouter {
     } else if (to && typeof to === 'object') {
       if (to.path) {
         // {path} 类型：path可能也包含query和hash
-        const parsed = parseUrlString(to.path, this.#root)
+        const parsed = parseUrlString(to.path, this.#scoped)
         if (!parsed) return null
 
         path = parsed.path
@@ -233,8 +233,8 @@ class VRouter {
     if (path && !path.startsWith('/')) {
       path = '/' + path
     }
-    if (this.#root) {
-      path = path.startsWith(this.#root) ? path.slice(this.#root.length) : path
+    if (this.#scoped) {
+      path = path.startsWith(this.#scoped) ? path.slice(this.#scoped.length) : path
     }
 
     if (!path.startsWith('/')) {
@@ -401,7 +401,7 @@ class VRouter {
   ParseVrouter($vhtml, $node, env) {
     this.#node = $node
     this.#env = env
-    this.#root = env.root || ''
+    this.#scoped = env.scoped || ''
     this.#originContent = Array.from($node.childNodes)
     this.#vhtml = $vhtml
     this.push(window.location.href)

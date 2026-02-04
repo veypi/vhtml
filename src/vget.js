@@ -24,12 +24,12 @@ var pendingRequests = {};
 let baseFile = ''
 
 const envMap = {}
-async function getEnv(root, temp) {
-  root = root || ''
-  if (!envMap[root]) {
-    let baseURL = root.startsWith('http') ? root : window.location.origin + root
-    envMap[root] = Object.assign({}, temp, {
-      root: root,
+async function getEnv(scoped, temp) {
+  scoped = scoped || ''
+  if (!envMap[scoped]) {
+    let baseURL = scoped.startsWith('http') ? scoped : window.location.origin + scoped
+    envMap[scoped] = Object.assign({}, temp, {
+      scoped: scoped,
       $G: vproxy.Wrap({}),
       $bus: new EventBus(),
       $axios: axios.create({
@@ -39,37 +39,37 @@ async function getEnv(root, temp) {
       $router: null,
       $emit: null,
     })
-    if (root === $vhtml.root || $vhtml.root === null) {
-      envMap[root].$router = $vhtml.$router
+    if (scoped === $vhtml.scoped || $vhtml.scoped === null) {
+      envMap[scoped].$router = $vhtml.$router
     } else {
       // 对于第三方组件，不配置路由
-      envMap[root].$router = { addRoutes: () => { }, beforeEnter: () => { } }
+      envMap[scoped].$router = { addRoutes: () => { }, beforeEnter: () => { } }
     }
     try {
-      await (await import(baseURL + '/env.js')).default(envMap[root])
+      await (await import(baseURL + '/env.js')).default(envMap[scoped])
     } catch (e) {
       console.warn('error loading ' + baseURL + '/env.js: ' + e)
     }
   }
-  return envMap[root]
+  return envMap[scoped]
 }
 
 /**
 * @param {string} url
 * @return {Promise<{heads:HTMLCollection, body: HTMLElement, setup?:Element, scripts:Element[]}, scripts:Element>}
 */
-async function FetchUI(url, env, ignoreroot) {
+async function FetchUI(url, env, ignorescoped) {
   if (!url || url === '/') {
-    url = '/root.html'
+    url = '/scoped.html'
   }
   if (!url.startsWith('http') && !url.startsWith('@')) {
     if (!url.startsWith('/')) {
       url = '/' + url
     }
   }
-  let root = env?.root
-  if (root && url.startsWith('/')) {
-    url = root + url
+  let scoped = env?.scoped
+  if (scoped && url.startsWith('/')) {
+    url = scoped + url
   }
   if (url.startsWith('@')) {
     url = url.slice(1)
@@ -91,12 +91,12 @@ async function FetchUI(url, env, ignoreroot) {
           tempenv[key.slice(5)] = value
         }
       }
-      let root = tempenv.root || ''
+      let scoped = tempenv.scoped || ''
       if (url.startsWith('http')) {
-        root = new URL(url).origin + root
-        tempenv.root = root
+        scoped = new URL(url).origin + scoped
+        tempenv.scoped = scoped
       }
-      let packEnv = await getEnv(root, tempenv)
+      let packEnv = await getEnv(scoped, tempenv)
       Object.assign(tempenv, packEnv)
       // Object.seal(tempenv)
       return response.text()
@@ -108,7 +108,7 @@ async function FetchUI(url, env, ignoreroot) {
       if (baseFile == '') {
         baseFile = txt
       }
-      return ParseUI(txt, tempenv, url, ignoreroot)
+      return ParseUI(txt, tempenv, url, ignorescoped)
     }).then((parser) => {
       cacheUrl[url] = parser
       return parser
@@ -180,7 +180,7 @@ function sync_ref_owner_id(dom, id) {
   })
 }
 
-async function ParseUI(txt, env, turl, ignoreroot) {
+async function ParseUI(txt, env, turl, ignorescoped) {
   if (turl === undefined) {
     turl = '#' + generateCompactUniqueString()
   }
@@ -188,7 +188,7 @@ async function ParseUI(txt, env, turl, ignoreroot) {
     turl = turl.slice(0, -5)
   }
   let tmp = new DOMParser().parseFromString(txt, 'text/html')
-  if (tmp.body.hasAttribute('root') && !ignoreroot) {
+  if (tmp.body.hasAttribute('scoped') && !ignorescoped) {
     throw new Error(`HTTP error! status: 404`);
   }
   let target = {
@@ -246,7 +246,7 @@ async function ParseUI(txt, env, turl, ignoreroot) {
   })
   target.body.setAttribute('vref', turl)
   sync_ref_owner_id(target.body, turl)
-  if (!ignoreroot) {
+  if (!ignorescoped) {
     await loadHeaders(target, env)
   }
   return target
@@ -271,9 +271,9 @@ async function loadHeaders(target, env) {
 function LoadScript(dom, env) {
   let src = dom.getAttribute('src')
   let key = dom.getAttribute('key')
-  let root = env?.root
-  if (root && src.startsWith('/')) {
-    src = root + src
+  let scoped = env?.scoped
+  if (scoped && src.startsWith('/')) {
+    src = scoped + src
   }
   if (src.startsWith('@')) {
     src = src.slice(1)
@@ -300,9 +300,9 @@ function LoadScript(dom, env) {
 async function LoadLink(dom, env) {
   let src = dom.getAttribute('href')
   let key = dom.getAttribute('key')
-  let root = env?.root
-  if (root && src.startsWith('/')) {
-    src = root + src
+  let scoped = env?.scoped
+  if (scoped && src.startsWith('/')) {
+    src = scoped + src
   }
   if (src.startsWith('@')) {
     src = src.slice(1)
