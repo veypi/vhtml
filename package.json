@@ -1,0 +1,41 @@
+{
+  "name": "@veypi/vhtml",
+  "version": "0.6",
+  "description": "vhtml is a lightweight JavaScript library for parsing and manipulating HTML content with ease.",
+  "type": "module",
+  "module": "./dist/vhtml.js",
+  "exports": {
+    ".": {
+      "import": "./dist/vhtml.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "vite build",
+    "build:watch": "vite build --watch",
+    "dev": "vite build --watch --mode development",
+    "preview": "vite preview",
+    "prepublishOnly": "npm run build",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "javascript",
+    "library"
+  ],
+  "author": "veypi",
+  "license": "MIT",
+  "devDependencies": {
+    "vite": "^5.3.0",
+    "terser": "^5.19.0",
+    "@types/node": "^20.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/veypi/vhtml.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
