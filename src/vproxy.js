@@ -214,8 +214,8 @@ function Wrap(data, root = undefined) {
         return listeners
       }
       const value = Reflect.get(target, key, receiver)
-      if (value === scopedArg) {
-        return target[scopedObj][key]
+      if (value === rootArg) {
+        return target[rootObj][key]
       }
       if (typeof key === 'symbol' && stopChecking) {
         return value
@@ -247,8 +247,8 @@ function Wrap(data, root = undefined) {
     },
     set(target, key, newValue, receiver) {
       const oldValue = Reflect.get(target, key, receiver)
-      if (oldValue === scopedArg) {
-        target[scopedObj][key] = newValue
+      if (oldValue === rootArg) {
+        target[rootObj][key] = newValue
         return true
       }
       if (oldValue === newValue) {
@@ -471,8 +471,8 @@ function resolvePath(relativePath, currentPath) {
 }
 
 
-async function ParseImport(code, scoped, env, src) {
-  scoped = scoped || {}
+async function ParseImport(code, data, env, src) {
+  data = data || {}
   let scoped = env.scoped || ''
   let codeCopy = code
   let match;
@@ -527,16 +527,16 @@ async function ParseImport(code, scoped, env, src) {
       const module = await import(url)
       if (typeof packs === 'string') {
         if (module.default) {
-          scoped[packs] = module.default
+          data[packs] = module.default
         } else {
-          scoped[packs] = module
+          data[packs] = module
         }
       } else {
         packs.forEach((p) => {
           if (p in module) {
-            scoped[p] = module[p]
+            data[p] = module[p]
           } else if (p in module.default) {
-            scoped[p] = module.default[p]
+            data[p] = module.default[p]
           }
         })
       }
