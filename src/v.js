@@ -162,7 +162,7 @@ import setupVdev from './vdev.js'
         if (mainParser.env?.vdev && window.self !== window.top) {
           setupVdev()
         }
-        this.parseRef('scoped', this.app, {}, mainParser.env || {}, mainParser, true)
+        this.parseRef('root', this.app, {}, mainParser.env || {}, mainParser, true)
       }
       init()
     }
@@ -506,17 +506,28 @@ import setupVdev from './vdev.js'
       if (!dom.hasAttribute("href") && !dom.hasAttribute(":href")) {
         return
       }
-      vproxy.Watch(() => {
-        let href = dom.getAttribute("href")
-        if (dom.hasAttribute(":href")) {
-          let code = dom.getAttribute(":href")
-          dom.removeAttribute(":href")
-          href = vproxy.Run(code, data, env)
-        }
+      if (dom.hasAttribute(":href")) {
+        let code = dom.getAttribute(":href")
+        dom.removeAttribute(":href")
+        vproxy.Watch(() => {
+          let href = vproxy.Run(code, data, env)
+          if (!href || href.startsWith('#') || href.startsWith('http')) {
+            return
+          } else if (href.startsWith('@')) {
+            dom.setAttribute('href', href.slice(1))
+          } else if (href) {
+            let scoped = env?.scoped
+            if (scoped) {
+              href = scoped + href
+            }
+            dom.setAttribute('href', href)
+          }
+        })
+      } else {
+        let href = dom.getAttribute('href')
         if (!href || href.startsWith('#') || href.startsWith('http')) {
           return
         } else if (href.startsWith('@')) {
-          href = href.replaceAll('//', '/')
           dom.setAttribute('href', href.slice(1))
         } else if (href) {
           let scoped = env?.scoped
@@ -525,7 +536,7 @@ import setupVdev from './vdev.js'
           }
           dom.setAttribute('href', href)
         }
-      })
+      }
       const fc = (to) => {
         let url = to?.fullPath
         if (dom.getAttribute('href') === url) {

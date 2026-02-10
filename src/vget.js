@@ -60,7 +60,7 @@ async function getEnv(scoped, temp) {
 */
 async function FetchUI(url, env, ignorescoped) {
   if (!url || url === '/') {
-    url = '/scoped.html'
+    url = '/'
   }
   if (!url.startsWith('http') && !url.startsWith('@')) {
     if (!url.startsWith('/')) {
@@ -88,7 +88,7 @@ async function FetchUI(url, env, ignorescoped) {
       }
       for (const [key, value] of response.headers.entries()) {
         if (key.startsWith('vhtml-')) {
-          tempenv[key.slice(5)] = value
+          tempenv[key.slice(6)] = value
         }
       }
       let scoped = tempenv.scoped || ''
