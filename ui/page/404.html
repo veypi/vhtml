@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="404 页面未找到"
+      details="vhtml 官方网站的 404 错误页面"
+    />
+    <title>404 - 页面未找到</title>
+  </head>
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg-color);
+    }
+    .error-container {
+      text-align: center;
+      padding: var(--spacing-xl);
+    }
+    .error-code {
+      font-size: 120px;
+      font-weight: var(--font-weight-bold);
+      color: var(--color-primary);
+      line-height: 1;
+      margin-bottom: var(--spacing-md);
+      background: linear-gradient(135deg, var(--color-primary) 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .error-title {
+      font-size: var(--font-size-2xl);
+      color: var(--text-color);
+      margin-bottom: var(--spacing-sm);
+    }
+    .error-message {
+      font-size: var(--font-size-lg);
+      color: var(--text-color-tertiary);
+      margin-bottom: var(--spacing-xl);
+    }
+    .error-actions {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: center;
+    }
+    .btn {
+      padding: 12px 24px;
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-md);
+      font-weight: var(--font-weight-medium);
+      text-decoration: none;
+      transition: all var(--transition-fast);
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--color-primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--color-primary-hover);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-color-secondary);
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-color);
+      border-color: var(--border-color-hover);
+    }
+  </style>
+  <body>
+    <div class="error-container">
+      <div class="error-code">404</div>
+      <h1 class="error-title">页面未找到</h1>
+      <p class="error-message">抱歉，您访问的页面不存在或已被移除</p>
+      <div class="error-actions">
+        <a href="/" class="btn btn-primary">返回首页</a>
+        <button class="btn btn-secondary" @click="goBack">返回上一页</button>
+      </div>
+    </div>
+  </body>
+  <script setup>
+    goBack = () => {
+      $router.back();
+    };
+  </script>
+  <script>
+    console.log('404 页面');
+  </script>
+</html>

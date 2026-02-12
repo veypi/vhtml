@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="vhtml 示例"
+      details="vhtml 框架功能演示和代码示例，包含数据绑定、条件渲染、列表渲染等"
+    />
+    <title>示例 - vhtml</title>
+  </head>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 var(--spacing-xl);
+    }
+    /* 页面标题 */
+    .page-header {
+      text-align: center;
+      padding: var(--spacing-2xl) 0 var(--spacing-xl);
+    }
+    .page-header h1 {
+      font-size: var(--font-size-2xl);
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-color);
+    }
+    .page-header p {
+      color: var(--text-color-tertiary);
+      font-size: var(--font-size-lg);
+    }
+    /* 示例卡片 */
+    .examples-grid {
+      display: grid;
+      gap: var(--spacing-xl);
+      padding-bottom: var(--spacing-2xl);
+    }
+    .example-card {
+      background: #fff;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .example-header {
+      padding: var(--spacing-md) var(--spacing-lg);
+      background: var(--bg-color);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .example-header h3 {
+      margin: 0;
+      font-size: var(--font-size-lg);
+      color: var(--text-color);
+    }
+    .example-body {
+      padding: var(--spacing-lg);
+    }
+    .example-preview {
+      background: var(--bg-color);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+    }
+    .example-code {
+      background: #1a1a2e;
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      overflow-x: auto;
+    }
+    .example-code pre {
+      margin: 0;
+      color: #fff;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: var(--font-size-sm);
+      line-height: 1.6;
+    }
+    /* 交互样式 */
+    .counter-box {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+    .counter-value {
+      font-size: 32px;
+      font-weight: var(--font-weight-bold);
+      color: var(--color-primary);
+      min-width: 60px;
+      text-align: center;
+    }
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--color-primary);
+      color: #fff;
+      cursor: pointer;
+      font-size: var(--font-size-md);
+      transition: background var(--transition-fast);
+    }
+    .btn:hover {
+      background: var(--color-primary-hover);
+    }
+    .btn-danger {
+      background: var(--color-danger);
+    }
+    .btn-danger:hover {
+      background: var(--color-danger-hover);
+    }
+    .input-field {
+      padding: 10px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-md);
+      width: 200px;
+    }
+    .todo-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .todo-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-sm);
+      background: #fff;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--spacing-xs);
+    }
+    .todo-item.completed span {
+      text-decoration: line-through;
+      color: var(--text-color-disabled);
+    }
+    .todo-input-group {
+      display: flex;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-md);
+    }
+    .tab-buttons {
+      display: flex;
+      gap: var(--spacing-xs);
+      margin-bottom: var(--spacing-md);
+    }
+    .tab-btn {
+      padding: 8px 16px;
+      border: 1px solid var(--border-color);
+      background: #fff;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: var(--font-size-md);
+      transition: all var(--transition-fast);
+    }
+    .tab-btn.active {
+      background: var(--color-primary);
+      color: #fff;
+      border-color: var(--color-primary);
+    }
+    .tab-content {
+      padding: var(--spacing-lg);
+      background: var(--bg-color);
+      border-radius: var(--radius-lg);
+    }
+  </style>
+  <body>
+    <!-- 页面标题 -->
+    <header class="page-header">
+      <div class="container">
+        <h1>示例</h1>
+        <p>vhtml 功能演示与代码示例</p>
+      </div>
+    </header>
+
+    <!-- 示例列表 -->
+    <div class="container examples-grid">
+      <!-- 计数器示例 -->
+      <div class="example-card">
+        <div class="example-header">
+          <h3>计数器</h3>
+        </div>
+        <div class="example-body">
+          <div class="example-preview">
+            <div class="counter-box">
+              <button class="btn" @click="decrement">-</button>
+              <span class="counter-value">{{ count }}</span>
+              <button class="btn" @click="increment">+</button>
+            </div>
+          </div>
+          <div class="example-code">
+            <pre>&lt;script setup&gt;
+  count = 0;
+  increment = () =&gt; count++;
+  decrement = () =&gt; count--;
+&lt;/script&gt;
+
+&lt;button @click="decrement"&gt;-&lt;/button&gt;
+&lt;span&gt;{{ count }}&lt;/span&gt;
+&lt;button @click="increment"&gt;+&lt;/button&gt;</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 双向绑定示例 -->
+      <div class="example-card">
+        <div class="example-header">
+          <h3>双向数据绑定</h3>
+        </div>
+        <div class="example-body">
+          <div class="example-preview">
+            <input class="input-field" v:value="inputText" placeholder="输入内容...">
+            <p style="margin-top: 12px; color: var(--text-color-tertiary);">你输入了：<strong>{{ inputText }}</strong></p>
+          </div>
+          <div class="example-code">
+            <pre>&lt;script setup&gt;
+  inputText = '';
+&lt;/script&gt;
+
+&lt;input v:value="inputText" placeholder="输入内容..."&gt;
+&lt;p&gt;你输入了：{{ inputText }}&lt;/p&gt;</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 条件渲染示例 -->
+      <div class="example-card">
+        <div class="example-header">
+          <h3>条件渲染</h3>
+        </div>
+        <div class="example-body">
+          <div class="example-preview">
+            <button class="btn" @click="toggleShow">{{ isVisible ? '隐藏' : '显示' }}内容</button>
+            <div v-if="isVisible" style="margin-top: 16px; padding: 16px; background: #e0e7ff; border-radius: 8px;">
+              🎉 这是条件渲染的内容！
+            </div>
+          </div>
+          <div class="example-code">
+            <pre>&lt;script setup&gt;
+  isVisible = true;
+  toggleShow = () =&gt; {
+    isVisible = !isVisible;
+  };
+&lt;/script&gt;
+
+&lt;button @click="toggleShow"&gt;{{ isVisible ? '隐藏' : '显示' }}&lt;/button&gt;
+&lt;div v-if="isVisible"&gt;🎉 这是条件渲染的内容！&lt;/div&gt;</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- 列表渲染示例 -->
+      <div class="example-card">
+        <div class="example-header">
+          <h3>列表渲染</h3>
+        </div>
+        <div class="example-body">
+          <div class="example-preview">
+            <div class="todo-input-group">
+              <input class="input-field" v:value="newTodo" placeholder="添加待办事项...">
+              <button class="btn" @click="addTodo">添加</button>
+            </div>
+            <ul class="todo-list">
+              <li v-for="(todo, index) in todos" class="todo-item" :class="{completed: todo.done}">
+                <input type="checkbox" :checked="todo.done" @change="toggleTodo(index)">
+                <span>{{ todo.text }}</span>
+                <button class="btn btn-danger" @click="removeTodo(index)" style="margin-left: auto; padding: 6px 12px;">删除</button>
+              </li>
+            </ul>
+          </div>
+          <div class="example-code">
+            <pre>&lt;script setup&gt;
+  newTodo = '';
+  todos = [
+    { text: '学习 vhtml', done: true },
+    { text: '创建项目', done: false }
+  ];
+
+  addTodo = () =&gt; {
+    if (newTodo.trim()) {
+      todos.push({ text: newTodo, done: false });
+      newTodo = '';
+    }
+  };
+
+  toggleTodo = (index) =&gt; {
+    todos[index].done = !todos[index].done;
+  };
+
+  removeTodo = (index) =&gt; {
+    todos.splice(index, 1);
+  };
+&lt;/script&gt;
+
+&lt;li v-for="(todo, index) in todos"
+    :class="{completed: todo.done}"&gt;
+  &lt;input type="checkbox"
+         :checked="todo.done"
+         @change="toggleTodo(index)"&gt;
+  &lt;span&gt;{{ todo.text }}&lt;/span&gt;
+&lt;/li&gt;</pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 切换示例 -->
+      <div class="example-card">
+        <div class="example-header">
+          <h3>Tab 切换</h3>
+        </div>
+        <div class="example-body">
+          <div class="example-preview">
+            <div class="tab-buttons">
+              <button class="tab-btn" :class="{active: activeTab === 'home'}" @click="switchTab('home')">首页</button>
+              <button class="tab-btn" :class="{active: activeTab === 'profile'}" @click="switchTab('profile')">个人</button>
+              <button class="tab-btn" :class="{active: activeTab === 'settings'}" @click="switchTab('settings')">设置</button>
+            </div>
+            <div class="tab-content">
+              <div v-if="activeTab === 'home'">
+                🏠 这是首页内容
+              </div>
+              <div v-if="activeTab === 'profile'">
+                👤 这是个人资料内容
+              </div>
+              <div v-if="activeTab === 'settings'">
+                ⚙️ 这是设置内容
+              </div>
+            </div>
+          </div>
+          <div class="example-code">
+            <pre>&lt;script setup&gt;
+  activeTab = 'home';
+  switchTab = (tab) =&gt; {
+    activeTab = tab;
+  };
+&lt;/script&gt;
+
+&lt;button :class="{active: activeTab === 'home'}"
+        @click="switchTab('home')"&gt;首页&lt;/button&gt;
+&lt;div v-if="activeTab === 'home'"&gt;🏠 首页内容&lt;/div&gt;</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+  <script setup>
+    // 计数器
+    count = 0;
+    increment = () => count++;
+    decrement = () => count--;
+
+    // 双向绑定
+    inputText = '';
+
+    // 条件渲染
+    isVisible = true;
+    toggleShow = () => {
+      isVisible = !isVisible;
+    };
+
+    // 列表渲染
+    newTodo = '';
+    todos = [
+      { text: '学习 vhtml', done: true },
+      { text: '创建项目', done: false },
+      { text: '发布应用', done: false }
+    ];
+
+    addTodo = () => {
+      if (newTodo.trim()) {
+        todos.push({ text: newTodo, done: false });
+        newTodo = '';
+      }
+    };
+
+    toggleTodo = (index) => {
+      todos[index].done = !todos[index].done;
+    };
+
+    removeTodo = (index) => {
+      todos.splice(index, 1);
+    };
+
+    // Tab 切换
+    activeTab = 'home';
+    switchTab = (tab) => {
+      activeTab = tab;
+    };
+  </script>
+  <script>
+    console.log('示例页面已加载');
+  </script>
+</html>

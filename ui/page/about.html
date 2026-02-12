@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="vhtml 关于"
+      details="vhtml 框架版本信息、开发者介绍、开源协议"
+    />
+    <title>关于 - vhtml</title>
+  </head>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 var(--spacing-xl);
+    }
+    /* 页面标题 */
+    .page-header {
+      text-align: center;
+      padding: var(--spacing-2xl) 0 var(--spacing-xl);
+    }
+    .page-header h1 {
+      font-size: var(--font-size-2xl);
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-color);
+    }
+    .page-header p {
+      color: var(--text-color-tertiary);
+      font-size: var(--font-size-lg);
+    }
+    /* 关于卡片 */
+    .about-section {
+      background: #fff;
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
+      margin-bottom: var(--spacing-xl);
+    }
+    .about-section h2 {
+      font-size: var(--font-size-xl);
+      margin-bottom: var(--spacing-md);
+      color: var(--text-color);
+    }
+    .about-section p {
+      color: var(--text-color-secondary);
+      line-height: 1.8;
+      margin-bottom: var(--spacing-md);
+    }
+    /* 版本信息 */
+    .version-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--spacing-md);
+      margin-top: var(--spacing-md);
+    }
+    .version-item {
+      background: var(--bg-color);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      text-align: center;
+    }
+    .version-label {
+      font-size: var(--font-size-sm);
+      color: var(--text-color-tertiary);
+      margin-bottom: var(--spacing-xs);
+    }
+    .version-value {
+      font-size: 24px;
+      font-weight: var(--font-weight-bold);
+      color: var(--color-primary);
+    }
+    /* 开发者 */
+    .developer-card {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-lg);
+      background: var(--bg-color);
+      border-radius: var(--radius-lg);
+    }
+    .developer-avatar {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+      color: #fff;
+    }
+    .developer-info h3 {
+      margin: 0 0 var(--spacing-xs);
+      font-size: var(--font-size-xl);
+      color: var(--text-color);
+    }
+    .developer-info p {
+      margin: 0;
+      color: var(--text-color-tertiary);
+    }
+    .developer-links {
+      display: flex;
+      gap: var(--spacing-md);
+      margin-top: var(--spacing-sm);
+    }
+    .developer-links a {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-size: var(--font-size-sm);
+    }
+    .developer-links a:hover {
+      text-decoration: underline;
+    }
+    /* 开源协议 */
+    .license-box {
+      background: var(--bg-color);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: var(--font-size-sm);
+      line-height: 1.8;
+      color: var(--text-color-secondary);
+    }
+    /* 链接列表 */
+    .link-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .link-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .link-item:last-child {
+      border-bottom: none;
+    }
+    .link-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--bg-color);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .link-info {
+      flex: 1;
+    }
+    .link-info h4 {
+      margin: 0 0 4px;
+      font-size: var(--font-size-md);
+      color: var(--text-color);
+    }
+    .link-info p {
+      margin: 0;
+      color: var(--text-color-tertiary);
+      font-size: var(--font-size-sm);
+    }
+    .link-arrow {
+      color: var(--text-color-disabled);
+      font-size: 20px;
+    }
+  </style>
+  <body>
+    <!-- 页面标题 -->
+    <header class="page-header">
+      <div class="container">
+        <h1>关于 vhtml</h1>
+        <p>了解框架的版本、开发者和开源信息</p>
+      </div>
+    </header>
+
+    <!-- 内容区 -->
+    <div class="container">
+      <!-- 项目介绍 -->
+      <div class="about-section">
+        <h2>项目介绍</h2>
+        <p>vhtml 是一个由 veypi 开发的轻量级响应式前端框架。项目始于 2024 年，旨在提供一个简单、高效、无需复杂构建工具的前端开发解决方案。</p>
+        <p>vhtml 采用原生 HTML5 语法，开发者无需学习复杂的构建流程和新的模板语法，即可快速构建现代化的 Web 应用。</p>
+      </div>
+
+      <!-- 版本信息 -->
+      <div class="about-section">
+        <h2>版本信息</h2>
+        <div class="version-grid">
+          <div class="version-item">
+            <div class="version-label">当前版本</div>
+            <div class="version-value">v0.6.0</div>
+          </div>
+          <div class="version-item">
+            <div class="version-label">压缩体积</div>
+            <div class="version-value">96KB</div>
+          </div>
+          <div class="version-item">
+            <div class="version-label">首次发布</div>
+            <div class="version-value">2024</div>
+          </div>
+          <div class="version-item">
+            <div class="version-label">开源协议</div>
+            <div class="version-value">MIT</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 开发者 -->
+      <div class="about-section">
+        <h2>开发者</h2>
+        <div class="developer-card">
+          <div class="developer-avatar">👨‍💻</div>
+          <div class="developer-info">
+            <h3>veypi</h3>
+            <p>vhtml 框架作者，热爱开源，专注于前端工具链开发</p>
+            <div class="developer-links">
+              <a href="https://github.com/veypi" target="_blank">GitHub</a>
+              <a href="mailto:veypi@qq.com">邮箱</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 相关链接 -->
+      <div class="about-section">
+        <h2>相关链接</h2>
+        <ul class="link-list">
+          <li class="link-item">
+            <div class="link-icon">📦</div>
+            <div class="link-info">
+              <h4>NPM 包</h4>
+              <p>@veypi/vhtml</p>
+            </div>
+            <a href="https://www.npmjs.com/package/@veypi/vhtml" target="_blank" class="link-arrow">→</a>
+          </li>
+          <li class="link-item">
+            <div class="link-icon">🐙</div>
+            <div class="link-info">
+              <h4>GitHub 仓库</h4>
+              <p>github.com/veypi/vhtml</p>
+            </div>
+            <a href="https://github.com/veypi/vhtml" target="_blank" class="link-arrow">→</a>
+          </li>
+          <li class="link-item">
+            <div class="link-icon">📖</div>
+            <div class="link-info">
+              <h4>更新日志</h4>
+              <p>查看版本更新历史</p>
+            </div>
+            <a href="https://github.com/veypi/vhtml/releases" target="_blank" class="link-arrow">→</a>
+          </li>
+          <li class="link-item">
+            <div class="link-icon">🐛</div>
+            <div class="link-info">
+              <h4>问题反馈</h4>
+              <p>提交 Bug 或功能建议</p>
+            </div>
+            <a href="https://github.com/veypi/vhtml/issues" target="_blank" class="link-arrow">→</a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- 开源协议 -->
+      <div class="about-section">
+        <h2>开源协议</h2>
+        <p>vhtml 采用 MIT 协议开源，你可以自由使用、修改和分发。</p>
+        <div class="license-box">
+MIT License<br><br>
+
+Copyright (c) 2024-2025 veypi<br><br>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:<br><br>
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+        </div>
+      </div>
+    </div>
+  </body>
+  <script setup>
+    // 关于页面数据
+    console.log('关于页面已加载');
+  </script>
+  <script>
+    console.log('vhtml 关于页面');
+  </script>
+</html>

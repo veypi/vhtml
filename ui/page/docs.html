@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="vhtml 文档"
+      details="vhtml 框架使用文档，包含快速开始指南、API参考和最佳实践"
+    />
+    <title>文档 - vhtml</title>
+  </head>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 var(--spacing-xl);
+    }
+    /* 主体布局 */
+    .main-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: var(--spacing-xl);
+      padding: var(--spacing-xl) 0;
+    }
+    /* 侧边栏 */
+    .sidebar {
+      background: #fff;
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-lg);
+      height: fit-content;
+      position: sticky;
+      top: var(--spacing-md);
+      box-shadow: var(--shadow-sm);
+    }
+    .sidebar-section {
+      margin-bottom: var(--spacing-lg);
+    }
+    .sidebar-title {
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-bold);
+      color: var(--text-color-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: var(--spacing-sm);
+    }
+    .sidebar-link {
+      display: block;
+      padding: var(--spacing-sm) var(--spacing-md);
+      color: var(--text-color-secondary);
+      text-decoration: none;
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-md);
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .sidebar-link:hover,
+    .sidebar-link.active {
+      background: var(--bg-color);
+      color: var(--color-primary);
+    }
+    /* 内容区 */
+    .content {
+      background: #fff;
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
+      box-shadow: var(--shadow-sm);
+    }
+    .content h1 {
+      font-size: var(--font-size-2xl);
+      margin-bottom: var(--spacing-lg);
+      color: var(--text-color);
+    }
+    .content h2 {
+      font-size: var(--font-size-xl);
+      margin-top: var(--spacing-xl);
+      margin-bottom: var(--spacing-md);
+      color: var(--text-color);
+      padding-bottom: var(--spacing-sm);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .content h3 {
+      font-size: var(--font-size-lg);
+      margin-top: var(--spacing-lg);
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-color-secondary);
+    }
+    .content p {
+      margin-bottom: var(--spacing-md);
+      color: var(--text-color-secondary);
+    }
+    .content code {
+      background: var(--bg-color);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: var(--font-size-sm);
+      color: var(--color-danger);
+    }
+    .content pre {
+      background: #1a1a2e;
+      color: #fff;
+      padding: var(--spacing-lg);
+      border-radius: var(--radius-lg);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: var(--font-size-md);
+      line-height: 1.6;
+    }
+    .content pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+    .content ul {
+      margin-bottom: var(--spacing-md);
+      padding-left: var(--spacing-xl);
+    }
+    .content li {
+      margin-bottom: var(--spacing-xs);
+      color: var(--text-color-secondary);
+    }
+    .content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: var(--spacing-md) 0;
+    }
+    .content th,
+    .content td {
+      padding: var(--spacing-sm);
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .content th {
+      background: var(--bg-color);
+      font-weight: var(--font-weight-bold);
+      color: var(--text-color);
+    }
+  </style>
+  <body>
+    <!-- 主体内容 -->
+    <div class="container main-layout">
+      <!-- 侧边栏 -->
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-title">指南</div>
+          <a class="sidebar-link" :class="{active: currentSection === 'intro'}" @click="switchSection('intro')">介绍</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'quickstart'}" @click="switchSection('quickstart')">快速开始</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'structure'}" @click="switchSection('structure')">目录结构</a>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-title">基础</div>
+          <a class="sidebar-link" :class="{active: currentSection === 'template'}" @click="switchSection('template')">模板语法</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'data'}" @click="switchSection('data')">响应式数据</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'events'}" @click="switchSection('events')">事件处理</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'components'}" @click="switchSection('components')">组件</a>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-title">进阶</div>
+          <a class="sidebar-link" :class="{active: currentSection === 'router'}" @click="switchSection('router')">路由</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'api'}" @click="switchSection('api')">API 调用</a>
+          <a class="sidebar-link" :class="{active: currentSection === 'slots'}" @click="switchSection('slots')">插槽</a>
+        </div>
+      </aside>
+
+      <!-- 内容区 -->
+      <main class="content">
+        <!-- 介绍 -->
+        <div v-if="currentSection === 'intro'">
+          <h1>介绍</h1>
+          <p>vhtml 是一个轻量级响应式前端框架，采用原生 HTML5 语法，无需复杂的构建工具即可快速开发 Web 应用。</p>
+          <h2>特性</h2>
+          <ul>
+            <li><strong>轻量</strong> - 压缩后仅 96KB，无外部依赖</li>
+            <li><strong>简单</strong> - 基于标准 HTML5，学习成本低</li>
+            <li><strong>响应式</strong> - 自动数据绑定，状态驱动视图</li>
+            <li><strong>组件化</strong> - 支持组件封装和复用</li>
+            <li><strong>路由</strong> - 内置客户端路由系统</li>
+          </ul>
+          <h2>浏览器支持</h2>
+          <p>vhtml 支持所有现代浏览器，包括 Chrome、Firefox、Safari、Edge 等。</p>
+        </div>
+
+        <!-- 快速开始 -->
+        <div v-if="currentSection === 'quickstart'">
+          <h1>快速开始</h1>
+          <h2>安装</h2>
+          <p>通过 npm 安装：</p>
+          <pre><code>npm install @veypi/vhtml</code></pre>
+          <p>或直接通过 CDN 引入：</p>
+          <pre><code>&lt;script src="https://unpkg.com/@veypi/vhtml/dist/vhtml.min.js"&gt;&lt;/script&gt;</code></pre>
+          <h2>创建第一个页面</h2>
+          <p>创建 <code>index.html</code>：</p>
+          <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+  &lt;head&gt;
+    &lt;meta charset="UTF-8" /&gt;
+    &lt;title&gt;我的应用&lt;/title&gt;
+  &lt;/head&gt;
+  &lt;body&gt;
+    &lt;h1&gt;{{ message }}&lt;/h1&gt;
+    &lt;button @click="updateMessage"&gt;点击&lt;/button&gt;
+  &lt;/body&gt;
+  &lt;script setup&gt;
+    message = 'Hello vhtml!';
+    updateMessage = () =&gt; {
+      message = '你好，世界！';
+    };
+  &lt;/script&gt;
+&lt;/html&gt;</code></pre>
+        </div>
+
+        <!-- 目录结构 -->
+        <div v-if="currentSection === 'structure'">
+          <h1>目录结构</h1>
+          <p>推荐的 vhtml 项目目录结构：</p>
+          <pre><code>project/
+├── ui/
+│   ├── root.html          # 应用根页面
+│   ├── app.js             # 应用配置
+│   ├── routes.js          # 路由配置
+│   ├── assets/
+│   │   └── global.css     # 全局样式
+│   ├── layout/
+│   │   └── default.html   # 默认布局
+│   ├── page/
+│   │   ├── index.html     # 首页
+│   │   └── 404.html       # 404页面
+│   └── components/        # 组件目录
+└── ...</code></pre>
+        </div>
+
+        <!-- 模板语法 -->
+        <div v-if="currentSection === 'template'">
+          <h1>模板语法</h1>
+          <h2>文本插值</h2>
+          <pre><code>&lt;p&gt;{{ message }}&lt;/p&gt;</code></pre>
+          <h2>属性绑定</h2>
+          <pre><code>&lt;!-- 动态属性 --&gt;
+&lt;a :href="url"&gt;链接&lt;/a&gt;
+
+&lt;!-- 双向绑定 --&gt;
+&lt;input v:value="inputValue"&gt;</code></pre>
+          <h2>条件渲染</h2>
+          <pre><code>&lt;div v-if="type === 'A'"&gt;A&lt;/div&gt;
+&lt;div v-else-if="type === 'B'"&gt;B&lt;/div&gt;
+&lt;div v-else&gt;其他&lt;/div&gt;</code></pre>
+          <h2>列表渲染</h2>
+          <pre><code>&lt;div v-for="(item, index) in list"&gt;
+  {{ index }}: {{ item.name }}
+&lt;/div&gt;</code></pre>
+        </div>
+
+        <!-- 响应式数据 -->
+        <div v-if="currentSection === 'data'">
+          <h1>响应式数据</h1>
+          <h2>声明数据</h2>
+          <p>在 <code>&lt;script setup&gt;</code> 中使用 <code>=</code> 直接赋值声明响应式数据：</p>
+          <pre><code>&lt;script setup&gt;
+  // 基础类型
+  count = 0;
+  message = 'Hello';
+
+  // 对象和数组
+  user = { name: '张三', age: 25 };
+  items = ['a', 'b', 'c'];
+&lt;/script&gt;</code></pre>
+          <h2>访问数据</h2>
+          <p>在模板中直接使用变量名：</p>
+          <pre><code>&lt;p&gt;{{ message }}&lt;/p&gt;
+&lt;p&gt;{{ user.name }}&lt;/p&gt;</code></pre>
+          <h2>在 script 中访问</h2>
+          <pre><code>&lt;script&gt;
+  // 使用 $data 访问和修改
+  $data.count = 10;
+  $data.message = '新消息';
+&lt;/script&gt;</code></pre>
+        </div>
+
+        <!-- 事件处理 -->
+        <div v-if="currentSection === 'events'">
+          <h1>事件处理</h1>
+          <h2>监听事件</h2>
+          <pre><code>&lt;button @click="handleClick"&gt;点击&lt;/button&gt;
+&lt;input @input="onInput"&gt;</code></pre>
+          <h2>事件处理函数</h2>
+          <pre><code>&lt;script setup&gt;
+  handleClick = () =&gt; {
+    console.log('按钮被点击');
+  };
+
+  onInput = (event) =&gt; {
+    console.log('输入值:', event.target.value);
+  };
+&lt;/script&gt;</code></pre>
+          <h2>触发自定义事件</h2>
+          <pre><code>&lt;script&gt;
+  // 向父组件触发事件
+  $emit('custom_event', data);
+&lt;/script&gt;</code></pre>
+        </div>
+
+        <!-- 组件 -->
+        <div v-if="currentSection === 'components'">
+          <h1>组件</h1>
+          <h2>创建组件</h2>
+          <p>在 <code>/ui/components/</code> 目录下创建 HTML 文件：</p>
+          <pre><code>&lt;!-- /ui/components/my-button.html --&gt;
+&lt;button @click="onClick"&gt;{{ label }}&lt;/button&gt;
+&lt;script setup&gt;
+  label = '按钮';
+  onClick = () =&gt; {
+    $emit('click');
+  };
+&lt;/script&gt;</code></pre>
+          <h2>使用组件</h2>
+          <p>路径 <code>/ui/components/my-button.html</code> 对应标签 <code>&lt;components-my-button&gt;</code>：</p>
+          <pre><code>&lt;components-my-button
+  :label="'提交'"
+  @click="handleSubmit"&gt;
+&lt;/components-my-button&gt;</code></pre>
+        </div>
+
+        <!-- 路由 -->
+        <div v-if="currentSection === 'router'">
+          <h1>路由</h1>
+          <h2>配置路由</h2>
+          <p>在 <code>/ui/routes.js</code> 中配置：</p>
+          <pre><code>const routes = [
+  { path: '/', component: '/page/index.html', name: 'home' },
+  { path: '/about', component: '/page/about.html', name: 'about' },
+  { path: '*', component: '/page/404.html', name: '404' },
+];
+
+export default routes;</code></pre>
+          <h2>导航</h2>
+          <pre><code>&lt;!-- 链接导航 --&gt;
+&lt;a href="/about"&gt;关于&lt;/a&gt;
+
+&lt;!-- 编程导航 --&gt;
+&lt;script&gt;
+  $router.push('/about');
+  $router.back();
+&lt;/script&gt;</code></pre>
+        </div>
+
+        <!-- API 调用 -->
+        <div v-if="currentSection === 'api'">
+          <h1>API 调用</h1>
+          <p>vhtml 内置 <code>$axios</code> 用于 HTTP 请求：</p>
+          <h2>GET 请求</h2>
+          <pre><code>&lt;script&gt;
+  $axios.get('/api/users')
+    .then(data =&gt; {
+      console.log('用户列表:', data);
+    })
+    .catch(error =&gt; {
+      $message.error('获取失败');
+    });
+&lt;/script&gt;</code></pre>
+          <h2>POST 请求</h2>
+          <pre><code>&lt;script&gt;
+  $axios.post('/api/users', { name: '张三', age: 25 })
+    .then(data =&gt; {
+      $message.success('创建成功');
+    });
+&lt;/script&gt;</code></pre>
+        </div>
+
+        <!-- 插槽 -->
+        <div v-if="currentSection === 'slots'">
+          <h1>插槽</h1>
+          <h2>默认插槽</h2>
+          <pre><code>&lt;!-- 组件内 --&gt;
+&lt;vslot&gt;
+  &lt;p&gt;默认内容&lt;/p&gt;
+&lt;/vslot&gt;
+
+&lt;!-- 使用时 --&gt;
+&lt;my-component&gt;
+  &lt;div&gt;自定义内容&lt;/div&gt;
+&lt;/my-component&gt;</code></pre>
+          <h2>命名插槽</h2>
+          <pre><code>&lt;!-- 组件内 --&gt;
+&lt;vslot name="header"&gt;
+  &lt;h1&gt;默认标题&lt;/h1&gt;
+&lt;/vslot&gt;
+
+&lt;!-- 使用时 --&gt;
+&lt;my-component&gt;
+  &lt;div vslot="header"&gt;
+    &lt;h1&gt;自定义标题&lt;/h1&gt;
+  &lt;/div&gt;
+&lt;/my-component&gt;</code></pre>
+        </div>
+      </main>
+    </div>
+  </body>
+  <script setup>
+    currentSection = 'intro';
+
+    switchSection = (section) => {
+      currentSection = section;
+    };
+  </script>
+  <script>
+    console.log('文档页面已加载');
+  </script>
+</html>

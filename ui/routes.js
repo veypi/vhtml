@@ -5,8 +5,23 @@
 * */
 
 const routes = [
-  { path: '/', component: '/page/index.html', name: 'home', layout: '', description: '' },
-  { path: '*', component: '/page/404.html', name: '404', layout: '', description: '404' },
+  // 首页
+  { path: '/', component: '/page/index.html', name: 'home', layout: 'default', description: 'vhtml - 轻量级响应式前端框架' },
+
+  // 文档页面
+  { path: '/docs', component: '/page/docs.html', name: 'docs', layout: 'default', description: '文档 - 使用指南与API参考' },
+
+  // 示例页面
+  { path: '/examples', component: '/page/examples.html', name: 'examples', layout: 'default', description: '示例 - 功能演示与代码案例' },
+
+  // 生态页面
+  { path: '/ecosystem', component: '/page/ecosystem.html', name: 'ecosystem', layout: 'default', description: '生态 - 工具与资源' },
+
+  // 关于页面
+  { path: '/about', component: '/page/about.html', name: 'about', layout: 'default', description: '关于 - 版本与开发者信息' },
+
+  // 404页面
+  { path: '*', component: '/page/404.html', name: '404', layout: 'default', description: '页面未找到' },
 ]
 
 export default routes

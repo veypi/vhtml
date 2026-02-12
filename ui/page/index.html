@@ -1,13 +1,235 @@
 <!DOCTYPE html>
+
 <html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="vhtml 首页"
+      details="vhtml 轻量级响应式前端框架官方首页，展示核心特性和快速开始指南"
+    />
+    <title>vhtml - 轻量级响应式前端框架</title>
+  </head>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--text-color);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 var(--spacing-xl);
+    }
+    /* Hero 区域 */
+    .hero {
+      text-align: center;
+      padding: var(--spacing-2xl) 0 100px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+    }
+    .hero h1 {
+      font-size: 56px;
+      margin: 0 0 var(--spacing-md);
+      font-weight: var(--font-weight-bold);
+    }
+    .hero .subtitle {
+      font-size: 22px;
+      opacity: 0.9;
+      margin-bottom: var(--spacing-xl);
+    }
+    .hero-actions {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: center;
+    }
+    .btn {
+      padding: 14px 32px;
+      border-radius: var(--radius-lg);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-medium);
+      text-decoration: none;
+      transition: all var(--transition-base);
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: #fff;
+      color: #667eea;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #fff;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: #fff;
+    }
+    /* 特性区域 */
+    .features {
+      background: #fff;
+      padding: var(--spacing-2xl) 0;
+    }
+    .features h2 {
+      text-align: center;
+      font-size: 36px;
+      margin-bottom: 60px;
+      color: var(--text-color);
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--spacing-xl);
+    }
+    .feature-card {
+      padding: var(--spacing-xl);
+      border-radius: var(--radius-xl);
+      background: var(--bg-color);
+      transition: transform var(--transition-base), box-shadow var(--transition-base);
+    }
+    .feature-card:hover {
+      transform: translateY(-5px);
+      box-shadow: var(--shadow-lg);
+    }
+    .feature-icon {
+      font-size: 40px;
+      margin-bottom: var(--spacing-md);
+    }
+    .feature-card h3 {
+      font-size: var(--font-size-xl);
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-color);
+    }
+    .feature-card p {
+      color: var(--text-color-secondary);
+      line-height: 1.7;
+    }
+    /* 代码示例区域 */
+    .code-section {
+      background: #1a1a2e;
+      padding: var(--spacing-2xl) 0;
+      color: #fff;
+    }
+    .code-section h2 {
+      text-align: center;
+      font-size: 36px;
+      margin-bottom: var(--spacing-xl);
+    }
+    .code-block {
+      background: #16213e;
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
+      overflow-x: auto;
+      font-family: 'Consolas', 'Monaco', monospace;
+      font-size: var(--font-size-md);
+      line-height: 1.8;
+    }
+    .code-block .comment {
+      color: #6272a4;
+    }
+    .code-block .tag {
+      color: #ff79c6;
+    }
+    .code-block .attr {
+      color: #50fa7b;
+    }
+    .code-block .value {
+      color: #f1fa8c;
+    }
+  </style>
+  <body>
+    <!-- Hero 区域 -->
+    <section class="hero">
+      <div class="container">
+        <h1>vhtml</h1>
+        <p class="subtitle">轻量级响应式前端框架，基于原生 HTML5 语法，无需复杂编译</p>
+        <div class="hero-actions">
+          <a href="/docs" class="btn btn-primary">快速开始</a>
+          <a href="/examples" class="btn btn-secondary">查看示例</a>
+        </div>
+      </div>
+    </section>
 
-<head>
-  <meta charset="utf-8" />
-  <title>Index</title>
-</head>
+    <!-- 特性区域 -->
+    <section class="features">
+      <div class="container">
+        <h2>核心特性</h2>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>轻量快速</h3>
+            <p>压缩后仅 96KB，无依赖，加载迅速，性能优异</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>原生语法</h3>
+            <p>基于标准 HTML5，学习成本低，无需掌握复杂的构建工具</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🔄</div>
+            <h3>响应式绑定</h3>
+            <p>自动数据绑定，状态变化自动更新视图，开发更高效</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🧩</div>
+            <h3>组件化开发</h3>
+            <p>支持组件封装、属性传递、事件通信，代码复用更简单</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🛣️</div>
+            <h3>客户端路由</h3>
+            <p>内置路由系统，支持动态路由、路由守卫，SPA 开发无压力</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📦</div>
+            <h3>开箱即用</h3>
+            <p>集成 Axios、FontAwesome、ECharts，无需额外配置</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-<body>
+    <!-- 代码示例 -->
+    <section class="code-section">
+      <div class="container">
+        <h2>简洁的语法</h2>
+        <div class="code-block">
+<span class="comment">&lt;!-- 数据绑定 --&gt;</span>
+&lt;<span class="tag">p</span>&gt;{{ message }}&lt;/<span class="tag">p</span>&gt;
+&lt;<span class="tag">input</span> <span class="attr">v:value</span>=<span class="value">"message"</span>&gt;
 
-</body>
+<span class="comment">&lt;!-- 条件渲染 --&gt;</span>
+&lt;<span class="tag">div</span> <span class="attr">v-if</span>=<span class="value">"isShow"</span>&gt;显示内容&lt;/<span class="tag">div</span>&gt;
 
+<span class="comment">&lt;!-- 列表渲染 --&gt;</span>
+&lt;<span class="tag">div</span> <span class="attr">v-for</span>=<span class="value">"item in list"</span>&gt;{{ item.name }}&lt;/<span class="tag">div</span>&gt;
+
+<span class="comment">&lt;!-- 事件绑定 --&gt;</span>
+&lt;<span class="tag">button</span> <span class="attr">@click</span>=<span class="value">"handleClick"</span>&gt;点击&lt;/<span class="tag">button</span>&gt;
+        </div>
+      </div>
+    </section>
+  </body>
+  <script setup>
+    message = 'Hello vhtml!';
+    isShow = true;
+    list = [
+      { name: '简洁' },
+      { name: '高效' },
+      { name: '强大' }
+    ];
+
+    handleClick = () => {
+      $message.success('欢迎使用 vhtml！');
+    };
+  </script>
+  <script>
+    console.log('vhtml 首页已加载');
+  </script>
 </html>
