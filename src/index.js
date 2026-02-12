@@ -797,9 +797,12 @@ import setupVdev from './vdev.js'
           start = -1
           nstart = match.index + 2
           vproxy.Watch(() => {
-            txtItems[valIdx - 1] = vproxy.Run(valStr, data, env)
-            if (typeof txtItems[valIdx - 1] === 'object') {
-              txtItems[valIdx - 1] = JSON.stringify(txtItems[valIdx - 1])
+            let valVal = vproxy.Run(valStr, data, env)
+            txtItems[valIdx - 1] = valVal
+            if (typeof valVal === 'function') {
+              txtItems[valIdx - 1] = valVal()
+            } else if (typeof valVal === 'object') {
+              txtItems[valIdx - 1] = JSON.stringify(valVal)
             }
             dom.nodeValue = txtItems.join('')
           })

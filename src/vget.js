@@ -9,6 +9,7 @@ import axios from './axios.min.js'
 import vcss from './vcss.js'
 import vproxy from './vproxy.js';
 import vmessage from './vmessage.js'
+import i18n from './i18n.js'
 
 async function FetchFile(url) {
   return fetch(url).then((response) => {
@@ -24,6 +25,10 @@ var pendingRequests = {};
 let baseFile = ''
 
 const envMap = {}
+const i18nLocale = vproxy.Wrap({ locale: localStorage.getItem('i18n_locale') || 'zh-CN', fallback: 'en-US' })
+vproxy.Watch(() => {
+  localStorage.setItem('i18n_locale', i18nLocale.locale)
+})
 async function getEnv(scoped, temp) {
   scoped = scoped || ''
   if (!envMap[scoped]) {
@@ -35,10 +40,12 @@ async function getEnv(scoped, temp) {
       $axios: axios.create({
         baseURL: baseURL,
       }),
+      $i18n: new i18n(i18nLocale),
       $message: vmessage,
       $router: null,
       $emit: null,
     })
+    envMap[scoped].$t = (a, b = {}) => envMap[scoped].$i18n.t(a, b)
     if (scoped === $vhtml.scoped || $vhtml.scoped === null) {
       envMap[scoped].$router = $vhtml.$router
     } else {

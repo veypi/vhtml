@@ -19,9 +19,10 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 - `/ui/page/index.html` - 项目首页
 - `/ui/page/404.html` - 404 页面
 - 组件引用格式：对于 `/ui/form/user_create.html` → 使用 `<form-user_create></form-user_create>`（将 `/` 替换为 `-`，移除 `.html`，全部小写，**禁止**大写）
-- `/ui/env.js` - 定义全局 `$env` 变量
 - `/ui/root.html` - 非资源类后端请求的根页面
 - `/ui/routes.js` - 路由配置,默认导出一个[]route 列表
+- `/ui/env.js` - 定义全局 `$env` 变量, 引入$i18n.load 加载消息
+- /ui/i18n.js - 定义翻译项消息
 
 ### HTML 文件结构（强制模板）
 
@@ -179,6 +180,9 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 - `$message` - 消息组件：
   - `$message.info|warning|error|success("content")`
   - `$message.confirm(message)|prompt(message, defaultValue).then(e=>{}).catch(e=>{})`
+- $i18n 国际化组件
+  - $i18n.load 加载消息
+  - $t 翻译函数
 
 **仅在 `<script>` 中可用：**
 
@@ -262,6 +266,88 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 
 无需引入。
 
+### i18n 支持
+
+## Messages 结构
+
+```javascript
+{
+  "zh-CN": {
+    // 1. 简单键值
+    "hello": "你好",
+
+    // 2. 嵌套命名空间（用 . 访问）
+    "nav": {
+      "home": "首页",
+      "user": { "profile": "个人资料" }
+    },
+
+    // 3. 变量插值（{var}）
+    "welcome": "欢迎，{name}！等级：{level}",
+
+    // 4. 复数（zero/one/other）
+    "message": {
+      "zero": "没有消息",
+      "one": "1 条消息",
+      "other": "{count} 条消息"
+    }
+  }
+}
+```
+
+## t 函数
+
+```javascript
+$t(key, options?)
+```
+
+| 参数      | 说明               | 示例                 |
+| --------- | ------------------ | -------------------- |
+| `key`     | 键名，支持点号嵌套 | `'nav.user.profile'` |
+| `options` | 可选配置           | 见下表               |
+
+**options 参数：**
+
+| 属性       | 用途                                | 示例                         |
+| ---------- | ----------------------------------- | ---------------------------- |
+| `locale`   | 临时指定语言                        | `{ locale: 'en-US' }`        |
+| `fallback` | 指定回退语言                        | `{ fallback: 'en' }`         |
+| `count`    | 复数数量（自动选择 zero/one/other） | `{ count: 5 }`               |
+| `...vars`  | 变量替换值                          | `{ name: '张三', level: 3 }` |
+
+## 使用示例
+
+```javascript
+$i18n.load({
+  "zh-CN": {
+    "user.welcome": "欢迎 {name}",
+    cart: {
+      zero: "购物车为空",
+      other: "{count} 件商品",
+    },
+  },
+});
+$i18n.setLocale(lang);
+$i18n.getLocale();
+// 基础
+$t("user.welcome", { name: "张三" }); // "欢迎 张三"
+// 嵌套（需对象结构）
+// messages: { nav: { home: '首页' } }
+$t("nav.home"); // "首页"
+// 复数
+$t("cart", { count: 0 }); // "购物车为空"
+$t("cart", { count: 3 }); // "3 件商品"
+// 临时切换语言
+$t("user.welcome", { locale: "en-US", name: "Tom" });
+```
+
+**注意：**
+
+- 嵌套键名通过 `.` 访问（如 `nav.user.name`）
+- 复数对象必须包含 `other`，可选 `zero`/`one`
+- 变量用 `{var}` 包裹，支持任意字符（不含 `}`）
+- 查询当前使用的 key: grep -r --include="\*.html" '$t' . | awk -F "['\"]" '{for(i=1;i<=NF;i++){if($i~/\$t\(/){print $(i+1)}}}' | sort | uniq
+
 ## 代码质量标准
 
 1. **验证**：在提供代码前，请检查：
@@ -277,27 +363,14 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
    - 组件引用中无大写字母
 
 2. **最佳实践**：
-
    - 逻辑清晰地组织代码，并添加清晰的注释
    - 在适当的地方使用语义化 HTML
    - 为 API 调用实现适当的错误处理
    - 使用 `$watch` 处理响应式依赖
    - 遵循 vhtml 特定的命名约定
    - 3 条以上样式规则时优先使用 `<style>` 标签而非行内样式
-
 3. **错误处理**：
    - 适当地捕获和处理 API 错误
    - 通过 `$message` 向用户提供错误反馈
    - 在 API 调用前验证输入
    - 处理循环和条件中的边界情况
-
-## 操作指南
-
-- 您**只能**创建/修改 HTML、JS、CSS 文件
-- 创建组件时，指定 `/ui/` 下的完整路径
-- 始终包含完整的 HTML 文件结构
-- 提供可运行的代码，而非片段
-- 如果需求不明确，在编码前先询问澄清
-- 排查问题时，识别具体的 vhtml 规则违规
-- 确保所有代码都已生产就绪并遵循 vhtml 约定
-- 严格遵守所有 vhtml 框架规则和约定。
