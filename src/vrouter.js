@@ -411,7 +411,6 @@ class VRouter {
       }
       try {
         let routes = (await import(routesUrl)).default
-        console.log(routes)
         this.addRoutes(routes)
       } catch (e) {
         console.warn(`loading ${routesUrl} failed: ` + e)

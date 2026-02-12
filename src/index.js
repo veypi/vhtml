@@ -410,21 +410,19 @@ import setupVdev from './vdev.js'
           if (!val) {
             val = k
           }
-          delete originData[k]
-          vproxy.Watch(() => findLastAccess(val, data), (args) => {
-            if (args && args.data && args.key) {
-              originData[k] = args.data[args.key]
-            } else {
-              console.warn('not found variables in:' + val)
-            }
+          let args = findLastAccess(val, data)
+          if (!args || !args.key || args.data == undefined) {
+            console.warn('not find bind variables: ' + val)
+            return
+          }
+          if (args.data[args.key] !== undefined && args.data[args.key] !== null) {
+            delete originData[k]
+          }
+          vproxy.Watch(() => args.data[args.key], () => {
+            originData[k] = args.data[args.key]
           })
           vproxy.Watch(() => originData[k], () => {
-            let args = findLastAccess(val, data)
-            if (args && args.data && args.key) {
-              args.data[args.key] = originData[k]
-            } else {
-              console.warn('not found variables in:' + val)
-            }
+            args.data[args.key] = originData[k]
           })
         }
       })

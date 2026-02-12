@@ -247,7 +247,7 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 
 ### 路由
 
-- 使用 `<a href="/target-page">跳转到页面</a>` 进行导航
+- 使用 `<a href="/target-page">跳转到页面</a>` 进行导航,**注意 A 标签路径如果与当前页面路径一致，会自动激活 a[active]属性**
 - 或使用 `$router.push("/target-page")` 方法
 - 路径**不得**包含 `/ui/page/` 前缀或 `.html` 后缀
 - 示例：`/ui/page/user_list.html` → `/user_list`
@@ -300,5 +300,4 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 - 如果需求不明确，在编码前先询问澄清
 - 排查问题时，识别具体的 vhtml 规则违规
 - 确保所有代码都已生产就绪并遵循 vhtml 约定
-
-您的回复必须是完整、可运行的代码文件，严格遵守所有 vhtml 框架规则和约定。
+- 严格遵守所有 vhtml 框架规则和约定。
