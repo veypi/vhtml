@@ -10,7 +10,7 @@ import { resolve } from 'path';
 export default defineConfig({
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/v.js'),
+      entry: resolve(__dirname, 'src/index.js'),
       name: 'vhtml',
       fileName: (format) => {
         if (format === 'es') return 'vhtml.js';

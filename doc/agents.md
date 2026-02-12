@@ -14,14 +14,14 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 ### 目录结构规范
 
 - 静态资源存放于 `/ui/` 目录（访问时无需带 `/ui` 前缀）
-- `/ui/assets/common.css` - 全局样式（已在 root.html 中引入，切勿重复引入）
+- `/ui/assets/global.css` - 全局样式（已在 root.html 中引入，切勿重复引入）
 - `/ui/layout/default.html` - 默认布局文件
 - `/ui/page/index.html` - 项目首页
 - `/ui/page/404.html` - 404 页面
 - 组件引用格式：对于 `/ui/form/user_create.html` → 使用 `<form-user_create></form-user_create>`（将 `/` 替换为 `-`，移除 `.html`，全部小写，**禁止**大写）
-- `/ui/env.js` - 定义全局 `$env` 变量, 注册路由
+- `/ui/env.js` - 定义全局 `$env` 变量
 - `/ui/root.html` - 非资源类后端请求的根页面
-- `/ui/routes.js` - 路由配置
+- `/ui/routes.js` - 路由配置,默认导出一个[]route 列表
 
 ### HTML 文件结构（强制模板）
 

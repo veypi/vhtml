@@ -46,9 +46,9 @@ async function getEnv(scoped, temp) {
       envMap[scoped].$router = { addRoutes: () => { }, beforeEnter: () => { } }
     }
     try {
-      await (await import(baseURL + '/app.js')).default(envMap[scoped])
+      await (await import(baseURL + '/env.js')).default(envMap[scoped])
     } catch (e) {
-      console.warn('error loading ' + baseURL + '/app.js: ' + e)
+      console.warn('error loading ' + baseURL + '/env.js: ' + e)
     }
   }
   return envMap[scoped]
@@ -92,6 +92,9 @@ async function FetchUI(url, env, ignorescoped) {
         }
       }
       let scoped = tempenv.scoped || ''
+      if (scoped.endsWith("/")) {
+        scoped = scoped.slice(0, -1)
+      }
       if (url.startsWith('http')) {
         scoped = new URL(url).origin + scoped
         tempenv.scoped = scoped

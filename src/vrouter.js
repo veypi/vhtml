@@ -403,8 +403,22 @@ class VRouter {
     this.#env = env
     this.#scoped = env.scoped || ''
     this.#originContent = Array.from($node.childNodes)
-    this.#vhtml = $vhtml
-    this.push(window.location.href)
+    this.#vhtml = $vhtml;
+    (async () => {
+      let routesUrl = '/routes.js'
+      if (env.scoped) {
+        routesUrl = env.scoped + routesUrl
+      }
+      try {
+        let routes = (await import(routesUrl)).default
+        console.log(routes)
+        this.addRoutes(routes)
+      } catch (e) {
+        console.warn(`loading ${routesUrl} failed: ` + e)
+      } finally {
+        this.push(window.location.href)
+      }
+    })();
   }
 }
 
