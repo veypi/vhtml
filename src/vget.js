@@ -46,9 +46,9 @@ async function getEnv(scoped, temp) {
       envMap[scoped].$router = { addRoutes: () => { }, beforeEnter: () => { } }
     }
     try {
-      await (await import(baseURL + '/env.js')).default(envMap[scoped])
+      await (await import(baseURL + '/app.js')).default(envMap[scoped])
     } catch (e) {
-      console.warn('error loading ' + baseURL + '/env.js: ' + e)
+      console.warn('error loading ' + baseURL + '/app.js: ' + e)
     }
   }
   return envMap[scoped]
