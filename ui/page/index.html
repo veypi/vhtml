@@ -1,235 +1,263 @@
 <!DOCTYPE html>
 
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="vhtml 首页"
-      details="vhtml 轻量级响应式前端框架官方首页，展示核心特性和快速开始指南"
-    />
-    <title>{{ $t('home.title') }}</title>
-  </head>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      color: var(--text-color);
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 var(--spacing-xl);
-    }
-    /* Hero 区域 */
-    .hero {
-      text-align: center;
-      padding: var(--spacing-2xl) 0 100px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: #fff;
-    }
-    .hero h1 {
-      font-size: 56px;
-      margin: 0 0 var(--spacing-md);
-      font-weight: var(--font-weight-bold);
-    }
-    .hero .subtitle {
-      font-size: 22px;
-      opacity: 0.9;
-      margin-bottom: var(--spacing-xl);
-    }
-    .hero-actions {
-      display: flex;
-      gap: var(--spacing-md);
-      justify-content: center;
-    }
-    .btn {
-      padding: 14px 32px;
-      border-radius: var(--radius-lg);
-      font-size: var(--font-size-lg);
-      font-weight: var(--font-weight-medium);
-      text-decoration: none;
-      transition: all var(--transition-base);
-      cursor: pointer;
-      border: none;
-    }
-    .btn-primary {
-      background: #fff;
-      color: #667eea;
-    }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    }
-    .btn-secondary {
-      background: transparent;
-      color: #fff;
-      border: 2px solid rgba(255, 255, 255, 0.5);
-    }
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-      border-color: #fff;
-    }
-    /* 特性区域 */
-    .features {
-      background: #fff;
-      padding: var(--spacing-2xl) 0;
-    }
-    .features h2 {
-      text-align: center;
-      font-size: 36px;
-      margin-bottom: 60px;
-      color: var(--text-color);
-    }
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: var(--spacing-xl);
-    }
-    .feature-card {
-      padding: var(--spacing-xl);
-      border-radius: var(--radius-xl);
-      background: var(--bg-color);
-      transition: transform var(--transition-base), box-shadow var(--transition-base);
-    }
-    .feature-card:hover {
-      transform: translateY(-5px);
-      box-shadow: var(--shadow-lg);
-    }
-    .feature-icon {
-      font-size: 40px;
-      margin-bottom: var(--spacing-md);
-    }
-    .feature-card h3 {
-      font-size: var(--font-size-xl);
-      margin-bottom: var(--spacing-sm);
-      color: var(--text-color);
-    }
-    .feature-card p {
-      color: var(--text-color-secondary);
-      line-height: 1.7;
-    }
-    /* 代码示例区域 */
-    .code-section {
-      background: #1a1a2e;
-      padding: var(--spacing-2xl) 0;
-      color: #fff;
-    }
-    .code-section h2 {
-      text-align: center;
-      font-size: 36px;
-      margin-bottom: var(--spacing-xl);
-    }
-    .code-block {
-      background: #16213e;
-      border-radius: var(--radius-xl);
-      padding: var(--spacing-xl);
-      overflow-x: auto;
-      font-family: 'Consolas', 'Monaco', monospace;
-      font-size: var(--font-size-md);
-      line-height: 1.8;
-    }
-    .code-block .comment {
-      color: #6272a4;
-    }
-    .code-block .tag {
-      color: #ff79c6;
-    }
-    .code-block .attr {
-      color: #50fa7b;
-    }
-    .code-block .value {
-      color: #f1fa8c;
-    }
-  </style>
-  <body>
-    <!-- Hero 区域 -->
-    <section class="hero">
-      <div class="container">
-        <h1>vhtml</h1>
-        <p class="subtitle">{{ $t('home.subtitle') }}</p>
-        <div class="hero-actions">
-          <a href="/docs" class="btn btn-primary">{{ $t('home.quickStart') }}</a>
-          <a href="/examples" class="btn btn-secondary">{{ $t('home.viewExamples') }}</a>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="vhtml 首页" details="vhtml 轻量级响应式前端框架官方首页，展示核心特性和快速开始指南" />
+  <title>{{ $t('home.title') }}</title>
+</head>
+<style>
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--spacing-xl);
+  }
+
+  /* Hero 区域 */
+  .hero {
+    text-align: center;
+    padding: var(--spacing-2xl) 0 100px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+  }
+
+  .hero h1 {
+    font-size: 56px;
+    margin: 0 0 var(--spacing-md);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .hero .subtitle {
+    font-size: 22px;
+    opacity: 0.9;
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: center;
+  }
+
+  .btn {
+    padding: 14px 32px;
+    border-radius: var(--radius-lg);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+    transition: all var(--transition-base);
+    cursor: pointer;
+    border: none;
+  }
+
+  .btn-primary {
+    background: #fff;
+    color: #667eea;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: #fff;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #fff;
+  }
+
+  /* 特性区域 */
+  .features {
+    background: #fff;
+    padding: var(--spacing-2xl) 0;
+  }
+
+  .features h2 {
+    text-align: center;
+    font-size: 36px;
+    margin-bottom: 60px;
+    color: var(--text-color);
+  }
+
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-xl);
+  }
+
+  .feature-card {
+    padding: var(--spacing-xl);
+    border-radius: var(--radius-xl);
+    background: var(--bg-color);
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
+  }
+
+  .feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .feature-icon {
+    font-size: 40px;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .feature-card h3 {
+    font-size: var(--font-size-xl);
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-color);
+  }
+
+  .feature-card p {
+    color: var(--text-color-secondary);
+    line-height: 1.7;
+  }
+
+  /* 代码示例区域 */
+  .code-section {
+    background: #1a1a2e;
+    padding: var(--spacing-2xl) 0;
+    color: #fff;
+  }
+
+  .code-section h2 {
+    text-align: center;
+    font-size: 36px;
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .code-block {
+    background: #16213e;
+    border-radius: var(--radius-xl);
+    padding: var(--spacing-xl);
+    overflow-x: auto;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: var(--font-size-md);
+    line-height: 1.8;
+  }
+
+  .code-block .comment {
+    color: #6272a4;
+  }
+
+  .code-block .tag {
+    color: #ff79c6;
+  }
+
+  .code-block .attr {
+    color: #50fa7b;
+  }
+
+  .code-block .value {
+    color: #f1fa8c;
+  }
+</style>
+
+<body>
+  <!-- Hero 区域 -->
+  <section class="hero">
+    <div class="container">
+      <h1>vhtml</h1>
+      <p class="subtitle">{{ $t('home.subtitle') }}</p>
+      <div class="hero-actions">
+        <a href="/docs" class="btn btn-primary">{{ $t('home.quickStart') }}</a>
+        <a href="/examples" class="btn btn-secondary">{{ $t('home.viewExamples') }}</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 特性区域 -->
+  <section class="features">
+    <div class="container">
+      <h2>{{ $t('home.features') }}</h2>
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>{{ $t('home.featureList.lightweight.title') }}</h3>
+          <p>{{ $t('home.featureList.lightweight.desc') }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎯</div>
+          <h3>{{ $t('home.featureList.native.title') }}</h3>
+          <p>{{ $t('home.featureList.native.desc') }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>{{ $t('home.featureList.reactive.title') }}</h3>
+          <p>{{ $t('home.featureList.reactive.desc') }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🧩</div>
+          <h3>{{ $t('home.featureList.component.title') }}</h3>
+          <p>{{ $t('home.featureList.component.desc') }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🛣️</div>
+          <h3>{{ $t('home.featureList.router.title') }}</h3>
+          <p>{{ $t('home.featureList.router.desc') }}</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3>{{ $t('home.featureList.ready.title') }}</h3>
+          <p>{{ $t('home.featureList.ready.desc') }}</p>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- 特性区域 -->
-    <section class="features">
-      <div class="container">
-        <h2>{{ $t('home.features') }}</h2>
-        <div class="feature-grid">
-          <div class="feature-card">
-            <div class="feature-icon">⚡</div>
-            <h3>{{ $t('home.featureList.lightweight.title') }}</h3>
-            <p>{{ $t('home.featureList.lightweight.desc') }}</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">🎯</div>
-            <h3>{{ $t('home.featureList.native.title') }}</h3>
-            <p>{{ $t('home.featureList.native.desc') }}</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">🔄</div>
-            <h3>{{ $t('home.featureList.reactive.title') }}</h3>
-            <p>{{ $t('home.featureList.reactive.desc') }}</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">🧩</div>
-            <h3>{{ $t('home.featureList.component.title') }}</h3>
-            <p>{{ $t('home.featureList.component.desc') }}</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">🛣️</div>
-            <h3>{{ $t('home.featureList.router.title') }}</h3>
-            <p>{{ $t('home.featureList.router.desc') }}</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon">📦</div>
-            <h3>{{ $t('home.featureList.ready.title') }}</h3>
-            <p>{{ $t('home.featureList.ready.desc') }}</p>
-          </div>
-        </div>
+  <!-- 代码示例 -->
+  <section class="code-section">
+    <div class="container">
+      <h2>{{ $t('home.syntax') }}</h2>
+      <div class="code-block">
+        <span class="comment">&lt;!-- {{ $t('home.codeComments.dataBinding') }} --&gt;</span>
+        &lt;<span class="tag">p</span>&gt;{{ message }}&lt;/<span class="tag">p</span>&gt;
+        &lt;<span class="tag">input</span> <span class="attr">v:value</span>=<span class="value">"message"</span>&gt;
+
+        <span class="comment">&lt;!-- {{ $t('home.codeComments.condition') }} --&gt;</span>
+        &lt;<span class="tag">div</span> <span class="attr">v-if</span>=<span class="value">"isShow"</span>&gt;{{
+        $t('home.codeComments.condition') }}&lt;/<span class="tag">div</span>&gt;
+
+        <span class="comment">&lt;!-- {{ $t('home.codeComments.list') }} --&gt;</span>
+        &lt;<span class="tag">div</span> <span class="attr">v-for</span>=<span class="value">"item in list"</span>&gt;{{
+        item.name }}&lt;/<span class="tag">div</span>&gt;
+
+        <span class="comment">&lt;!-- {{ $t('home.codeComments.event') }} --&gt;</span>
+        &lt;<span class="tag">button</span> <span class="attr">@click</span>=<span
+          class="value">"handleClick"</span>&gt;{{ $t('home.codeComments.event') }}&lt;/<span
+          class="tag">button</span>&gt;
       </div>
-    </section>
+    </div>
+  </section>
+</body>
+<script setup>
+  message = 'Hello vhtml!';
+  isShow = true;
+  list = [
+    {name: '简洁'},
+    {name: '高效'},
+    {name: '强大'}
+  ];
 
-    <!-- 代码示例 -->
-    <section class="code-section">
-      <div class="container">
-        <h2>{{ $t('home.syntax') }}</h2>
-        <div class="code-block">
-<span class="comment">&lt;!-- {{ $t('home.codeComments.dataBinding') }} --&gt;</span>
-&lt;<span class="tag">p</span>&gt;{{ message }}&lt;/<span class="tag">p</span>&gt;
-&lt;<span class="tag">input</span> <span class="attr">v:value</span>=<span class="value">"message"</span>&gt;
+  handleClick = () => {
+    $message.success('欢迎使用 vhtml！');
+  };
+</script>
+<script>
+  console.log('vhtml 首页已加载');
+</script>
 
-<span class="comment">&lt;!-- {{ $t('home.codeComments.condition') }} --&gt;</span>
-&lt;<span class="tag">div</span> <span class="attr">v-if</span>=<span class="value">"isShow"</span>&gt;{{ $t('home.codeComments.condition') }}&lt;/<span class="tag">div</span>&gt;
-
-<span class="comment">&lt;!-- {{ $t('home.codeComments.list') }} --&gt;</span>
-&lt;<span class="tag">div</span> <span class="attr">v-for</span>=<span class="value">"item in list"</span>&gt;{{ item.name }}&lt;/<span class="tag">div</span>&gt;
-
-<span class="comment">&lt;!-- {{ $t('home.codeComments.event') }} --&gt;</span>
-&lt;<span class="tag">button</span> <span class="attr">@click</span>=<span class="value">"handleClick"</span>&gt;{{ $t('home.codeComments.event') }}&lt;/<span class="tag">button</span>&gt;
-        </div>
-      </div>
-    </section>
-  </body>
-  <script setup>
-    message = 'Hello vhtml!';
-    isShow = true;
-    list = [
-      { name: '简洁' },
-      { name: '高效' },
-      { name: '强大' }
-    ];
-
-    handleClick = () => {
-      $message.success('欢迎使用 vhtml！');
-    };
-  </script>
-  <script>
-    console.log('vhtml 首页已加载');
-  </script>
 </html>
