@@ -126,7 +126,7 @@ func SaveTranslations(outputPath string, translations map[string]map[string]inte
 	var err error
 
 	if format.SortKeys {
-		translations = sortTranslationKeys(translations)
+		translations = sortTranslationKeysFlat(translations)
 	}
 
 	if format.TrailingComma {
@@ -148,16 +148,16 @@ func SaveTranslations(outputPath string, translations map[string]map[string]inte
 	return os.WriteFile(outputPath, data, 0o644)
 }
 
-// sortTranslationKeys 对翻译 key 进行排序
-func sortTranslationKeys(translations map[string]map[string]interface{}) map[string]map[string]interface{} {
+// sortTranslationKeysFlat 对扁平化翻译 key 进行排序
+func sortTranslationKeysFlat(translations map[string]map[string]interface{}) map[string]map[string]interface{} {
 	sorted := make(map[string]map[string]interface{})
 	for lang, items := range translations {
-		sorted[lang] = sortKeysRecursive(items)
+		sorted[lang] = sortKeysFlat(items)
 	}
 	return sorted
 }
 
-func sortKeysRecursive(data map[string]interface{}) map[string]interface{} {
+func sortKeysFlat(data map[string]interface{}) map[string]interface{} {
 	sorted := make(map[string]interface{})
 	keys := make([]string, 0, len(data))
 	for k := range data {
@@ -174,12 +174,7 @@ func sortKeysRecursive(data map[string]interface{}) map[string]interface{} {
 	}
 
 	for _, k := range keys {
-		v := data[k]
-		if nested, ok := v.(map[string]interface{}); ok {
-			sorted[k] = sortKeysRecursive(nested)
-		} else {
-			sorted[k] = v
-		}
+		sorted[k] = data[k]
 	}
 	return sorted
 }

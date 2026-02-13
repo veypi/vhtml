@@ -44,8 +44,11 @@ func runStats() error {
 		return err
 	}
 
-	// 获取基准语言的所有 keys
-	baseKeys := getAllKeysFlat(translations[config.DefaultLanguage])
+	// 获取基准语言的所有 keys（扁平化直接遍历）
+	var baseKeys []string
+	for key := range translations[config.DefaultLanguage] {
+		baseKeys = append(baseKeys, key)
+	}
 	totalKeys := len(baseKeys)
 
 	// 统计每种语言
@@ -64,7 +67,7 @@ func runStats() error {
 
 		done := 0
 		for _, key := range baseKeys {
-			if value := getValueByKey(items, key); value != nil {
+			if value, exists := items[key]; exists {
 				if v, ok := value.(string); ok && v != "" {
 					done++
 				}

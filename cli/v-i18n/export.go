@@ -75,8 +75,11 @@ func exportCSV(output string, translations map[string]map[string]interface{}, la
 	headers = append(headers, "context")
 	writer.Write(headers)
 
-	// 获取所有 keys
-	allKeys := getAllKeysFlat(translations[config.DefaultLanguage])
+	// 获取所有 keys（扁平化直接遍历）
+	var allKeys []string
+	for key := range translations[config.DefaultLanguage] {
+		allKeys = append(allKeys, key)
+	}
 
 	for _, key := range allKeys {
 		// 如果只导出缺失项，检查是否所有目标语言都缺失
@@ -87,7 +90,7 @@ func exportCSV(output string, translations map[string]map[string]interface{}, la
 					continue
 				}
 				if items, ok := translations[lang]; ok {
-					if getValueByKey(items, key) != nil {
+					if _, exists := items[key]; exists {
 						allMissing = false
 						break
 					}
@@ -102,7 +105,7 @@ func exportCSV(output string, translations map[string]map[string]interface{}, la
 		for _, lang := range langs {
 			value := ""
 			if items, ok := translations[lang]; ok {
-				if v := getValueByKey(items, key); v != nil {
+				if v, exists := items[key]; exists {
 					if s, ok := v.(string); ok {
 						value = s
 					} else {
@@ -125,11 +128,7 @@ func exportJSON(output string, translations map[string]map[string]interface{}, l
 
 	for _, lang := range langs {
 		if items, ok := translations[lang]; ok {
-			if exportOpts.Flat {
-				result[lang] = flattenKeys(items)
-			} else {
-				result[lang] = items
-			}
+			result[lang] = items
 		}
 	}
 
@@ -144,26 +143,4 @@ func exportJSON(output string, translations map[string]map[string]interface{}, l
 
 	fmt.Printf("✅ 已导出到: %s\n", output)
 	return nil
-}
-
-func flattenKeys(data map[string]interface{}) map[string]string {
-	result := make(map[string]string)
-	flattenRecursive(data, "", result)
-	return result
-}
-
-func flattenRecursive(data map[string]interface{}, prefix string, result map[string]string) {
-	for k, v := range data {
-		key := k
-		if prefix != "" {
-			key = prefix + "." + k
-		}
-		if nested, ok := v.(map[string]interface{}); ok {
-			flattenRecursive(nested, key, result)
-		} else if s, ok := v.(string); ok {
-			result[key] = s
-		} else {
-			result[key] = fmt.Sprintf("%v", v)
-		}
-	}
 }

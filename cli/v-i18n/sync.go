@@ -9,7 +9,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 )
 
 var syncOpts = struct {
@@ -61,8 +60,11 @@ func runSync() error {
 		}
 	}
 
-	// 获取源语言所有 keys
-	sourceKeys := getAllKeysFlat(sourceData)
+	// 获取源语言所有 keys（扁平化直接遍历）
+	var sourceKeys []string
+	for key := range sourceData {
+		sourceKeys = append(sourceKeys, key)
+	}
 
 	// 同步每个目标语言
 	for _, targetLang := range targetLangs {
@@ -76,10 +78,10 @@ func runSync() error {
 		missingCount := 0
 
 		for _, key := range sourceKeys {
-			sourceValue := getValueByKey(sourceData, key)
-			targetValue := getValueByKey(targetData, key)
+			sourceValue := sourceData[key]
+			targetValue, exists := targetData[key]
 
-			if targetValue == nil {
+			if !exists {
 				// key 不存在，需要添加
 				fillValue := syncOpts.SyncFill
 				if fillValue == "" {
@@ -93,21 +95,20 @@ func runSync() error {
 				if syncOpts.Mark && fillValue != "" {
 					fillValue = "🔴 " + fillValue
 				}
-				setNestedKey(targetData, key, fillValue)
+				targetData[key] = fillValue
 				missingCount++
 			} else {
 				// key 存在，保持原值
-				setNestedKey(targetData, key, targetValue)
+				targetData[key] = targetValue
 				syncedCount++
 			}
 		}
 
 		// 删除目标语言中多余的 keys
-		targetKeys := getAllKeysFlat(targetData)
 		removedCount := 0
-		for _, key := range targetKeys {
+		for key := range targetData {
 			if !contains(sourceKeys, key) {
-				deleteNestedKey(targetData, key)
+				delete(targetData, key)
 				removedCount++
 			}
 		}
@@ -122,44 +123,6 @@ func runSync() error {
 	}
 
 	fmt.Printf("\n✅ 同步完成，已保存到 %s\n", config.Output)
-	return nil
-}
-
-// getAllKeysFlat 获取所有 keys（扁平化）
-func getAllKeysFlat(data map[string]interface{}) []string {
-	var keys []string
-	extractKeysFlat(data, "", &keys)
-	return keys
-}
-
-func extractKeysFlat(data map[string]interface{}, prefix string, keys *[]string) {
-	for k, v := range data {
-		key := k
-		if prefix != "" {
-			key = prefix + "." + k
-		}
-		if nested, ok := v.(map[string]interface{}); ok {
-			extractKeysFlat(nested, key, keys)
-		} else {
-			*keys = append(*keys, key)
-		}
-	}
-}
-
-// getValueByKey 通过 key 获取值
-func getValueByKey(data map[string]interface{}, key string) interface{} {
-	parts := strings.Split(key, ".")
-	current := data
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			return current[part]
-		}
-		if nested, ok := current[part].(map[string]interface{}); ok {
-			current = nested
-		} else {
-			return nil
-		}
-	}
 	return nil
 }
 

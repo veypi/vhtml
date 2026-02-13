@@ -149,7 +149,7 @@ func importCSV(input string, translations map[string]map[string]interface{}, con
 
 			// 检查是否已存在
 			if items, ok := translations[lang]; ok {
-				if existing := getValueByKey(items, key); existing != nil && !importOpts.Overwrite {
+				if _, exists := items[key]; exists && !importOpts.Overwrite {
 					continue
 				}
 			}
@@ -159,7 +159,7 @@ func importCSV(input string, translations map[string]map[string]interface{}, con
 			}
 
 			if !importOpts.DryRun {
-				setNestedKey(translations[lang], key, value)
+				translations[lang][key] = value
 			}
 			imported++
 		}
@@ -193,12 +193,12 @@ func importJSON(input string, translations map[string]map[string]interface{}, co
 
 		for key, value := range items {
 			// 检查是否已存在
-			if existing := getValueByKey(translations[lang], key); existing != nil && !importOpts.Overwrite {
+			if _, exists := translations[lang][key]; exists && !importOpts.Overwrite {
 				continue
 			}
 
 			if !importOpts.DryRun {
-				setNestedKey(translations[lang], key, value)
+				translations[lang][key] = value
 			}
 			importedCount++
 		}

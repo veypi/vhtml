@@ -196,93 +196,28 @@ func scanFiles(config *Config) (map[string]bool, error) {
 	return keys, err
 }
 
-// getAllKeys 获取所有已存在的 keys
+// getAllKeys 获取所有已存在的 keys（扁平化）
 func getAllKeys(translations map[string]map[string]interface{}, lang string) map[string]bool {
 	keys := make(map[string]bool)
 	if items, ok := translations[lang]; ok {
-		extractKeys(items, "", keys)
+		for key := range items {
+			keys[key] = true
+		}
 	}
 	return keys
 }
 
-func extractKeys(data map[string]interface{}, prefix string, keys map[string]bool) {
-	for k, v := range data {
-		key := k
-		if prefix != "" {
-			key = prefix + "." + k
-		}
-		if nested, ok := v.(map[string]interface{}); ok {
-			// 检查是否为复数格式（包含 zero/one/other 的对象）
-			if isPluralObject(nested) {
-				// 复数对象本身也是合法键（如 $t("apples")）
-				// 复数对象的子键（zero/one/other）不作为独立 key
-				keys[key] = true
-			} else {
-				// 普通对象继续递归
-				extractKeys(nested, key, keys)
-			}
-		} else {
-			keys[key] = true
-		}
-	}
-}
-
-// isPluralObject 检查对象是否为复数格式
-// 复数对象包含 zero/one/other 中的至少一个键
-func isPluralObject(obj map[string]interface{}) bool {
-	pluralKeys := []string{"zero", "one", "other"}
-	for _, pk := range pluralKeys {
-		if _, ok := obj[pk]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-// getEmptyKeys 获取所有值为空的 keys
+// getEmptyKeys 获取所有值为空的 keys（扁平化）
 func getEmptyKeys(translations map[string]map[string]interface{}, lang string) map[string]bool {
 	emptyKeys := make(map[string]bool)
 	if items, ok := translations[lang]; ok {
-		extractEmptyKeys(items, "", emptyKeys)
+		for key, value := range items {
+			if isEmptyValue(value) {
+				emptyKeys[key] = true
+			}
+		}
 	}
 	return emptyKeys
-}
-
-func extractEmptyKeys(data map[string]interface{}, prefix string, emptyKeys map[string]bool) {
-	for k, v := range data {
-		key := k
-		if prefix != "" {
-			key = prefix + "." + k
-		}
-		if nested, ok := v.(map[string]interface{}); ok {
-			// 检查是否为空对象 {}
-			if len(nested) == 0 {
-				emptyKeys[key] = true
-			} else if isPluralObject(nested) {
-				// 复数对象：检查所有子键是否都为空
-				allEmpty := true
-				for _, pk := range []string{"zero", "one", "other"} {
-					if val, has := nested[pk]; has {
-						if !isEmptyValue(val) {
-							allEmpty = false
-							break
-						}
-					}
-				}
-				if allEmpty {
-					emptyKeys[key] = true
-				}
-			} else {
-				// 普通对象继续递归
-				extractEmptyKeys(nested, key, emptyKeys)
-			}
-		} else {
-			// 检查值是否为空
-			if isEmptyValue(v) {
-				emptyKeys[key] = true
-			}
-		}
-	}
 }
 
 // isEmptyValue 检查值是否为空
@@ -443,30 +378,17 @@ func getAllKeysFromConfig(config *Config) map[string]bool {
 	return getAllKeys(translations, config.DefaultLanguage)
 }
 
-// keyExists 检查 key 是否存在于指定语言
+// keyExists 检查 key 是否存在于指定语言（扁平化）
 func keyExists(translations map[string]map[string]interface{}, lang, key string) bool {
 	items, ok := translations[lang]
 	if !ok {
 		return false
 	}
-
-	parts := strings.Split(key, ".")
-	current := items
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			_, exists := current[part]
-			return exists
-		}
-		if nested, ok := current[part].(map[string]interface{}); ok {
-			current = nested
-		} else {
-			return false
-		}
-	}
-	return false
+	_, exists := items[key]
+	return exists
 }
 
-// fixMissingKeys 修复缺失的 keys
+// fixMissingKeys 修复缺失的 keys（扁平化）
 func fixMissingKeys(translations map[string]map[string]interface{}, missingKeys []string, config *Config) error {
 	for _, lang := range config.Languages {
 		if _, ok := translations[lang]; !ok {
@@ -476,60 +398,31 @@ func fixMissingKeys(translations map[string]map[string]interface{}, missingKeys 
 
 	for _, key := range missingKeys {
 		for _, lang := range config.Languages {
-			setNestedKey(translations[lang], key, scanOpts.Fill)
+			translations[lang][key] = scanOpts.Fill
 		}
 	}
 
 	return SaveTranslations(config.Output, translations, config.Format)
 }
 
-// setNestedKey 设置嵌套 key
+// setNestedKey 设置 key（扁平化，保留函数名以兼容其他代码）
 func setNestedKey(data map[string]interface{}, key string, value interface{}) {
-	parts := strings.Split(key, ".")
-	current := data
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			current[part] = value
-			return
-		}
-		if _, ok := current[part]; !ok {
-			current[part] = make(map[string]interface{})
-		}
-		if nested, ok := current[part].(map[string]interface{}); ok {
-			current = nested
-		} else {
-			// 如果已存在但不是对象，需要替换
-			current[part] = make(map[string]interface{})
-			current = current[part].(map[string]interface{})
-		}
-	}
+	data[key] = value
 }
 
-// removeUnusedKeys 删除未使用的 keys
+// removeUnusedKeys 删除未使用的 keys（扁平化）
 func removeUnusedKeys(translations map[string]map[string]interface{}, unusedKeys []string, config *Config) error {
 	for _, key := range unusedKeys {
 		for _, lang := range config.Languages {
-			deleteNestedKey(translations[lang], key)
+			delete(translations[lang], key)
 		}
 	}
 	return SaveTranslations(config.Output, translations, config.Format)
 }
 
-// deleteNestedKey 删除嵌套 key
+// deleteNestedKey 删除 key（扁平化，保留函数名以兼容其他代码）
 func deleteNestedKey(data map[string]interface{}, key string) {
-	parts := strings.Split(key, ".")
-	current := data
-	for i, part := range parts {
-		if i == len(parts)-1 {
-			delete(current, part)
-			return
-		}
-		if nested, ok := current[part].(map[string]interface{}); ok {
-			current = nested
-		} else {
-			return
-		}
-	}
+	delete(data, key)
 }
 
 // outputReport 输出报告到文件

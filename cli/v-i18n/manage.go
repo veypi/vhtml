@@ -131,7 +131,8 @@ func addKeys(keys []string, config *Config) error {
 				value = ""
 			}
 
-			setNestedKey(translations[lang], key, value)
+			// 扁平化直接设置
+			translations[lang][key] = value
 		}
 		fmt.Printf("✅ 已添加 key: %s\n", key)
 	}
@@ -181,8 +182,7 @@ func runRemove() error {
 		}
 		for _, lang := range config.Languages {
 			if items, ok := translations[lang]; ok {
-				keys := getAllKeysFlat(items)
-				for _, key := range keys {
+				for key := range items {
 					if re.MatchString(key) && !contains(keysToRemove, key) {
 						keysToRemove = append(keysToRemove, key)
 					}
@@ -217,11 +217,11 @@ func runRemove() error {
 		}
 	}
 
-	// 执行删除
+	// 执行删除（扁平化）
 	for _, lang := range config.Languages {
 		if items, ok := translations[lang]; ok {
 			for _, key := range keysToRemove {
-				deleteNestedKey(items, key)
+				delete(items, key)
 			}
 		}
 	}
@@ -270,14 +270,13 @@ func runRename() error {
 		fmt.Printf("[预览模式] 将重命名: %s -> %s\n", oldKey, newKey)
 	}
 
-	// 执行重命名
+	// 执行重命名（扁平化）
 	for _, lang := range config.Languages {
 		if items, ok := translations[lang]; ok {
-			value := getValueByKey(items, oldKey)
-			if value != nil {
+			if value, exists := items[oldKey]; exists {
 				if !renameOpts.DryRun {
-					deleteNestedKey(items, oldKey)
-					setNestedKey(items, newKey, value)
+					delete(items, oldKey)
+					items[newKey] = value
 				}
 			}
 		}
