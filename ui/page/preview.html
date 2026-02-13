@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="组件预览" details="vhtml 组件预览页面，支持代码编辑和实时预览" />
+  <title>{{ $t('preview.title') }}</title>
+</head>
+<style>
+  .preview-page {
+    padding: var(--spacing-xl);
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .page-header {
+    margin-bottom: var(--spacing-xl);
+  }
+
+  .page-header h1 {
+    font-size: var(--font-size-2xl);
+    color: var(--text-color);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .page-header p {
+    color: var(--text-color-secondary);
+  }
+
+  /* 预览组件容器 */
+  .preview-container {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    background: #fff;
+    box-shadow: var(--shadow-md);
+  }
+
+  /* 工具栏 */
+  .preview-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+  }
+
+  .toolbar-title {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-color);
+  }
+
+  .mode-indicator {
+    font-size: var(--font-size-sm);
+    color: var(--text-color-secondary);
+    padding: 2px 8px;
+    background: var(--bg-color-secondary);
+    border-radius: var(--radius-sm);
+  }
+
+  .toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  /* 模式切换按钮 */
+  .mode-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--border-color);
+    background: #fff;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    color: var(--text-color-secondary);
+  }
+
+  .mode-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .mode-btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+  }
+
+  .mode-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* 预览主体区域 */
+  .preview-body {
+    display: flex;
+    min-height: 500px;
+  }
+
+  /* 左右分栏模式 */
+  .preview-body.split-mode {
+    flex-direction: row;
+  }
+
+  .preview-body.split-mode .code-panel,
+  .preview-body.split-mode .preview-panel {
+    flex: 1;
+    width: 50%;
+  }
+
+  .preview-body.split-mode .code-panel {
+    border-right: 1px solid var(--border-color);
+  }
+
+  /* 切换模式 */
+  .preview-body.switch-mode {
+    flex-direction: column;
+  }
+
+  .preview-body.switch-mode .code-panel,
+  .preview-body.switch-mode .preview-panel {
+    width: 100%;
+    height: 100%;
+  }
+
+  .preview-body.switch-mode .code-panel.hidden,
+  .preview-body.switch-mode .preview-panel.hidden {
+    display: none;
+  }
+
+  /* 代码面板 */
+  .code-panel {
+    display: flex;
+    flex-direction: column;
+    background: #1e1e1e;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: #252526;
+    border-bottom: 1px solid #333;
+  }
+
+  .panel-title {
+    font-size: var(--font-size-sm);
+    color: #ccc;
+    font-weight: var(--font-weight-medium);
+  }
+
+  .panel-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+  }
+
+  .action-btn {
+    padding: 4px 10px;
+    font-size: var(--font-size-xs);
+    border: none;
+    background: #3c3c3c;
+    color: #ccc;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .action-btn:hover {
+    background: #4c4c4c;
+    color: #fff;
+  }
+
+  .code-editor {
+    flex: 1;
+    padding: var(--spacing-md);
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #d4d4d4;
+    background: #1e1e1e;
+    border: none;
+    resize: none;
+    outline: none;
+    white-space: pre;
+    overflow: auto;
+    tab-size: 2;
+  }
+
+  /* 预览面板 */
+  .preview-panel {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+  }
+
+  .preview-panel .panel-header {
+    background: var(--bg-color);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .preview-panel .panel-title {
+    color: var(--text-color);
+  }
+
+  .preview-content {
+    flex: 1;
+    padding: var(--spacing-lg);
+    overflow: auto;
+  }
+
+  /* 空状态 */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-color-secondary);
+  }
+
+  .empty-state svg {
+    width: 64px;
+    height: 64px;
+    margin-bottom: var(--spacing-md);
+    opacity: 0.5;
+  }
+
+  /* 响应式 */
+  @media (max-width: 768px) {
+    .preview-body.split-mode {
+      flex-direction: column;
+    }
+
+    .preview-body.split-mode .code-panel,
+    .preview-body.split-mode .preview-panel {
+      width: 100%;
+      height: 50%;
+    }
+
+    .preview-body.split-mode .code-panel {
+      border-right: none;
+      border-bottom: 1px solid var(--border-color);
+    }
+  }
+
+  /* 嵌入模式样式 */
+  .preview-page.embedded .preview-container {
+    box-shadow: none;
+    border: 1px solid var(--border-color);
+  }
+
+  .preview-page.embedded .preview-body {
+    min-height: 300px;
+  }
+
+  .preview-page.embedded .preview-toolbar {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  /* 示例选择器 */
+  .example-selector {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+  }
+
+  .example-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-color);
+    background: #fff;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--text-color);
+    transition: all var(--transition-fast);
+  }
+
+  .example-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .example-btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+  }
+</style>
+
+<body>
+  <div class="preview-page" :class="{embedded: isEmbedded}">
+    <div class="page-header" v-if="!isEmbedded">
+      <h1>{{ $t('preview.title') }}</h1>
+      <p>{{ $t('preview.subtitle') }}</p>
+    </div>
+
+    <!-- 示例选择器 -->
+    <div class="example-selector" v-if="!isEmbedded && !code">
+      <button class="example-btn" :class="{active: currentExample === 'basic'}" @click="loadExample('basic')">
+        {{ $t('preview.examples.basic') }}
+      </button>
+      <button class="example-btn" :class="{active: currentExample === 'form'}" @click="loadExample('form')">
+        {{ $t('preview.examples.form') }}
+      </button>
+      <button class="example-btn" :class="{active: currentExample === 'card'}" @click="loadExample('card')">
+        {{ $t('preview.examples.card') }}
+      </button>
+    </div>
+
+    <!-- 预览组件 -->
+    <div class="preview-container">
+      <!-- 工具栏 -->
+      <div class="preview-toolbar">
+        <div class="toolbar-left">
+          <span class="toolbar-title">{{ $t('preview.componentTitle') }}</span>
+          <span class="mode-indicator">{{ displayModeText }}</span>
+        </div>
+        <div class="toolbar-right">
+          <!-- 左右分栏模式按钮 -->
+          <button class="mode-btn" :class="{active: displayMode === 'split'}" @click="setMode('split')"
+            :title="$t('preview.mode.split')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="12" y1="3" x2="12" y2="21"></line>
+            </svg>
+          </button>
+          <!-- 切换模式按钮 -->
+          <button class="mode-btn" :class="{active: displayMode === 'switch'}" @click="setMode('switch')"
+            :title="$t('preview.mode.switch')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <polyline points="9 3 9 21 15 21"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 预览主体 -->
+      <div class="preview-body" :class="bodyClass">
+        <!-- 代码面板 -->
+        <div class="code-panel" :class="{hidden: switchView === 'preview'}">
+          <div class="panel-header">
+            <span class="panel-title">HTML</span>
+            <div class="panel-actions" v-if="!code">
+              <button class="action-btn" @click="resetCode">{{ $t('preview.reset') }}</button>
+            </div>
+          </div>
+          <textarea class="code-editor" v:value="code" @input="updateCode" :readonly="code ? true : false"
+            spellcheck="false"></textarea>
+        </div>
+
+        <!-- 预览面板 -->
+        <div class="preview-panel" :class="{hidden: switchView === 'code'}">
+          <div class="panel-header">
+            <span class="panel-title">{{ $t('preview.previewTitle') }}</span>
+            <div class="panel-actions" v-if="displayMode === 'switch'">
+              <button class="action-btn" @click="toggleSwitchView">
+                {{ switchView === 'code' ? $t('preview.showPreview') : $t('preview.showCode') }}
+              </button>
+            </div>
+          </div>
+          <div class="preview-content">
+            <div class="preview-box" style="height: 100%;"></div>
+            <div class="empty-state" v-show='!code'>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="9"></line>
+                <line x1="9" y1="13" x2="15" y2="13"></line>
+                <line x1="9" y1="17" x2="11" y2="17"></line>
+              </svg>
+              <span>{{ $t('preview.emptyState') }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script setup>
+  // 判断是否为嵌入模式（传入了 code）
+  isEmbedded = () => {
+    return !!code;
+  };
+
+  // 显示模式: split(左右分栏) | switch(切换)
+  // 嵌入模式下默认使用 split，独立页面默认使用 split
+  displayMode = 'split';
+
+  // 切换模式时的当前视图: code | preview
+  switchView = 'preview';
+
+  // 当前示例
+  currentExample = 'basic';
+
+  // 代码内容 - 响应式绑定到 code
+  code = '';
+
+  // 示例代码
+  examples = {
+    basic: `<div style="padding: 20px; font-family: system-ui;">
+  <h2 style="color: #667eea; margin-bottom: 16px;">欢迎使用 vhtml</h2>
+  <p style="color: #666; line-height: 1.6;">
+    这是一个简单的预览示例。您可以编辑左侧的代码，
+    右侧会实时更新预览效果。
+  </p>
+  <button style="
+    margin-top: 16px;
+    padding: 10px 20px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  " @click="alert('Hello vhtml!')">
+    点击我
+  </button>
+</div>`,
+    form: `<form style="padding: 20px; max-width: 400px; font-family: system-ui;" onsubmit="event.preventDefault(); alert('表单已提交!')">
+  <h3 style="margin-bottom: 20px; color: #333;">用户登录</h3>
+  <div style="margin-bottom: 16px;">
+    <label style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">用户名</label>
+    <input type="text" placeholder="请输入用户名" style="
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    ">
+  </div>
+  <div style="margin-bottom: 20px;">
+    <label style="display: block; margin-bottom: 6px; color: #555; font-size: 14px;">密码</label>
+    <input type="password" placeholder="请输入密码" style="
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      box-sizing: border-box;
+    ">
+  </div>
+  <button type="submit" style="
+    width: 100%;
+    padding: 12px;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+  ">登录</button>
+</form>`,
+    card: `<div style="padding: 20px; font-family: system-ui;">
+  <div style="
+    max-width: 300px;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  ">
+    <div style="
+      height: 150px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <span style="font-size: 48px;">🚀</span>
+    </div>
+    <div style="padding: 20px;">
+      <h3 style="margin: 0 0 10px 0; color: #333;">vhtml 框架</h3>
+      <p style="margin: 0; color: #666; font-size: 14px; line-height: 1.5;">
+        轻量级响应式前端框架，简洁、高效、强大。
+      </p>
+      <div style="margin-top: 16px; display: flex; gap: 8px;">
+        <span style="
+          padding: 4px 10px;
+          background: #f0f0f0;
+          border-radius: 4px;
+          font-size: 12px;
+          color: #666;
+        ">响应式</span>
+        <span style="
+          padding: 4px 10px;
+          background: #f0f0f0;
+          border-radius: 4px;
+          font-size: 12px;
+          color: #666;
+        ">组件化</span>
+      </div>
+    </div>
+  </div>
+</div>`
+  };
+
+  // 计算属性：主体区域类名
+  bodyClass = () => {
+    return displayMode === 'split' ? 'split-mode' : 'switch-mode';
+  };
+
+  // 计算属性：模式显示文本
+  displayModeText = () => {
+    return displayMode === 'split' ? $t('preview.mode.split') : $t('preview.mode.switch');
+  };
+
+  // 设置显示模式
+  setMode = (mode) => {
+    displayMode = mode;
+    if (mode === 'switch') {
+      switchView = 'preview';
+    }
+  };
+
+  // 切换视图（切换模式下使用）
+  toggleSwitchView = () => {
+    switchView = switchView === 'code' ? 'preview' : 'code';
+  };
+
+  // 更新代码（仅在非嵌入模式下）
+  updateCode = (e) => {
+    if (!code) {
+      code = e.target.value;
+    }
+  };
+
+  // 加载示例
+  loadExample = (name) => {
+    currentExample = name;
+    code = examples[name] || '';
+  };
+
+  // 重置代码（仅在非嵌入模式下）
+  resetCode = () => {
+    if (!code) {
+      code = examples[currentExample] || '';
+    }
+  };
+
+  // 初始化（仅在非嵌入模式下加载默认示例）
+  if (!code) {
+    loadExample('basic');
+  }
+</script>
+<script>
+  $watch(() => code, async () => {
+    let dom = $node.querySelector('.preview-box')
+    dom.innerHTML = ''
+    await $vhtml.parseRaw(dom, {}, {}, code)
+  })
+</script>
+
+</html>

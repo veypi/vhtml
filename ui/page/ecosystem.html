@@ -9,7 +9,7 @@
       content="vhtml 生态"
       details="vhtml 框架生态系统和周边工具，包含插件、组件库、社区资源"
     />
-    <title>生态 - vhtml</title>
+    <title>{{ $t('ecosystem.title') }}</title>
   </head>
   <style>
     body {
@@ -150,8 +150,8 @@
     <!-- 页面标题 -->
     <header class="page-header">
       <div class="container">
-        <h1>生态系统</h1>
-        <p>探索 vhtml 的周边工具、组件库和社区资源</p>
+        <h1>{{ $t('common.ecosystem') }}</h1>
+        <p>{{ $t('ecosystem.subtitle') }}</p>
       </div>
     </header>
 
@@ -160,60 +160,60 @@
       <div class="ecosystem-grid">
         <div class="eco-card">
           <div class="eco-icon">📦</div>
-          <h3>vhtml CLI</h3>
-          <p>官方命令行工具，快速创建项目、生成组件、构建部署</p>
+          <h3>{{ $t('ecosystem.core.cli.title') }}</h3>
+          <p>{{ $t('ecosystem.core.cli.desc') }}</p>
           <div class="eco-links">
-            <a href="#" class="eco-link">文档</a>
+            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
             <a href="#" class="eco-link">GitHub</a>
           </div>
         </div>
 
         <div class="eco-card">
           <div class="eco-icon">🎨</div>
-          <h3>vhtml UI</h3>
-          <p>官方组件库，提供丰富的基础组件和业务组件</p>
+          <h3>{{ $t('ecosystem.core.ui.title') }}</h3>
+          <p>{{ $t('ecosystem.core.ui.desc') }}</p>
           <div class="eco-links">
-            <a href="#" class="eco-link">文档</a>
-            <a href="#" class="eco-link">预览</a>
+            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
+            <a href="#" class="eco-link">{{ $t('examples.viewExamples') }}</a>
           </div>
         </div>
 
         <div class="eco-card">
           <div class="eco-icon">🔌</div>
-          <h3>vhtml Router</h3>
-          <p>增强版路由插件，支持嵌套路由、路由守卫、懒加载</p>
+          <h3>{{ $t('ecosystem.core.router.title') }}</h3>
+          <p>{{ $t('ecosystem.core.router.desc') }}</p>
           <div class="eco-links">
-            <a href="#" class="eco-link">文档</a>
+            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
             <a href="#" class="eco-link">GitHub</a>
           </div>
         </div>
 
         <div class="eco-card">
           <div class="eco-icon">📊</div>
-          <h3>vhtml Charts</h3>
-          <p>基于 ECharts 的图表组件库，轻松创建数据可视化</p>
+          <h3>{{ $t('ecosystem.core.charts.title') }}</h3>
+          <p>{{ $t('ecosystem.core.charts.desc') }}</p>
           <div class="eco-links">
-            <a href="#" class="eco-link">文档</a>
-            <a href="#" class="eco-link">示例</a>
+            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
+            <a href="#" class="eco-link">{{ $t('examples.viewExamples') }}</a>
           </div>
         </div>
 
         <div class="eco-card">
           <div class="eco-icon">📝</div>
-          <h3>vhtml Form</h3>
-          <p>表单解决方案，包含表单验证、动态表单、表单生成器</p>
+          <h3>{{ $t('ecosystem.core.form.title') }}</h3>
+          <p>{{ $t('ecosystem.core.form.desc') }}</p>
           <div class="eco-links">
-            <a href="#" class="eco-link">文档</a>
+            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
             <a href="#" class="eco-link">GitHub</a>
           </div>
         </div>
 
         <div class="eco-card">
           <div class="eco-icon">🌐</div>
-          <h3>vhtml i18n</h3>
-          <p>国际化插件，支持多语言切换、语言包管理</p>
+          <h3>{{ $t('ecosystem.core.i18n.title') }}</h3>
+          <p>{{ $t('ecosystem.core.i18n.desc') }}</p>
           <div class="eco-links">
-            <a href="#" class="eco-link">文档</a>
+            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
             <a href="#" class="eco-link">GitHub</a>
           </div>
         </div>
@@ -221,38 +221,38 @@
 
       <!-- 社区资源 -->
       <div class="resource-section">
-        <h2>社区资源</h2>
+        <h2>{{ $t('ecosystem.community.title') }}</h2>
         <ul class="resource-list">
           <li class="resource-item">
             <div class="resource-icon">📚</div>
             <div class="resource-info">
-              <h4>Awesome vhtml</h4>
-              <p>精选的 vhtml 资源列表，包含教程、工具、项目案例</p>
-              <span class="resource-tag">资源合集</span>
+              <h4>{{ $t('ecosystem.community.awesome.title') }}</h4>
+              <p>{{ $t('ecosystem.community.awesome.desc') }}</p>
+              <span class="resource-tag">{{ $t('ecosystem.community.awesome.tag') }}</span>
             </div>
           </li>
           <li class="resource-item">
             <div class="resource-icon">🛠️</div>
             <div class="resource-info">
-              <h4>vhtml DevTools</h4>
-              <p>浏览器开发者工具扩展，用于调试 vhtml 应用</p>
-              <span class="resource-tag">开发工具</span>
+              <h4>{{ $t('ecosystem.community.devtools.title') }}</h4>
+              <p>{{ $t('ecosystem.community.devtools.desc') }}</p>
+              <span class="resource-tag">{{ $t('ecosystem.community.devtools.tag') }}</span>
             </div>
           </li>
           <li class="resource-item">
             <div class="resource-icon">📖</div>
             <div class="resource-info">
-              <h4>vhtml 实战教程</h4>
-              <p>从入门到精通的完整教程系列，包含视频和文档</p>
-              <span class="resource-tag">教程</span>
+              <h4>{{ $t('ecosystem.community.tutorial.title') }}</h4>
+              <p>{{ $t('ecosystem.community.tutorial.desc') }}</p>
+              <span class="resource-tag">{{ $t('ecosystem.community.tutorial.tag') }}</span>
             </div>
           </li>
           <li class="resource-item">
             <div class="resource-icon">🏗️</div>
             <div class="resource-info">
-              <h4>vhtml Templates</h4>
-              <p>官方项目模板集合，包含后台管理、移动端、官网等</p>
-              <span class="resource-tag">模板</span>
+              <h4>{{ $t('ecosystem.community.templates.title') }}</h4>
+              <p>{{ $t('ecosystem.community.templates.desc') }}</p>
+              <span class="resource-tag">{{ $t('ecosystem.community.templates.tag') }}</span>
             </div>
           </li>
         </ul>

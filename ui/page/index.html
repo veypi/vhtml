@@ -9,7 +9,7 @@
       content="vhtml 首页"
       details="vhtml 轻量级响应式前端框架官方首页，展示核心特性和快速开始指南"
     />
-    <title>vhtml - 轻量级响应式前端框架</title>
+    <title>{{ $t('home.title') }}</title>
   </head>
   <style>
     body {
@@ -148,10 +148,10 @@
     <section class="hero">
       <div class="container">
         <h1>vhtml</h1>
-        <p class="subtitle">轻量级响应式前端框架，基于原生 HTML5 语法，无需复杂编译</p>
+        <p class="subtitle">{{ $t('home.subtitle') }}</p>
         <div class="hero-actions">
-          <a href="/docs" class="btn btn-primary">快速开始</a>
-          <a href="/examples" class="btn btn-secondary">查看示例</a>
+          <a href="/docs" class="btn btn-primary">{{ $t('home.quickStart') }}</a>
+          <a href="/examples" class="btn btn-secondary">{{ $t('home.viewExamples') }}</a>
         </div>
       </div>
     </section>
@@ -159,37 +159,37 @@
     <!-- 特性区域 -->
     <section class="features">
       <div class="container">
-        <h2>核心特性</h2>
+        <h2>{{ $t('home.features') }}</h2>
         <div class="feature-grid">
           <div class="feature-card">
             <div class="feature-icon">⚡</div>
-            <h3>轻量快速</h3>
-            <p>压缩后仅 96KB，无依赖，加载迅速，性能优异</p>
+            <h3>{{ $t('home.featureList.lightweight.title') }}</h3>
+            <p>{{ $t('home.featureList.lightweight.desc') }}</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🎯</div>
-            <h3>原生语法</h3>
-            <p>基于标准 HTML5，学习成本低，无需掌握复杂的构建工具</p>
+            <h3>{{ $t('home.featureList.native.title') }}</h3>
+            <p>{{ $t('home.featureList.native.desc') }}</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🔄</div>
-            <h3>响应式绑定</h3>
-            <p>自动数据绑定，状态变化自动更新视图，开发更高效</p>
+            <h3>{{ $t('home.featureList.reactive.title') }}</h3>
+            <p>{{ $t('home.featureList.reactive.desc') }}</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🧩</div>
-            <h3>组件化开发</h3>
-            <p>支持组件封装、属性传递、事件通信，代码复用更简单</p>
+            <h3>{{ $t('home.featureList.component.title') }}</h3>
+            <p>{{ $t('home.featureList.component.desc') }}</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">🛣️</div>
-            <h3>客户端路由</h3>
-            <p>内置路由系统，支持动态路由、路由守卫，SPA 开发无压力</p>
+            <h3>{{ $t('home.featureList.router.title') }}</h3>
+            <p>{{ $t('home.featureList.router.desc') }}</p>
           </div>
           <div class="feature-card">
             <div class="feature-icon">📦</div>
-            <h3>开箱即用</h3>
-            <p>集成 Axios、FontAwesome、ECharts，无需额外配置</p>
+            <h3>{{ $t('home.featureList.ready.title') }}</h3>
+            <p>{{ $t('home.featureList.ready.desc') }}</p>
           </div>
         </div>
       </div>
@@ -198,20 +198,20 @@
     <!-- 代码示例 -->
     <section class="code-section">
       <div class="container">
-        <h2>简洁的语法</h2>
+        <h2>{{ $t('home.syntax') }}</h2>
         <div class="code-block">
-<span class="comment">&lt;!-- 数据绑定 --&gt;</span>
+<span class="comment">&lt;!-- {{ $t('home.codeComments.dataBinding') }} --&gt;</span>
 &lt;<span class="tag">p</span>&gt;{{ message }}&lt;/<span class="tag">p</span>&gt;
 &lt;<span class="tag">input</span> <span class="attr">v:value</span>=<span class="value">"message"</span>&gt;
 
-<span class="comment">&lt;!-- 条件渲染 --&gt;</span>
-&lt;<span class="tag">div</span> <span class="attr">v-if</span>=<span class="value">"isShow"</span>&gt;显示内容&lt;/<span class="tag">div</span>&gt;
+<span class="comment">&lt;!-- {{ $t('home.codeComments.condition') }} --&gt;</span>
+&lt;<span class="tag">div</span> <span class="attr">v-if</span>=<span class="value">"isShow"</span>&gt;{{ $t('home.codeComments.condition') }}&lt;/<span class="tag">div</span>&gt;
 
-<span class="comment">&lt;!-- 列表渲染 --&gt;</span>
+<span class="comment">&lt;!-- {{ $t('home.codeComments.list') }} --&gt;</span>
 &lt;<span class="tag">div</span> <span class="attr">v-for</span>=<span class="value">"item in list"</span>&gt;{{ item.name }}&lt;/<span class="tag">div</span>&gt;
 
-<span class="comment">&lt;!-- 事件绑定 --&gt;</span>
-&lt;<span class="tag">button</span> <span class="attr">@click</span>=<span class="value">"handleClick"</span>&gt;点击&lt;/<span class="tag">button</span>&gt;
+<span class="comment">&lt;!-- {{ $t('home.codeComments.event') }} --&gt;</span>
+&lt;<span class="tag">button</span> <span class="attr">@click</span>=<span class="value">"handleClick"</span>&gt;{{ $t('home.codeComments.event') }}&lt;/<span class="tag">button</span>&gt;
         </div>
       </div>
     </section>

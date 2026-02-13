@@ -286,6 +286,12 @@ import setupVdev from './vdev.js'
       dom.setAttribute('vdelay', did - 1)
     }
 
+    async parseRaw(dom, data, env, code) {
+      let tmp_id = '_' + Math.random().toString(36).slice(2)
+      let target = await vget.ParseUI(code, env || {}, tmp_id)
+      this.parseRef(tmp_id, dom, data || {}, { $axios: this.$axios, ...env }, target)
+    }
+
     /**
     * @param{string} name
     * @param{HTMLElement} dom

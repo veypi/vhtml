@@ -9,7 +9,7 @@
       content="vhtml 关于"
       details="vhtml 框架版本信息、开发者介绍、开源协议"
     />
-    <title>关于 - vhtml</title>
+    <title>{{ $t('about.title') }}</title>
   </head>
   <style>
     body {
@@ -176,8 +176,8 @@
     <!-- 页面标题 -->
     <header class="page-header">
       <div class="container">
-        <h1>关于 vhtml</h1>
-        <p>了解框架的版本、开发者和开源信息</p>
+        <h1>{{ $t('common.about') }} vhtml</h1>
+        <p>{{ $t('about.subtitle') }}</p>
       </div>
     </header>
 
@@ -185,29 +185,29 @@
     <div class="container">
       <!-- 项目介绍 -->
       <div class="about-section">
-        <h2>项目介绍</h2>
-        <p>vhtml 是一个由 veypi 开发的轻量级响应式前端框架。项目始于 2024 年，旨在提供一个简单、高效、无需复杂构建工具的前端开发解决方案。</p>
-        <p>vhtml 采用原生 HTML5 语法，开发者无需学习复杂的构建流程和新的模板语法，即可快速构建现代化的 Web 应用。</p>
+        <h2>{{ $t('about.project.title') }}</h2>
+        <p>{{ $t('about.project.p1') }}</p>
+        <p>{{ $t('about.project.p2') }}</p>
       </div>
 
       <!-- 版本信息 -->
       <div class="about-section">
-        <h2>版本信息</h2>
+        <h2>{{ $t('about.version.title') }}</h2>
         <div class="version-grid">
           <div class="version-item">
-            <div class="version-label">当前版本</div>
+            <div class="version-label">{{ $t('about.version.current') }}</div>
             <div class="version-value">v0.6.0</div>
           </div>
           <div class="version-item">
-            <div class="version-label">压缩体积</div>
+            <div class="version-label">{{ $t('about.version.size') }}</div>
             <div class="version-value">96KB</div>
           </div>
           <div class="version-item">
-            <div class="version-label">首次发布</div>
+            <div class="version-label">{{ $t('about.version.firstRelease') }}</div>
             <div class="version-value">2024</div>
           </div>
           <div class="version-item">
-            <div class="version-label">开源协议</div>
+            <div class="version-label">{{ $t('about.version.license') }}</div>
             <div class="version-value">MIT</div>
           </div>
         </div>
@@ -215,15 +215,15 @@
 
       <!-- 开发者 -->
       <div class="about-section">
-        <h2>开发者</h2>
+        <h2>{{ $t('about.developer.title') }}</h2>
         <div class="developer-card">
           <div class="developer-avatar">👨‍💻</div>
           <div class="developer-info">
-            <h3>veypi</h3>
-            <p>vhtml 框架作者，热爱开源，专注于前端工具链开发</p>
+            <h3>{{ $t('about.developer.name') }}</h3>
+            <p>{{ $t('about.developer.desc') }}</p>
             <div class="developer-links">
               <a href="https://github.com/veypi" target="_blank">GitHub</a>
-              <a href="mailto:veypi@qq.com">邮箱</a>
+              <a href="mailto:veypi@qq.com">{{ $t('about.developer.email') }}</a>
             </div>
           </div>
         </div>
@@ -231,37 +231,37 @@
 
       <!-- 相关链接 -->
       <div class="about-section">
-        <h2>相关链接</h2>
+        <h2>{{ $t('about.links.title') }}</h2>
         <ul class="link-list">
           <li class="link-item">
             <div class="link-icon">📦</div>
             <div class="link-info">
-              <h4>NPM 包</h4>
-              <p>@veypi/vhtml</p>
+              <h4>{{ $t('about.links.npm.title') }}</h4>
+              <p>{{ $t('about.links.npm.desc') }}</p>
             </div>
             <a href="https://www.npmjs.com/package/@veypi/vhtml" target="_blank" class="link-arrow">→</a>
           </li>
           <li class="link-item">
             <div class="link-icon">🐙</div>
             <div class="link-info">
-              <h4>GitHub 仓库</h4>
-              <p>github.com/veypi/vhtml</p>
+              <h4>{{ $t('about.links.github.title') }}</h4>
+              <p>{{ $t('about.links.github.desc') }}</p>
             </div>
             <a href="https://github.com/veypi/vhtml" target="_blank" class="link-arrow">→</a>
           </li>
           <li class="link-item">
             <div class="link-icon">📖</div>
             <div class="link-info">
-              <h4>更新日志</h4>
-              <p>查看版本更新历史</p>
+              <h4>{{ $t('about.links.changelog.title') }}</h4>
+              <p>{{ $t('about.links.changelog.desc') }}</p>
             </div>
             <a href="https://github.com/veypi/vhtml/releases" target="_blank" class="link-arrow">→</a>
           </li>
           <li class="link-item">
             <div class="link-icon">🐛</div>
             <div class="link-info">
-              <h4>问题反馈</h4>
-              <p>提交 Bug 或功能建议</p>
+              <h4>{{ $t('about.links.issues.title') }}</h4>
+              <p>{{ $t('about.links.issues.desc') }}</p>
             </div>
             <a href="https://github.com/veypi/vhtml/issues" target="_blank" class="link-arrow">→</a>
           </li>
@@ -270,23 +270,9 @@
 
       <!-- 开源协议 -->
       <div class="about-section">
-        <h2>开源协议</h2>
-        <p>vhtml 采用 MIT 协议开源，你可以自由使用、修改和分发。</p>
-        <div class="license-box">
-MIT License<br><br>
-
-Copyright (c) 2024-2025 veypi<br><br>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:<br><br>
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-        </div>
+        <h2>{{ $t('about.license.title') }}</h2>
+        <p>{{ $t('about.license.desc') }}</p>
+        <div class="license-box">{{ $t('about.license.text') }}</div>
       </div>
     </div>
   </body>
