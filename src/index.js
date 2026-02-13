@@ -1109,6 +1109,12 @@ import setupVdev from './vdev.js'
             if (n.getAttribute && n.getAttribute('vrefof')) {
               sNodeVrefof = n.getAttribute('vrefof')
               return true
+            } else if (n.nodeType === 3) {
+              // for text node
+              let parentDom = dom.parentNode.closest(`*[vref='${dom.getAttribute('vrefof')}']`)
+              if (parentDom) {
+                sNodeVrefof = parentDom.getAttribute('vrefof')
+              }
             }
             return false
           })

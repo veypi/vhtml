@@ -35,8 +35,6 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 
 <html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
       content="页面/组件名称"
@@ -92,7 +90,9 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 
 - **必须**包含 `<title>`、`<meta>`、`<meta name="description" content="...">`
 - 只有 title 允许使用动态数据绑定($env 数据),其余不支持动态数据绑定
+
   **STYLE 标签：**
+
 - 在 `<style>` 标签中定义 CSS
 - `body {}` 必须定义组件最外层样式
 - 优先级：行内 `style` > `<style>` 标签样式
