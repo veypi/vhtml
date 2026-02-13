@@ -5,8 +5,10 @@ vhtml 项目的国际化（i18n）管理工具。
 ## 安装
 
 ```bash
-go install github.com/veypi/vhtml/cli/i18n@latest
+go install github.com/veypi/vhtml/cmd/v-i18n@latest
 ```
+
+安装完成后，使用 `v-i18n` 命令。
 
 ## 快速开始
 
