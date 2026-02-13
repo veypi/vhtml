@@ -124,8 +124,18 @@ class I18n {
     return this._formatters.get(cacheKey).format(value, unit)
   }
 
+  // 检查是否为复数对象（包含 zero/one/other 的对象）
+  _isPluralObject(value) {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      return false
+    }
+    const pluralKeys = ['zero', 'one', 'other']
+    return pluralKeys.some(k => k in value)
+  }
+
   has(key, locale = this.shared.locale) {
-    return !!this.messages[locale]?.[key]
+    const value = this.messages[locale]?.[key]
+    return value !== undefined && (!this._isPluralObject(value) || value.one !== undefined || value.other !== undefined)
   }
 
   getLocales() {

@@ -274,96 +274,40 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 
 ### i18n 支持
 
-## Messages 结构
+**Messages 结构（扁平化）：**
 
 ```javascript
 {
   "zh-CN": {
-    // 1. 简单键值
-    "hello": "你好",
-
-    // 2. 嵌套命名空间（用 . 访问）
-    "nav": {
-      "home": "首页",
-      "user": { "profile": "个人资料" }
-    },
-
-    // 3. 变量插值（{var}）
-    "welcome": "欢迎，{name}！等级：{level}",
-
-    // 4. 复数（zero/one/other）
-    "message": {
-      "zero": "没有消息",
-      "one": "1 条消息",
-      "other": "{count} 条消息"
+    // 普通键：值是字符串
+    "user.welcome": "欢迎 {name}",
+    // 复数键：值是对象（zero/one/other）
+    "cart": {
+      "zero": "购物车为空",
+      "one": "1 件商品",
+      "other": "{count} 件商品"
     }
   }
 }
 ```
 
-## t 函数
+**用法：**
 
 ```javascript
-$t(key, options?)
+$i18n.load(messages)      // 加载翻译
+$i18n.setLocale("zh-CN")  // 切换语言
+$t("user.welcome", { name: "张三" })  // "欢迎 张三"
+$t("cart", { count: 3 })  // "3 件商品"（复数）
 ```
 
-| 参数      | 说明               | 示例                 |
-| --------- | ------------------ | -------------------- |
-| `key`     | 键名，支持点号嵌套 | `'nav.user.profile'` |
-| `options` | 可选配置           | 见下表               |
+**v-i18n 工具：**
 
-**options 参数：**
-
-| 属性       | 用途                                | 示例                         |
-| ---------- | ----------------------------------- | ---------------------------- |
-| `locale`   | 临时指定语言                        | `{ locale: 'en-US' }`        |
-| `fallback` | 指定回退语言                        | `{ fallback: 'en' }`         |
-| `count`    | 复数数量（自动选择 zero/one/other） | `{ count: 5 }`               |
-| `...vars`  | 变量替换值                          | `{ name: '张三', level: 3 }` |
-
-## 使用示例
-
-```javascript
-$i18n.load({
-  "zh-CN": {
-    "user.welcome": "欢迎 {name}",
-    cart: {
-      zero: "购物车为空",
-      other: "{count} 件商品",
-    },
-  },
-});
-$i18n.setLocale(lang);
-$i18n.getLocale();
-// 基础
-$t("user.welcome", { name: "张三" }); // "欢迎 张三"
-// 嵌套（需对象结构）
-// messages: { nav: { home: '首页' } }
-$t("nav.home"); // "首页"
-// 复数
-$t("cart", { count: 0 }); // "购物车为空"
-$t("cart", { count: 3 }); // "3 件商品"
-// 临时切换语言
-$t("user.welcome", { locale: "en-US", name: "Tom" });
-```
-
-**注意：**
-
-- 嵌套键名通过 `.` 访问（如 `nav.user.name`）
-- 复数对象必须包含 `other`，可选 `zero`/`one`
-- 变量用 `{var}` 包裹，支持任意字符（不含 `}`）
-
-### v-i18n 工具
-
-默认扫描路径 --entry ./ui 输出目录: --output ./ui/langs.json
-
+```bash
 go install github.com/veypi/vhtml/cmd/v-i18n@latest
-v-i18n scan --fix # 扫描代码，自动添加缺失的翻译 key,-removeUnused 移除未用的 key
-v-i18n sync # 同步所有语言文件，保持 key 一致
-v-i18n stats # 查看翻译完成度
-v-i18n add --key "common.save" --value "保存" # 添加翻译
-v-i18n remove --key "old.key" --yes # 删除翻译
-所有命令加 --help 看详细参数。
+v-i18n scan --fix    # 扫描代码，自动添加缺失的 key
+v-i18n sync          # 同步所有语言文件
+v-i18n stats         # 查看翻译完成度
+```
 
 ## 代码质量标准
 

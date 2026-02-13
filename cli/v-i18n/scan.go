@@ -228,6 +228,30 @@ func isEmptyValue(v interface{}) bool {
 	if s, ok := v.(string); ok {
 		return s == ""
 	}
+	// 复数对象：检查是否所有复数字段都为空
+	if obj, ok := v.(map[string]interface{}); ok {
+		if isPluralObject(obj) {
+			// 复数对象必须有 other 或 one 才有意义
+			if other, has := obj["other"]; has {
+				return isEmptyValue(other)
+			}
+			if one, has := obj["one"]; has {
+				return isEmptyValue(one)
+			}
+			return true // 没有 one/other 视为空
+		}
+	}
+	return false
+}
+
+// isPluralObject 检查是否为复数格式对象
+func isPluralObject(obj map[string]interface{}) bool {
+	pluralKeys := []string{"zero", "one", "other"}
+	for _, k := range pluralKeys {
+		if _, ok := obj[k]; ok {
+			return true
+		}
+	}
 	return false
 }
 
@@ -405,11 +429,6 @@ func fixMissingKeys(translations map[string]map[string]interface{}, missingKeys 
 	return SaveTranslations(config.Output, translations, config.Format)
 }
 
-// setNestedKey 设置 key（扁平化，保留函数名以兼容其他代码）
-func setNestedKey(data map[string]interface{}, key string, value interface{}) {
-	data[key] = value
-}
-
 // removeUnusedKeys 删除未使用的 keys（扁平化）
 func removeUnusedKeys(translations map[string]map[string]interface{}, unusedKeys []string, config *Config) error {
 	for _, key := range unusedKeys {
@@ -418,11 +437,6 @@ func removeUnusedKeys(translations map[string]map[string]interface{}, unusedKeys
 		}
 	}
 	return SaveTranslations(config.Output, translations, config.Format)
-}
-
-// deleteNestedKey 删除 key（扁平化，保留函数名以兼容其他代码）
-func deleteNestedKey(data map[string]interface{}, key string) {
-	delete(data, key)
 }
 
 // outputReport 输出报告到文件
