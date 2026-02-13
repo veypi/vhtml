@@ -18,7 +18,7 @@ import (
 
 var scanOpts = struct {
 	Fix          bool   `json:"fix" desc:"自动修复，为缺失的 key 添加空翻译"`
-	RemoveUnused bool   `json:"removeUnused" desc:"删除未使用的 key"`
+	RemoveUnused bool   `json:"removeUnused" desc:"删除未使用的 key 和值为空的 key"`
 	ReportOutput string `json:"reportOutput" desc:"报告输出文件路径"`
 	ReportFormat string `json:"reportFormat" desc:"报告格式：console、json"`
 	Fill         string `json:"fill" desc:"自动填充的值，用于修复时填充新 key"`
@@ -92,12 +92,28 @@ func runScan() error {
 		fmt.Printf("\n✅ 已自动添加 %d 个缺失的 key\n", len(missingKeys))
 	}
 
-	// 删除未使用的 keys
-	if scanOpts.RemoveUnused && len(unusedKeys) > 0 {
-		if err := removeUnusedKeys(translations, unusedKeys, config); err != nil {
-			return fmt.Errorf("删除未使用 key 失败: %w", err)
+	// 删除未使用的 keys（包括空值 key）
+	if scanOpts.RemoveUnused {
+		keysToRemove := unusedKeys
+
+		// 同时收集空值的 keys
+		if scanOpts.CheckEmpty && emptyKeys != nil {
+			for _, lang := range config.Languages {
+				for key := range emptyKeys[lang] {
+					// 避免重复添加
+					if !stringSliceContains(keysToRemove, key) {
+						keysToRemove = append(keysToRemove, key)
+					}
+				}
+			}
 		}
-		fmt.Printf("\n✅ 已删除 %d 个未使用的 key\n", len(unusedKeys))
+
+		if len(keysToRemove) > 0 {
+			if err := removeUnusedKeys(translations, keysToRemove, config); err != nil {
+				return fmt.Errorf("删除未使用 key 失败: %w", err)
+			}
+			fmt.Printf("\n✅ 已删除 %d 个未使用的 key（包含空值 key）\n", len(keysToRemove))
+		}
 	}
 
 	return nil
@@ -236,8 +252,13 @@ func extractEmptyKeys(data map[string]interface{}, prefix string, emptyKeys map[
 			key = prefix + "." + k
 		}
 		if nested, ok := v.(map[string]interface{}); ok {
-			// 复数对象本身不检查空值，只检查其子键
-			extractEmptyKeys(nested, key, emptyKeys)
+			// 检查是否为空对象 {}
+			if len(nested) == 0 {
+				emptyKeys[key] = true
+			} else {
+				// 复数对象本身不检查空值，只检查其子键
+				extractEmptyKeys(nested, key, emptyKeys)
+			}
 		} else {
 			// 检查值是否为空
 			if isEmptyValue(v) {
@@ -539,4 +560,14 @@ func mustMarshalJSON(v interface{}) []byte {
 
 func jsonMarshal(v interface{}) ([]byte, error) {
 	return json.MarshalIndent(v, "", "  ")
+}
+
+// stringSliceContains 检查字符串切片是否包含指定元素
+func stringSliceContains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
