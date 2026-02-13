@@ -215,9 +215,12 @@ func extractKeys(data map[string]interface{}, prefix string, keys map[string]boo
 			// 检查是否为复数格式（包含 zero/one/other 的对象）
 			if isPluralObject(nested) {
 				// 复数对象本身也是合法键（如 $t("apples")）
+				// 复数对象的子键（zero/one/other）不作为独立 key
 				keys[key] = true
+			} else {
+				// 普通对象继续递归
+				extractKeys(nested, key, keys)
 			}
-			extractKeys(nested, key, keys)
 		} else {
 			keys[key] = true
 		}
@@ -255,8 +258,22 @@ func extractEmptyKeys(data map[string]interface{}, prefix string, emptyKeys map[
 			// 检查是否为空对象 {}
 			if len(nested) == 0 {
 				emptyKeys[key] = true
+			} else if isPluralObject(nested) {
+				// 复数对象：检查所有子键是否都为空
+				allEmpty := true
+				for _, pk := range []string{"zero", "one", "other"} {
+					if val, has := nested[pk]; has {
+						if !isEmptyValue(val) {
+							allEmpty = false
+							break
+						}
+					}
+				}
+				if allEmpty {
+					emptyKeys[key] = true
+				}
 			} else {
-				// 复数对象本身不检查空值，只检查其子键
+				// 普通对象继续递归
 				extractEmptyKeys(nested, key, emptyKeys)
 			}
 		} else {
