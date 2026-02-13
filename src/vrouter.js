@@ -583,7 +583,48 @@ class Page {
   }
 
   activate() {
-    if (this.title) document.title = this.title
+    if (this.title) {
+      let title = this.title.trim()
+      if (title.indexOf("{{") >= 0) {
+        let target = this.slots['']
+        if (target instanceof Array && target.length > 0) {
+          target = target[0]
+        }
+        let match
+        let nstart = 0
+        let start = -1;
+        let txtItems = []
+        const varRegex = /{{|}}/g;
+        while ((match = varRegex.exec(title)) !== null) {
+          if (match[0] === '{{') {
+            start = match.index
+          } else if (match[0] === '}}' && start >= 0) {
+            if (nstart !== start) {
+              txtItems.push(title.slice(nstart, start))
+            }
+            txtItems.push('')
+            let valStr = title.slice(start + 2, match.index)
+            let valIdx = txtItems.length
+            start = -1
+            nstart = match.index + 2
+            vproxy.Watch(() => {
+              let valVal = vproxy.Run(valStr, {}, this.layoutDom.$env)
+              txtItems[valIdx - 1] = valVal
+              if (typeof valVal === 'function') {
+                txtItems[valIdx - 1] = valVal()
+              } else if (typeof valVal === 'object') {
+                txtItems[valIdx - 1] = JSON.stringify(valVal)
+              }
+              document.title = txtItems.join('')
+            })
+          }
+        }
+        txtItems.push(title.slice(nstart))
+        document.title = txtItems.join('')
+      } else {
+        document.title = title
+      }
+    }
     const layoutDom = this.layoutDom
 
     if (layoutDom) {

@@ -837,7 +837,8 @@ import setupVdev from './vdev.js'
 
           if (typeof iters === 'function') {
             iters = iters()
-          } else if (typeof iters === 'number') {
+          }
+          if (typeof iters === 'number') {
             iters = Array.from({ length: iters }, (_, i) => i)
           }
           if (iters === undefined || iters === null) {
