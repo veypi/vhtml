@@ -1,570 +1,354 @@
 {
   "en-US": {
-    "about": {
-      "developer": {
-        "desc": "Author of vhtml framework, open source enthusiast, focused on frontend tooling",
-        "email": "Email",
-        "name": "veypi",
-        "title": "Developer"
-      },
-      "license": {
-        "desc": "vhtml is open sourced under MIT license. You are free to use, modify, and distribute it.",
-        "text": "MIT License\n\nCopyright (c) 2024-2025 veypi\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.",
-        "title": "Open Source License"
-      },
-      "links": {
-        "changelog": {
-          "desc": "View version history",
-          "title": "Changelog"
-        },
-        "github": {
-          "desc": "github.com/veypi/vhtml",
-          "title": "GitHub Repository"
-        },
-        "issues": {
-          "desc": "Submit bugs or feature requests",
-          "title": "Issue Feedback"
-        },
-        "npm": {
-          "desc": "@veypi/vhtml",
-          "title": "NPM Package"
-        },
-        "title": "Related Links"
-      },
-      "project": {
-        "p1": "vhtml is a lightweight reactive frontend framework developed by veypi. Started in 2024, it aims to provide a simple, efficient frontend development solution without complex build tools.",
-        "p2": "vhtml uses native HTML5 syntax, allowing developers to build modern Web applications without learning complex build processes or new template syntax.",
-        "title": "Project Introduction"
-      },
-      "subtitle": "Learn about framework version, developer, and open source info",
-      "title": "About - vhtml",
-      "version": {
-        "current": "Current Version",
-        "firstRelease": "First Release",
-        "license": "License",
-        "size": "Compressed Size",
-        "title": "Version Info"
-      }
-    },
-    "code": {
-      "copied": "Copied",
-      "copy": "Copy"
-    },
-    "common": {
-      "about": "About",
-      "copyright": "vhtml © 2025 | {github}",
-      "docs": "Docs",
-      "ecosystem": "Ecosystem",
-      "examples": "Examples"
-    },
-    "docs": {
-      "codeComments": {
-        "event": "Click me"
-      },
-      "content": {
-        "api": {
-          "desc": "vhtml has built-in $axios for HTTP requests:",
-          "error": "Failed to fetch",
-          "get": "GET Request",
-          "post": "POST Request",
-          "success": "Created successfully",
-          "title": "API Calls"
-        },
-        "components": {
-          "create": "Creating Components",
-          "createDesc": "Create HTML files in /ui/components/ directory:",
-          "title": "Components",
-          "usage": "Using Components",
-          "usageDesc": "Path /ui/components/my-button.html maps to tag \u003ccomponents-my-button\u003e:"
-        },
-        "data": {
-          "access": "Accessing Data",
-          "accessDesc": "Use variable names directly in templates:",
-          "declare": "Declaring Data",
-          "declareDesc": "Use = assignment to declare reactive data in \u003cscript setup\u003e:",
-          "inScript": "Access in Script",
-          "inScriptDesc": "Use $data to access and modify:",
-          "title": "Reactive Data"
-        },
-        "events": {
-          "custom": "Emitting Custom Events",
-          "customDesc": "Emit events to parent components:",
-          "handler": "Event Handlers",
-          "listen": "Listening to Events",
-          "title": "Event Handling"
-        },
-        "intro": {
-          "browser": "Browser Support",
-          "browserDesc": "vhtml supports all modern browsers including Chrome, Firefox, Safari, Edge, etc.",
-          "desc": "vhtml is a lightweight reactive frontend framework using native HTML5 syntax, enabling rapid Web application development without complex build tools.",
-          "featureList": {
-            "component": "Component-based - Support component encapsulation and reuse",
-            "lightweight": "Lightweight - Only 96KB compressed, no external dependencies",
-            "reactive": "Reactive - Automatic data binding, state-driven views",
-            "router": "Router - Built-in client-side routing system",
-            "simple": "Simple - Based on standard HTML5, low learning curve"
-          },
-          "features": "Features",
-          "title": "Introduction"
-        },
-        "quickstart": {
-          "cdn": "Or include via CDN:",
-          "createIndex": "Create index.html:",
-          "firstPage": "Create Your First Page",
-          "install": "Installation",
-          "npmInstall": "Install via npm:",
-          "title": "Quick Start"
-        },
-        "router": {
-          "config": "Configuring Routes",
-          "configDesc": "Configure in /ui/routes.js:",
-          "linkNav": "Link Navigation",
-          "nav": "Navigation",
-          "progNav": "Programmatic Navigation",
-          "title": "Router"
-        },
-        "slots": {
-          "componentSide": "Inside Component",
-          "default": "Default Slot",
-          "named": "Named Slot",
-          "title": "Slots",
-          "usageSide": "When Using"
-        },
-        "structure": {
-          "desc": "Recommended vhtml project directory structure:",
-          "title": "Directory Structure"
-        },
-        "template": {
-          "attrBinding": "Attribute Binding",
-          "condition": "Conditional Rendering",
-          "dynamicAttr": "Dynamic Attribute",
-          "list": "List Rendering",
-          "textInterpolation": "Text Interpolation",
-          "title": "Template Syntax",
-          "twoWay": "Two-way Binding"
-        }
-      },
-      "sections": {
-        "api": "API Calls",
-        "components": "Components",
-        "data": "Reactive Data",
-        "events": "Event Handling",
-        "intro": "Introduction",
-        "quickstart": "Quick Start",
-        "router": "Router",
-        "slots": "Slots",
-        "structure": "Directory Structure",
-        "template": "Template Syntax"
-      },
-      "sidebar": {
-        "advanced": "Advanced",
-        "basics": "Basics",
-        "guide": "Guide"
-      },
-      "title": "Docs - vhtml"
-    },
-    "ecosystem": {
-      "community": {
-        "awesome": {
-          "desc": "Curated list of vhtml resources including tutorials, tools, and project examples",
-          "tag": "Collection",
-          "title": "Awesome vhtml"
-        },
-        "devtools": {
-          "desc": "Browser developer tools extension for debugging vhtml applications",
-          "tag": "Dev Tool",
-          "title": "vhtml DevTools"
-        },
-        "templates": {
-          "desc": "Official project templates including admin, mobile, and landing pages",
-          "tag": "Template",
-          "title": "vhtml Templates"
-        },
-        "title": "Community Resources",
-        "tutorial": {
-          "desc": "Complete tutorial series from beginner to advanced, with videos and docs",
-          "tag": "Tutorial",
-          "title": "vhtml Tutorials"
-        }
-      },
-      "core": {
-        "charts": {
-          "desc": "Chart component library based on ECharts for easy data visualization",
-          "title": "vhtml Charts"
-        },
-        "cli": {
-          "desc": "Official CLI tool for quick project creation, component generation, and deployment",
-          "title": "vhtml CLI"
-        },
-        "form": {
-          "desc": "Form solution with validation, dynamic forms, and form builder",
-          "title": "vhtml Form"
-        },
-        "i18n": {
-          "desc": "Internationalization plugin with multi-language switching and locale management",
-          "title": "vhtml i18n"
-        },
-        "router": {
-          "desc": "Enhanced routing plugin with nested routes, route guards, and lazy loading",
-          "title": "vhtml Router"
-        },
-        "ui": {
-          "desc": "Official component library with rich basic and business components",
-          "title": "vhtml UI"
-        }
-      },
-      "subtitle": "Explore vhtml tools, component libraries and community resources",
-      "title": "Ecosystem - vhtml"
-    },
-    "examples": {
-      "demoList": {
-        "condition": "Conditional Rendering",
-        "counter": "Counter",
-        "list": "List Rendering",
-        "tabs": "Tab Switching",
-        "twoWay": "Two-way Data Binding"
-      },
-      "subtitle": "vhtml feature demos and code examples",
-      "title": "Examples - vhtml",
-      "viewExamples": "View Examples"
-    },
-    "home": {
-      "featureList": {
-        "component": {
-          "desc": "Support component encapsulation, props passing, event communication, easier code reuse",
-          "title": "Component-based"
-        },
-        "lightweight": {
-          "desc": "Only 96KB compressed, no dependencies, fast loading, excellent performance",
-          "title": "Lightweight \u0026 Fast"
-        },
-        "native": {
-          "desc": "Based on standard HTML5, low learning curve, no complex build tools needed",
-          "title": "Native Syntax"
-        },
-        "reactive": {
-          "desc": "Automatic data binding, view updates when state changes, more efficient development",
-          "title": "Reactive Binding"
-        },
-        "ready": {
-          "desc": "Integrated Axios, FontAwesome, ECharts, no extra configuration needed",
-          "title": "Ready to Use"
-        },
-        "router": {
-          "desc": "Built-in routing system, supports dynamic routes, route guards, SPA development made easy",
-          "title": "Client-side Routing"
-        }
-      },
-      "features": "Core Features",
-      "quickStart": "Quick Start",
-      "subtitle": "Lightweight reactive frontend framework based on native HTML5 syntax, no complex compilation required",
-      "title": "vhtml - Lightweight Reactive Frontend Framework",
-      "viewExamples": "View Examples"
-    },
-    "notFound": {
-      "backHome": "Back to Home",
-      "backPrev": "Back to Previous",
-      "message": "Sorry, the page you visited does not exist or has been removed",
-      "title": "404 - Page Not Found",
-      "titleText": "Page Not Found"
-    },
-    "preview": {
-      "copy": "Copy Code",
-      "copyError": "Copy failed",
-      "copySuccess": "Copied successfully",
-      "emptyState": "No content yet, please edit code on the left",
-      "mode": {
-        "split": "Split View",
-        "switch": "Switch Mode"
-      },
-      "showCode": "Show Code",
-      "showPreview": "Show Preview",
-      "subtitle": "Edit code in real-time and preview the results",
-      "title": "Component Preview"
-    }
+    "about.developer.desc": "Author of vhtml framework, open source enthusiast, focused on frontend tooling",
+    "about.developer.email": "Email",
+    "about.developer.name": "veypi",
+    "about.developer.title": "Developer",
+    "about.license.desc": "vhtml is open sourced under MIT license. You are free to use, modify, and distribute it.",
+    "about.license.text": "MIT License\n\nCopyright (c) 2024-2025 veypi\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.",
+    "about.license.title": "Open Source License",
+    "about.links.changelog.desc": "View version history",
+    "about.links.changelog.title": "Changelog",
+    "about.links.github.desc": "github.com/veypi/vhtml",
+    "about.links.github.title": "GitHub Repository",
+    "about.links.issues.desc": "Submit bugs or feature requests",
+    "about.links.issues.title": "Issue Feedback",
+    "about.links.npm.desc": "@veypi/vhtml",
+    "about.links.npm.title": "NPM Package",
+    "about.links.title": "Related Links",
+    "about.project.p1": "vhtml is a lightweight reactive frontend framework developed by veypi. Started in 2024, it aims to provide a simple, efficient frontend development solution without complex build tools.",
+    "about.project.p2": "vhtml uses native HTML5 syntax, allowing developers to build modern Web applications without learning complex build processes or new template syntax.",
+    "about.project.title": "Project Introduction",
+    "about.subtitle": "Learn about framework version, developer, and open source info",
+    "about.title": "About - vhtml",
+    "about.version.current": "Current Version",
+    "about.version.firstRelease": "First Release",
+    "about.version.license": "License",
+    "about.version.size": "Compressed Size",
+    "about.version.title": "Version Info",
+    "code.copied": "Copied",
+    "code.copy": "Copy",
+    "common.about": "About",
+    "common.copyright": "vhtml © 2025 | {github}",
+    "common.docs": "Docs",
+    "common.ecosystem": "Ecosystem",
+    "common.examples": "Examples",
+    "docs.codeComments.event": "Click me",
+    "docs.content.api.desc": "vhtml has built-in $axios for HTTP requests:",
+    "docs.content.api.error": "Failed to fetch",
+    "docs.content.api.get": "GET Request",
+    "docs.content.api.post": "POST Request",
+    "docs.content.api.success": "Created successfully",
+    "docs.content.api.title": "API Calls",
+    "docs.content.components.create": "Creating Components",
+    "docs.content.components.createDesc": "Create HTML files in /ui/components/ directory:",
+    "docs.content.components.title": "Components",
+    "docs.content.components.usage": "Using Components",
+    "docs.content.components.usageDesc": "Path /ui/components/my-button.html maps to tag <components-my-button>:",
+    "docs.content.data.access": "Accessing Data",
+    "docs.content.data.accessDesc": "Use variable names directly in templates:",
+    "docs.content.data.declare": "Declaring Data",
+    "docs.content.data.declareDesc": "Use = assignment to declare reactive data in <script setup>:",
+    "docs.content.data.inScript": "Access in Script",
+    "docs.content.data.inScriptDesc": "Use $data to access and modify:",
+    "docs.content.data.title": "Reactive Data",
+    "docs.content.events.custom": "Emitting Custom Events",
+    "docs.content.events.customDesc": "Emit events to parent components:",
+    "docs.content.events.handler": "Event Handlers",
+    "docs.content.events.listen": "Listening to Events",
+    "docs.content.events.title": "Event Handling",
+    "docs.content.intro.browser": "Browser Support",
+    "docs.content.intro.browserDesc": "vhtml supports all modern browsers including Chrome, Firefox, Safari, Edge, etc.",
+    "docs.content.intro.desc": "vhtml is a lightweight reactive frontend framework using native HTML5 syntax, enabling rapid Web application development without complex build tools.",
+    "docs.content.intro.featureList.component": "Component-based - Support component encapsulation and reuse",
+    "docs.content.intro.featureList.lightweight": "Lightweight - Only 96KB compressed, no external dependencies",
+    "docs.content.intro.featureList.reactive": "Reactive - Automatic data binding, state-driven views",
+    "docs.content.intro.featureList.router": "Router - Built-in client-side routing system",
+    "docs.content.intro.featureList.simple": "Simple - Based on standard HTML5, low learning curve",
+    "docs.content.intro.features": "Features",
+    "docs.content.intro.title": "Introduction",
+    "docs.content.quickstart.cdn": "Or include via CDN:",
+    "docs.content.quickstart.createIndex": "Create index.html:",
+    "docs.content.quickstart.firstPage": "Create Your First Page",
+    "docs.content.quickstart.install": "Installation",
+    "docs.content.quickstart.npmInstall": "Install via npm:",
+    "docs.content.quickstart.title": "Quick Start",
+    "docs.content.router.config": "Configuring Routes",
+    "docs.content.router.configDesc": "Configure in /ui/routes.js:",
+    "docs.content.router.linkNav": "Link Navigation",
+    "docs.content.router.nav": "Navigation",
+    "docs.content.router.progNav": "Programmatic Navigation",
+    "docs.content.router.title": "Router",
+    "docs.content.slots.componentSide": "Inside Component",
+    "docs.content.slots.default": "Default Slot",
+    "docs.content.slots.named": "Named Slot",
+    "docs.content.slots.title": "Slots",
+    "docs.content.slots.usageSide": "When Using",
+    "docs.content.structure.desc": "Recommended vhtml project directory structure:",
+    "docs.content.structure.title": "Directory Structure",
+    "docs.content.template.attrBinding": "Attribute Binding",
+    "docs.content.template.condition": "Conditional Rendering",
+    "docs.content.template.dynamicAttr": "Dynamic Attribute",
+    "docs.content.template.list": "List Rendering",
+    "docs.content.template.textInterpolation": "Text Interpolation",
+    "docs.content.template.title": "Template Syntax",
+    "docs.content.template.twoWay": "Two-way Binding",
+    "docs.sections.api": "API Calls",
+    "docs.sections.components": "Components",
+    "docs.sections.data": "Reactive Data",
+    "docs.sections.events": "Event Handling",
+    "docs.sections.intro": "Introduction",
+    "docs.sections.quickstart": "Quick Start",
+    "docs.sections.router": "Router",
+    "docs.sections.slots": "Slots",
+    "docs.sections.structure": "Directory Structure",
+    "docs.sections.template": "Template Syntax",
+    "docs.sidebar.advanced": "Advanced",
+    "docs.sidebar.basics": "Basics",
+    "docs.sidebar.guide": "Guide",
+    "docs.title": "Docs - vhtml",
+    "ecosystem.community.awesome.desc": "Curated list of vhtml resources including tutorials, tools, and project examples",
+    "ecosystem.community.awesome.tag": "Collection",
+    "ecosystem.community.awesome.title": "Awesome vhtml",
+    "ecosystem.community.devtools.desc": "Browser developer tools extension for debugging vhtml applications",
+    "ecosystem.community.devtools.tag": "Dev Tool",
+    "ecosystem.community.devtools.title": "vhtml DevTools",
+    "ecosystem.community.templates.desc": "Official project templates including admin, mobile, and landing pages",
+    "ecosystem.community.templates.tag": "Template",
+    "ecosystem.community.templates.title": "vhtml Templates",
+    "ecosystem.community.title": "Community Resources",
+    "ecosystem.community.tutorial.desc": "Complete tutorial series from beginner to advanced, with videos and docs",
+    "ecosystem.community.tutorial.tag": "Tutorial",
+    "ecosystem.community.tutorial.title": "vhtml Tutorials",
+    "ecosystem.core.charts.desc": "Chart component library based on ECharts for easy data visualization",
+    "ecosystem.core.charts.title": "vhtml Charts",
+    "ecosystem.core.cli.desc": "Official CLI tool for quick project creation, component generation, and deployment",
+    "ecosystem.core.cli.title": "vhtml CLI",
+    "ecosystem.core.form.desc": "Form solution with validation, dynamic forms, and form builder",
+    "ecosystem.core.form.title": "vhtml Form",
+    "ecosystem.core.i18n.desc": "Internationalization plugin with multi-language switching and locale management",
+    "ecosystem.core.i18n.title": "vhtml i18n",
+    "ecosystem.core.router.desc": "Enhanced routing plugin with nested routes, route guards, and lazy loading",
+    "ecosystem.core.router.title": "vhtml Router",
+    "ecosystem.core.ui.desc": "Official component library with rich basic and business components",
+    "ecosystem.core.ui.title": "vhtml UI",
+    "ecosystem.subtitle": "Explore vhtml tools, component libraries and community resources",
+    "ecosystem.title": "Ecosystem - vhtml",
+    "examples.demoList.condition": "Conditional Rendering",
+    "examples.demoList.counter": "Counter",
+    "examples.demoList.list": "List Rendering",
+    "examples.demoList.tabs": "Tab Switching",
+    "examples.demoList.twoWay": "Two-way Data Binding",
+    "examples.subtitle": "vhtml feature demos and code examples",
+    "examples.title": "Examples - vhtml",
+    "examples.viewExamples": "View Examples",
+    "home.featureList.component.desc": "Support component encapsulation, props passing, event communication, easier code reuse",
+    "home.featureList.component.title": "Component-based",
+    "home.featureList.lightweight.desc": "Only 96KB compressed, no dependencies, fast loading, excellent performance",
+    "home.featureList.lightweight.title": "Lightweight & Fast",
+    "home.featureList.native.desc": "Based on standard HTML5, low learning curve, no complex build tools needed",
+    "home.featureList.native.title": "Native Syntax",
+    "home.featureList.reactive.desc": "Automatic data binding, view updates when state changes, more efficient development",
+    "home.featureList.reactive.title": "Reactive Binding",
+    "home.featureList.ready.desc": "Integrated Axios, FontAwesome, ECharts, no extra configuration needed",
+    "home.featureList.ready.title": "Ready to Use",
+    "home.featureList.router.desc": "Built-in routing system, supports dynamic routes, route guards, SPA development made easy",
+    "home.featureList.router.title": "Client-side Routing",
+    "home.features": "Core Features",
+    "home.quickStart": "Quick Start",
+    "home.subtitle": "Lightweight reactive frontend framework based on native HTML5 syntax, no complex compilation required",
+    "home.title": "vhtml - Lightweight Reactive Frontend Framework",
+    "home.viewExamples": "View Examples",
+    "notFound.backHome": "Back to Home",
+    "notFound.backPrev": "Back to Previous",
+    "notFound.message": "Sorry, the page you visited does not exist or has been removed",
+    "notFound.title": "404 - Page Not Found",
+    "notFound.titleText": "Page Not Found",
+    "preview.copy": "Copy Code",
+    "preview.copyError": "Copy failed",
+    "preview.copySuccess": "Copied successfully",
+    "preview.emptyState": "No content yet, please edit code on the left",
+    "preview.mode.split": "Split View",
+    "preview.mode.switch": "Switch Mode",
+    "preview.showCode": "Show Code",
+    "preview.showPreview": "Show Preview",
+    "preview.subtitle": "Edit code in real-time and preview the results",
+    "preview.title": "Component Preview"
   },
   "zh-CN": {
-    "about": {
-      "developer": {
-        "desc": "vhtml 框架作者，热爱开源，专注于前端工具链开发",
-        "email": "邮箱",
-        "name": "veypi",
-        "title": "开发者"
-      },
-      "license": {
-        "desc": "vhtml 采用 MIT 协议开源，你可以自由使用、修改和分发。",
-        "text": "MIT License\n\nCopyright (c) 2024-2025 veypi\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.",
-        "title": "开源协议"
-      },
-      "links": {
-        "changelog": {
-          "desc": "查看版本更新历史",
-          "title": "更新日志"
-        },
-        "github": {
-          "desc": "github.com/veypi/vhtml",
-          "title": "GitHub 仓库"
-        },
-        "issues": {
-          "desc": "提交 Bug 或功能建议",
-          "title": "问题反馈"
-        },
-        "npm": {
-          "desc": "@veypi/vhtml",
-          "title": "NPM 包"
-        },
-        "title": "相关链接"
-      },
-      "project": {
-        "p1": "vhtml 是一个由 veypi 开发的轻量级响应式前端框架。项目始于 2024 年，旨在提供一个简单、高效、无需复杂构建工具的前端开发解决方案。",
-        "p2": "vhtml 采用原生 HTML5 语法，开发者无需学习复杂的构建流程和新的模板语法，即可快速构建现代化的 Web 应用。",
-        "title": "项目介绍"
-      },
-      "subtitle": "了解框架的版本、开发者和开源信息",
-      "title": "关于 - vhtml",
-      "version": {
-        "current": "当前版本",
-        "firstRelease": "首次发布",
-        "license": "开源协议",
-        "size": "压缩体积",
-        "title": "版本信息"
-      }
-    },
-    "code": {
-      "copied": "已复制",
-      "copy": "复制"
-    },
-    "common": {
-      "about": "关于",
-      "copyright": "vhtml © 2025 | {github}",
-      "docs": "文档",
-      "ecosystem": "生态",
-      "examples": "示例"
-    },
-    "docs": {
-      "codeComments": {
-        "event": "点击我"
-      },
-      "content": {
-        "api": {
-          "desc": "vhtml 内置 $axios 用于 HTTP 请求：",
-          "error": "获取失败",
-          "get": "GET 请求",
-          "post": "POST 请求",
-          "success": "创建成功",
-          "title": "API 调用"
-        },
-        "components": {
-          "create": "创建组件",
-          "createDesc": "在 /ui/components/ 目录下创建 HTML 文件：",
-          "title": "组件",
-          "usage": "使用组件",
-          "usageDesc": "路径 /ui/components/my-button.html 对应标签 \u003ccomponents-my-button\u003e："
-        },
-        "data": {
-          "access": "访问数据",
-          "accessDesc": "在模板中直接使用变量名：",
-          "declare": "声明数据",
-          "declareDesc": "在 \u003cscript setup\u003e 中使用 = 直接赋值声明响应式数据：",
-          "inScript": "在 script 中访问",
-          "inScriptDesc": "使用 $data 访问和修改：",
-          "title": "响应式数据"
-        },
-        "events": {
-          "custom": "触发自定义事件",
-          "customDesc": "向父组件触发事件：",
-          "handler": "事件处理函数",
-          "listen": "监听事件",
-          "title": "事件处理"
-        },
-        "intro": {
-          "browser": "浏览器支持",
-          "browserDesc": "vhtml 支持所有现代浏览器，包括 Chrome、Firefox、Safari、Edge 等。",
-          "desc": "vhtml 是一个轻量级响应式前端框架，采用原生 HTML5 语法，无需复杂的构建工具即可快速开发 Web 应用。",
-          "featureList": {
-            "component": "组件化 - 支持组件封装和复用",
-            "lightweight": "轻量 - 压缩后仅 96KB，无外部依赖",
-            "reactive": "响应式 - 自动数据绑定，状态驱动视图",
-            "router": "路由 - 内置客户端路由系统",
-            "simple": "简单 - 基于标准 HTML5，学习成本低"
-          },
-          "features": "特性",
-          "title": "介绍"
-        },
-        "quickstart": {
-          "cdn": "或直接通过 CDN 引入：",
-          "createIndex": "创建 index.html：",
-          "firstPage": "创建第一个页面",
-          "install": "安装",
-          "npmInstall": "通过 npm 安装：",
-          "title": "快速开始"
-        },
-        "router": {
-          "config": "配置路由",
-          "configDesc": "在 /ui/routes.js 中配置：",
-          "linkNav": "链接导航",
-          "nav": "导航",
-          "progNav": "编程导航",
-          "title": "路由"
-        },
-        "slots": {
-          "componentSide": "组件内",
-          "default": "默认插槽",
-          "named": "命名插槽",
-          "title": "插槽",
-          "usageSide": "使用时"
-        },
-        "structure": {
-          "desc": "推荐的 vhtml 项目目录结构：",
-          "title": "目录结构"
-        },
-        "template": {
-          "attrBinding": "属性绑定",
-          "condition": "条件渲染",
-          "dynamicAttr": "动态属性",
-          "list": "列表渲染",
-          "textInterpolation": "文本插值",
-          "title": "模板语法",
-          "twoWay": "双向绑定"
-        }
-      },
-      "sections": {
-        "api": "API 调用",
-        "components": "组件",
-        "data": "响应式数据",
-        "events": "事件处理",
-        "intro": "介绍",
-        "quickstart": "快速开始",
-        "router": "路由",
-        "slots": "插槽",
-        "structure": "目录结构",
-        "template": "模板语法"
-      },
-      "sidebar": {
-        "advanced": "进阶",
-        "basics": "基础",
-        "guide": "指南"
-      },
-      "title": "文档 - vhtml"
-    },
-    "ecosystem": {
-      "community": {
-        "awesome": {
-          "desc": "精选的 vhtml 资源列表，包含教程、工具、项目案例",
-          "tag": "资源合集",
-          "title": "Awesome vhtml"
-        },
-        "devtools": {
-          "desc": "浏览器开发者工具扩展，用于调试 vhtml 应用",
-          "tag": "开发工具",
-          "title": "vhtml DevTools"
-        },
-        "templates": {
-          "desc": "官方项目模板集合，包含后台管理、移动端、官网等",
-          "tag": "模板",
-          "title": "vhtml Templates"
-        },
-        "title": "社区资源",
-        "tutorial": {
-          "desc": "从入门到精通的完整教程系列，包含视频和文档",
-          "tag": "教程",
-          "title": "vhtml 实战教程"
-        }
-      },
-      "core": {
-        "charts": {
-          "desc": "基于 ECharts 的图表组件库，轻松创建数据可视化",
-          "title": "vhtml Charts"
-        },
-        "cli": {
-          "desc": "官方命令行工具，快速创建项目、生成组件、构建部署",
-          "title": "vhtml CLI"
-        },
-        "form": {
-          "desc": "表单解决方案，包含表单验证、动态表单、表单生成器",
-          "title": "vhtml Form"
-        },
-        "i18n": {
-          "desc": "国际化插件，支持多语言切换、语言包管理",
-          "title": "vhtml i18n"
-        },
-        "router": {
-          "desc": "增强版路由插件，支持嵌套路由、路由守卫、懒加载",
-          "title": "vhtml Router"
-        },
-        "ui": {
-          "desc": "官方组件库，提供丰富的基础组件和业务组件",
-          "title": "vhtml UI"
-        }
-      },
-      "subtitle": "探索 vhtml 的周边工具、组件库和社区资源",
-      "title": "生态 - vhtml"
-    },
-    "examples": {
-      "demoList": {
-        "condition": "条件渲染",
-        "counter": "计数器",
-        "list": "列表渲染",
-        "tabs": "Tab 切换",
-        "twoWay": "双向数据绑定"
-      },
-      "subtitle": "vhtml 功能演示与代码示例",
-      "title": "示例 - vhtml",
-      "viewExamples": "查看示例"
-    },
-    "home": {
-      "featureList": {
-        "component": {
-          "desc": "支持组件封装、属性传递、事件通信，代码复用更简单",
-          "title": "组件化开发"
-        },
-        "lightweight": {
-          "desc": "压缩后仅 96KB，无依赖，加载迅速，性能优异",
-          "title": "轻量快速"
-        },
-        "native": {
-          "desc": "基于标准 HTML5，学习成本低，无需掌握复杂的构建工具",
-          "title": "原生语法"
-        },
-        "reactive": {
-          "desc": "自动数据绑定，状态变化自动更新视图，开发更高效",
-          "title": "响应式绑定"
-        },
-        "ready": {
-          "desc": "集成 Axios、FontAwesome、ECharts，无需额外配置",
-          "title": "开箱即用"
-        },
-        "router": {
-          "desc": "内置路由系统，支持动态路由、路由守卫，SPA 开发无压力",
-          "title": "客户端路由"
-        }
-      },
-      "features": "核心特性",
-      "quickStart": "快速开始",
-      "subtitle": "轻量级响应式前端框架，基于原生 HTML5 语法，无需复杂编译",
-      "title": "vhtml - 轻量级响应式前端框架",
-      "viewExamples": "查看示例"
-    },
-    "notFound": {
-      "backHome": "返回首页",
-      "backPrev": "返回上一页",
-      "message": "抱歉，您访问的页面不存在或已被移除",
-      "title": "404 - 页面未找到",
-      "titleText": "页面未找到"
-    },
-    "preview": {
-      "copy": "复制代码",
-      "copyError": "复制失败",
-      "copySuccess": "复制成功",
-      "emptyState": "暂无内容，请在左侧编辑代码",
-      "mode": {
-        "split": "左右分栏",
-        "switch": "切换模式"
-      },
-      "showCode": "显示代码",
-      "showPreview": "显示预览",
-      "subtitle": "实时编辑代码并预览效果",
-      "title": "组件预览"
-    }
+    "about.developer.desc": "vhtml 框架作者，热爱开源，专注于前端工具链开发",
+    "about.developer.email": "邮箱",
+    "about.developer.name": "veypi",
+    "about.developer.title": "开发者",
+    "about.license.desc": "vhtml 采用 MIT 协议开源，你可以自由使用、修改和分发。",
+    "about.license.text": "MIT License\n\nCopyright (c) 2024-2025 veypi\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.",
+    "about.license.title": "开源协议",
+    "about.links.changelog.desc": "查看版本更新历史",
+    "about.links.changelog.title": "更新日志",
+    "about.links.github.desc": "github.com/veypi/vhtml",
+    "about.links.github.title": "GitHub 仓库",
+    "about.links.issues.desc": "提交 Bug 或功能建议",
+    "about.links.issues.title": "问题反馈",
+    "about.links.npm.desc": "@veypi/vhtml",
+    "about.links.npm.title": "NPM 包",
+    "about.links.title": "相关链接",
+    "about.project.p1": "vhtml 是一个由 veypi 开发的轻量级响应式前端框架。项目始于 2024 年，旨在提供一个简单、高效、无需复杂构建工具的前端开发解决方案。",
+    "about.project.p2": "vhtml 采用原生 HTML5 语法，开发者无需学习复杂的构建流程和新的模板语法，即可快速构建现代化的 Web 应用。",
+    "about.project.title": "项目介绍",
+    "about.subtitle": "了解框架的版本、开发者和开源信息",
+    "about.title": "关于 - vhtml",
+    "about.version.current": "当前版本",
+    "about.version.firstRelease": "首次发布",
+    "about.version.license": "开源协议",
+    "about.version.size": "压缩体积",
+    "about.version.title": "版本信息",
+    "code.copied": "已复制",
+    "code.copy": "复制",
+    "common.about": "关于",
+    "common.copyright": "vhtml © 2025 | {github}",
+    "common.docs": "文档",
+    "common.ecosystem": "生态",
+    "common.examples": "示例",
+    "docs.codeComments.event": "点击我",
+    "docs.content.api.desc": "vhtml 内置 $axios 用于 HTTP 请求：",
+    "docs.content.api.error": "获取失败",
+    "docs.content.api.get": "GET 请求",
+    "docs.content.api.post": "POST 请求",
+    "docs.content.api.success": "创建成功",
+    "docs.content.api.title": "API 调用",
+    "docs.content.components.create": "创建组件",
+    "docs.content.components.createDesc": "在 /ui/components/ 目录下创建 HTML 文件：",
+    "docs.content.components.title": "组件",
+    "docs.content.components.usage": "使用组件",
+    "docs.content.components.usageDesc": "路径 /ui/components/my-button.html 对应标签 <components-my-button>：",
+    "docs.content.data.access": "访问数据",
+    "docs.content.data.accessDesc": "在模板中直接使用变量名：",
+    "docs.content.data.declare": "声明数据",
+    "docs.content.data.declareDesc": "在 <script setup> 中使用 = 直接赋值声明响应式数据：",
+    "docs.content.data.inScript": "在 script 中访问",
+    "docs.content.data.inScriptDesc": "使用 $data 访问和修改：",
+    "docs.content.data.title": "响应式数据",
+    "docs.content.events.custom": "触发自定义事件",
+    "docs.content.events.customDesc": "向父组件触发事件：",
+    "docs.content.events.handler": "事件处理函数",
+    "docs.content.events.listen": "监听事件",
+    "docs.content.events.title": "事件处理",
+    "docs.content.intro.browser": "浏览器支持",
+    "docs.content.intro.browserDesc": "vhtml 支持所有现代浏览器，包括 Chrome、Firefox、Safari、Edge 等。",
+    "docs.content.intro.desc": "vhtml 是一个轻量级响应式前端框架，采用原生 HTML5 语法，无需复杂的构建工具即可快速开发 Web 应用。",
+    "docs.content.intro.featureList.component": "组件化 - 支持组件封装和复用",
+    "docs.content.intro.featureList.lightweight": "轻量 - 压缩后仅 96KB，无外部依赖",
+    "docs.content.intro.featureList.reactive": "响应式 - 自动数据绑定，状态驱动视图",
+    "docs.content.intro.featureList.router": "路由 - 内置客户端路由系统",
+    "docs.content.intro.featureList.simple": "简单 - 基于标准 HTML5，学习成本低",
+    "docs.content.intro.features": "特性",
+    "docs.content.intro.title": "介绍",
+    "docs.content.quickstart.cdn": "或直接通过 CDN 引入：",
+    "docs.content.quickstart.createIndex": "创建 index.html：",
+    "docs.content.quickstart.firstPage": "创建第一个页面",
+    "docs.content.quickstart.install": "安装",
+    "docs.content.quickstart.npmInstall": "通过 npm 安装：",
+    "docs.content.quickstart.title": "快速开始",
+    "docs.content.router.config": "配置路由",
+    "docs.content.router.configDesc": "在 /ui/routes.js 中配置：",
+    "docs.content.router.linkNav": "链接导航",
+    "docs.content.router.nav": "导航",
+    "docs.content.router.progNav": "编程导航",
+    "docs.content.router.title": "路由",
+    "docs.content.slots.componentSide": "组件内",
+    "docs.content.slots.default": "默认插槽",
+    "docs.content.slots.named": "命名插槽",
+    "docs.content.slots.title": "插槽",
+    "docs.content.slots.usageSide": "使用时",
+    "docs.content.structure.desc": "推荐的 vhtml 项目目录结构：",
+    "docs.content.structure.title": "目录结构",
+    "docs.content.template.attrBinding": "属性绑定",
+    "docs.content.template.condition": "条件渲染",
+    "docs.content.template.dynamicAttr": "动态属性",
+    "docs.content.template.list": "列表渲染",
+    "docs.content.template.textInterpolation": "文本插值",
+    "docs.content.template.title": "模板语法",
+    "docs.content.template.twoWay": "双向绑定",
+    "docs.sections.api": "API 调用",
+    "docs.sections.components": "组件",
+    "docs.sections.data": "响应式数据",
+    "docs.sections.events": "事件处理",
+    "docs.sections.intro": "介绍",
+    "docs.sections.quickstart": "快速开始",
+    "docs.sections.router": "路由",
+    "docs.sections.slots": "插槽",
+    "docs.sections.structure": "目录结构",
+    "docs.sections.template": "模板语法",
+    "docs.sidebar.advanced": "进阶",
+    "docs.sidebar.basics": "基础",
+    "docs.sidebar.guide": "指南",
+    "docs.title": "文档 - vhtml",
+    "ecosystem.community.awesome.desc": "精选的 vhtml 资源列表，包含教程、工具、项目案例",
+    "ecosystem.community.awesome.tag": "资源合集",
+    "ecosystem.community.awesome.title": "Awesome vhtml",
+    "ecosystem.community.devtools.desc": "浏览器开发者工具扩展，用于调试 vhtml 应用",
+    "ecosystem.community.devtools.tag": "开发工具",
+    "ecosystem.community.devtools.title": "vhtml DevTools",
+    "ecosystem.community.templates.desc": "官方项目模板集合，包含后台管理、移动端、官网等",
+    "ecosystem.community.templates.tag": "模板",
+    "ecosystem.community.templates.title": "vhtml Templates",
+    "ecosystem.community.title": "社区资源",
+    "ecosystem.community.tutorial.desc": "从入门到精通的完整教程系列，包含视频和文档",
+    "ecosystem.community.tutorial.tag": "教程",
+    "ecosystem.community.tutorial.title": "vhtml 实战教程",
+    "ecosystem.core.charts.desc": "基于 ECharts 的图表组件库，轻松创建数据可视化",
+    "ecosystem.core.charts.title": "vhtml Charts",
+    "ecosystem.core.cli.desc": "官方命令行工具，快速创建项目、生成组件、构建部署",
+    "ecosystem.core.cli.title": "vhtml CLI",
+    "ecosystem.core.form.desc": "表单解决方案，包含表单验证、动态表单、表单生成器",
+    "ecosystem.core.form.title": "vhtml Form",
+    "ecosystem.core.i18n.desc": "国际化插件，支持多语言切换、语言包管理",
+    "ecosystem.core.i18n.title": "vhtml i18n",
+    "ecosystem.core.router.desc": "增强版路由插件，支持嵌套路由、路由守卫、懒加载",
+    "ecosystem.core.router.title": "vhtml Router",
+    "ecosystem.core.ui.desc": "官方组件库，提供丰富的基础组件和业务组件",
+    "ecosystem.core.ui.title": "vhtml UI",
+    "ecosystem.subtitle": "探索 vhtml 的周边工具、组件库和社区资源",
+    "ecosystem.title": "生态 - vhtml",
+    "examples.demoList.condition": "条件渲染",
+    "examples.demoList.counter": "计数器",
+    "examples.demoList.list": "列表渲染",
+    "examples.demoList.tabs": "Tab 切换",
+    "examples.demoList.twoWay": "双向数据绑定",
+    "examples.subtitle": "vhtml 功能演示与代码示例",
+    "examples.title": "示例 - vhtml",
+    "examples.viewExamples": "查看示例",
+    "home.featureList.component.desc": "支持组件封装、属性传递、事件通信，代码复用更简单",
+    "home.featureList.component.title": "组件化开发",
+    "home.featureList.lightweight.desc": "压缩后仅 96KB，无依赖，加载迅速，性能优异",
+    "home.featureList.lightweight.title": "轻量快速",
+    "home.featureList.native.desc": "基于标准 HTML5，学习成本低，无需掌握复杂的构建工具",
+    "home.featureList.native.title": "原生语法",
+    "home.featureList.reactive.desc": "自动数据绑定，状态变化自动更新视图，开发更高效",
+    "home.featureList.reactive.title": "响应式绑定",
+    "home.featureList.ready.desc": "集成 Axios、FontAwesome、ECharts，无需额外配置",
+    "home.featureList.ready.title": "开箱即用",
+    "home.featureList.router.desc": "内置路由系统，支持动态路由、路由守卫，SPA 开发无压力",
+    "home.featureList.router.title": "客户端路由",
+    "home.features": "核心特性",
+    "home.quickStart": "快速开始",
+    "home.subtitle": "轻量级响应式前端框架，基于原生 HTML5 语法，无需复杂编译",
+    "home.title": "vhtml - 轻量级响应式前端框架",
+    "home.viewExamples": "查看示例",
+    "notFound.backHome": "返回首页",
+    "notFound.backPrev": "返回上一页",
+    "notFound.message": "抱歉，您访问的页面不存在或已被移除",
+    "notFound.title": "404 - 页面未找到",
+    "notFound.titleText": "页面未找到",
+    "preview.copy": "复制代码",
+    "preview.copyError": "复制失败",
+    "preview.copySuccess": "复制成功",
+    "preview.emptyState": "暂无内容，请在左侧编辑代码",
+    "preview.mode.split": "左右分栏",
+    "preview.mode.switch": "切换模式",
+    "preview.showCode": "显示代码",
+    "preview.showPreview": "显示预览",
+    "preview.subtitle": "实时编辑代码并预览效果",
+    "preview.title": "组件预览"
   }
 }

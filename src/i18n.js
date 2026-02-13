@@ -33,11 +33,10 @@ class I18n {
     } else {
       this.messages = messages
     }
-    console.log(this.shared)
     return this
   }
 
-  // 核心翻译：支持嵌套 key、插值、复数
+  // 核心翻译：支持插值、复数
   t(key, options = {}) {
     const {
       locale = this.shared.locale,
@@ -46,11 +45,8 @@ class I18n {
       ...vars
     } = options
 
-    const getNested = (obj, path) =>
-      path.split('.').reduce((acc, part) => acc?.[part], obj)
-
-    let str = getNested(this.messages[locale], key)
-      || getNested(this.messages[fallback], key)
+    let str = this.messages[locale]?.[key]
+      || this.messages[fallback]?.[key]
       || key
 
     // 复数处理
@@ -129,8 +125,7 @@ class I18n {
   }
 
   has(key, locale = this.shared.locale) {
-    const getNested = (obj, path) => path.split('.').reduce((acc, part) => acc?.[part], obj)
-    return !!getNested(this.messages[locale], key)
+    return !!this.messages[locale]?.[key]
   }
 
   getLocales() {
