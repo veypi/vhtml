@@ -108,8 +108,8 @@ func addKeys(keys []string, config *Config) error {
 		return err
 	}
 
-	// 解析多语言值
-	var values map[string]string
+	// 解析多语言值（支持字符串或复数对象）
+	var values map[string]interface{}
 	if addOpts.Values != "" {
 		if err := json.Unmarshal([]byte(addOpts.Values), &values); err != nil {
 			return fmt.Errorf("解析 values 失败: %w", err)
@@ -126,7 +126,13 @@ func addKeys(keys []string, config *Config) error {
 			if v, ok := values[lang]; ok {
 				value = v
 			} else if addOpts.Value != "" {
-				value = addOpts.Value
+				// 尝试解析为 JSON 对象（复数格式）
+				var obj interface{}
+				if err := json.Unmarshal([]byte(addOpts.Value), &obj); err == nil {
+					value = obj
+				} else {
+					value = addOpts.Value
+				}
 			} else {
 				value = ""
 			}
