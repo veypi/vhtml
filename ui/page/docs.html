@@ -221,28 +221,12 @@
         <h1>{{ $t('docs.content.quickstart.title') }}</h1>
         <h2>{{ $t('docs.content.quickstart.install') }}</h2>
         <p>{{ $t('docs.content.quickstart.npmInstall') }}</p>
-        <pre><code>npm install @veypi/vhtml</code></pre>
+        <local-code :code="npmInstallCode" :language="'bash'"></local-code>
         <p>{{ $t('docs.content.quickstart.cdn') }}</p>
-        <pre><code>&lt;script src="https://unpkg.com/@veypi/vhtml/dist/vhtml.min.js"&gt;&lt;/script&gt;</code></pre>
+        <local-code :code="cdnCode" :language="'html'"></local-code>
         <h2>{{ $t('docs.content.quickstart.firstPage') }}</h2>
         <p>{{ $t('docs.content.quickstart.createIndex') }}</p>
-        <pre><code>&lt;!DOCTYPE html&gt;
-            &lt;html&gt;
-            &lt;head&gt;
-            &lt;meta charset="UTF-8" /&gt;
-            &lt;title&gt;我的应用&lt;/title&gt;
-            &lt;/head&gt;
-            &lt;body&gt;
-            &lt;h1&gt;{{ message }}&lt;/h1&gt;
-            &lt;button @click="updateMessage"&gt;点击&lt;/button&gt;
-            &lt;/body&gt;
-            &lt;script setup&gt;
-            message = 'Hello vhtml!';
-            updateMessage = () =&gt; {
-            message = '你好，世界！';
-            };
-            &lt;/script&gt;
-            &lt;/html&gt;</code></pre>
+        <local-preview :code="firstPageCode"></local-preview>
       </div>
 
       <!-- 目录结构 -->
@@ -439,6 +423,29 @@
   switchSection = (section) => {
     currentSection = section;
   };
+
+  // 代码示例
+  npmInstallCode = 'npm install @veypi/vhtml';
+
+  cdnCode = '<script src="https://unpkg.com/@veypi/vhtml/dist/vhtml.min.js"><\/script>';
+
+  firstPageCode = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>我的应用</title>
+</head>
+<body>
+  <h1>{{ message }}</h1>
+  <button @click="updateMessage">点击</button>
+</body>
+<script setup>
+  message = 'Hello vhtml!';
+  updateMessage = () => {
+    message = '你好，世界！';
+  };
+<\/script>
+<\/html>`;
 </script>
 <script>
   console.log('文档页面已加载');

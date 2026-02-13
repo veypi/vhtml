@@ -276,7 +276,7 @@
           </svg>
         </button>
         <!-- 视图切换按钮（仅在 switch 模式下显示） -->
-        <button v-if="displayMode === 'switch'" class="icon-btn" @click="toggleSwitchView"
+        <button v-if="mode === 'switch'" class="icon-btn" @click="toggleSwitchView"
           :title="switchView === 'code' ? $t('preview.showPreview') : $t('preview.showCode')">
           <svg v-if="switchView === 'code'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
@@ -288,9 +288,10 @@
           </svg>
         </button>
         <!-- 模式切换按钮：split/switch 合并（最右） -->
-        <button class="icon-btn" @click="toggleMode" :title="displayMode === 'split' ? $t('preview.mode.switch') : $t('preview.mode.split')">
+        <button class="icon-btn" @click="toggleMode"
+          :title="mode === 'split' ? $t('preview.mode.switch') : $t('preview.mode.split')">
           <!-- split 模式图标 -->
-          <svg v-if="displayMode === 'split'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg v-if="mode === 'split'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="12" y1="3" x2="12" y2="21"></line>
           </svg>
@@ -336,17 +337,17 @@
   isEmbedded = () => {
     return !!code;
   };
-  displayMode = 'switch';
+  mode = 'switch';
 
   switchView = 'preview';
 
   code = '';
   bodyClass = () => {
-    return displayMode === 'split' ? 'split-mode' : 'switch-mode';
+    return mode === 'split' ? 'split-mode' : 'switch-mode';
   };
 
-  setMode = (mode) => {
-    displayMode = mode;
+  setMode = (m) => {
+    mode = m;
     if (mode === 'switch') {
       switchView = 'preview';
     }
@@ -354,7 +355,7 @@
 
   // 切换模式
   toggleMode = () => {
-    setMode(displayMode === 'split' ? 'switch' : 'split');
+    setMode(mode === 'split' ? 'switch' : 'split');
   };
 
   // 切换视图（切换模式下使用）

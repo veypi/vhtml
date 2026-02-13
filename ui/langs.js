@@ -362,6 +362,12 @@ copies or substantial portions of the Software.`
       zh: "中文",
       en: "English",
       switch: "切换语言"
+    },
+
+    // 代码组件
+    code: {
+      copy: "复制",
+      copied: "已复制"
     }
   },
 
@@ -721,6 +727,12 @@ copies or substantial portions of the Software.`
       zh: "中文",
       en: "English",
       switch: "Switch Language"
+    },
+
+    // Code component
+    code: {
+      copy: "Copy",
+      copied: "Copied"
     }
   }
 }

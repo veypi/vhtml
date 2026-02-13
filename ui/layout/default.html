@@ -10,6 +10,7 @@
 </head>
 <style>
   body {
+    width: 100%;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -102,6 +103,7 @@
   /* 主内容区 */
   .main-content {
     flex: 1;
+    width: 100%;
   }
 
   /* 页脚 */
@@ -140,9 +142,7 @@
   </nav>
 
   <!-- 主内容插槽 -->
-  <main class="main-content">
-    <vslot></vslot>
-  </main>
+  <vslot class="main-content"></vslot>
 
   <!-- 页脚 -->
   <footer class="footer">

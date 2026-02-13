@@ -21,7 +21,9 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 - 组件引用格式：对于 `/ui/form/user_create.html` → 使用 `<form-user_create></form-user_create>`（将 `/` 替换为 `-`，移除 `.html`，全部小写，**禁止**大写）
 - `/ui/root.html` - 非资源类后端请求的根页面
 - `/ui/routes.js` - 路由配置,默认导出一个[]route 列表
-- `/ui/env.js` - 定义全局 `$env` 变量, 引入$i18n.load 加载消息
+- `/ui/env.js` - 定义全局 `$env` 变量, 引入$i18n.load 加载消息, 注册路由插件
+  - $env.$i18n.load(i18n) //{'zh-CN': {}, 'en-US': {}}
+  - $env.$router.beforeEnter = async (to, from, next) =>{}
 - /ui/i18n.js - 定义翻译项消息
 
 ### HTML 文件结构（强制模板）
@@ -40,7 +42,9 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
       content="页面/组件名称"
       details="页面/组件详细描述信息"
     />
-    <title>页面标题</title>
+    <title>页面标题 or {{$t('xxxxx')}}</title>
+    <link rel="stylesheet" key="xxxx" href="xxxxx" />
+    <script type="module" key="xxxx" src="xxxx"></script>
   </head>
   <style>
     /* CSS 样式 */
@@ -87,10 +91,8 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 **HEAD 标签：**
 
 - **必须**包含 `<title>`、`<meta>`、`<meta name="description" content="...">`
-- 不允许使用动态数据绑定
-
-**STYLE 标签：**
-
+- 只有 title 允许使用动态数据绑定($env 数据),其余不支持动态数据绑定
+  **STYLE 标签：**
 - 在 `<style>` 标签中定义 CSS
 - `body {}` 必须定义组件最外层样式
 - 优先级：行内 `style` > `<style>` 标签样式
@@ -109,9 +111,13 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 - 变量名使用 camelCase 命名规范
 - 使用 `let`/`const`/`var`/`function` 声明的变量/方法是**临时的**，**不会**暴露给模板或普通 `<script>`
 
+**SCRIPT ACTIVE 标签：**
+
+- 每次加载到页面执行一次
+
 **SCRIPT 标签：**
 
-- 页面初始化后自动执行
+- 页面初始化后自动执行一次
 - 访问/修改响应式数据：`$data.variableName = "value"`（触发视图更新）
 - DOM 操作：`$node.querySelector("#myElement")`（$node 指向模板根元素的父节点）
 - API 调用：`$axios.get/post/patch/put/delete`

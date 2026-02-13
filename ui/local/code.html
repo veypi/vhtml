@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="代码展示组件" details="带行号和语法高亮的代码展示组件" />
+  <title>Code Block</title>
+</head>
+
+<style>
+  body {
+    background: #1a1a2e;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: var(--font-size-sm);
+    line-height: 1.6;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: #252542;
+    border-bottom: 1px solid #333;
+  }
+
+  .code-lang {
+    color: #8892b0;
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .code-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+  }
+
+  .code-btn {
+    background: transparent;
+    border: 1px solid #444;
+    color: #8892b0;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    transition: all var(--transition-fast);
+  }
+
+  .code-btn:hover {
+    background: #333;
+    color: #fff;
+    border-color: #555;
+  }
+
+  .code-btn.copied {
+    color: #4caf50;
+    border-color: #4caf50;
+  }
+
+  .code-container {
+    display: flex;
+    overflow-x: auto;
+    max-height: 500px;
+  }
+
+  .line-numbers {
+    flex-shrink: 0;
+    padding: var(--spacing-md) var(--spacing-sm);
+    background: #1a1a2e;
+    color: #4a5568;
+    text-align: right;
+    user-select: none;
+    border-right: 1px solid #2d2d4a;
+  }
+
+  .line-number {
+    display: block;
+    min-width: 2em;
+    line-height: 1.6;
+  }
+
+  .code-content {
+    flex: 1;
+    padding: var(--spacing-md);
+    overflow-x: auto;
+  }
+
+  .code-content pre {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: #e2e8f0;
+  }
+
+  .code-content code {
+    display: block;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-family: inherit;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  /* 语法高亮颜色 */
+  .token-keyword {
+    color: #ff79c6;
+  }
+
+  .token-string {
+    color: #f1fa8c;
+  }
+
+  .token-comment {
+    color: #6272a4;
+  }
+
+  .token-number {
+    color: #bd93f9;
+  }
+
+  .token-function {
+    color: #50fa7b;
+  }
+
+  .token-operator {
+    color: #ff79c6;
+  }
+
+  .token-tag {
+    color: #ff79c6;
+  }
+
+  .token-attr {
+    color: #50fa7b;
+  }
+</style>
+
+<body>
+  <div class="code-header">
+    <span class="code-lang">{{ language }}</span>
+    <div class="code-actions">
+      <button class="code-btn" @click="copyCode" :class="{ copied: copied }">
+        {{ copied ? $t('code.copied') : $t('code.copy') }}
+      </button>
+    </div>
+  </div>
+  <div class="code-container">
+    <div class="line-numbers">
+      <span v-for="(n, i) in lineCount" class="line-number">{{ i + 1 }}</span>
+    </div>
+    <div class="code-content">
+      <pre><code>{{ formattedCode }}</code></pre>
+    </div>
+  </div>
+</body>
+
+<script setup>
+  code = '';
+  language = 'html';
+  copied = false;
+
+  // 计算行数
+  lineCount = () => {
+    if (!code) return 1;
+    return code.split('\n').length;
+  };
+
+  // 格式化代码（保留缩进和换行）
+  formattedCode = () => {
+    if (!code) return '';
+    // 统一使用 2 空格缩进
+    return code.replace(/\t/g, '  ');
+  };
+
+  // 复制代码
+  copyCode = () => {
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+      copied = true;
+      setTimeout(() => {
+        copied = false;
+      }, 2000);
+    });
+  };
+</script>
+
+</html>

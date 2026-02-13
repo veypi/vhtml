@@ -10,9 +10,9 @@
 </head>
 <style>
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     line-height: 1.6;
     color: var(--text-color);
+    width: 100%;
   }
 
   .container {
@@ -128,7 +128,6 @@
 
   /* 代码示例区域 */
   .code-section {
-    background: #1a1a2e;
     padding: var(--spacing-2xl) 0;
     color: #fff;
   }
@@ -221,25 +220,7 @@
   <!-- 代码示例 -->
   <section class="code-section">
     <div class="container">
-      <h2>{{ $t('home.syntax') }}</h2>
-      <div class="code-block">
-        <span class="comment">&lt;!-- {{ $t('home.codeComments.dataBinding') }} --&gt;</span>
-        &lt;<span class="tag">p</span>&gt;{{ message }}&lt;/<span class="tag">p</span>&gt;
-        &lt;<span class="tag">input</span> <span class="attr">v:value</span>=<span class="value">"message"</span>&gt;
-
-        <span class="comment">&lt;!-- {{ $t('home.codeComments.condition') }} --&gt;</span>
-        &lt;<span class="tag">div</span> <span class="attr">v-if</span>=<span class="value">"isShow"</span>&gt;{{
-        $t('home.codeComments.condition') }}&lt;/<span class="tag">div</span>&gt;
-
-        <span class="comment">&lt;!-- {{ $t('home.codeComments.list') }} --&gt;</span>
-        &lt;<span class="tag">div</span> <span class="attr">v-for</span>=<span class="value">"item in list"</span>&gt;{{
-        item.name }}&lt;/<span class="tag">div</span>&gt;
-
-        <span class="comment">&lt;!-- {{ $t('home.codeComments.event') }} --&gt;</span>
-        &lt;<span class="tag">button</span> <span class="attr">@click</span>=<span
-          class="value">"handleClick"</span>&gt;{{ $t('home.codeComments.event') }}&lt;/<span
-          class="tag">button</span>&gt;
-      </div>
+      <local-preview mode='split' :code='code()'></local-preview>
     </div>
   </section>
 </body>
@@ -251,6 +232,66 @@
     {name: '高效'},
     {name: '强大'}
   ];
+  code = () => {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Counter Demo</title>
+</head>
+<style>
+  body {
+    text-align: center;
+    padding: 40px;
+    color: #667eea;
+  }
+  .counter {
+    font-size: 48px;
+    color: #667eea;
+    margin: 20px 0;
+  }
+  button {
+    padding: 10px 20px;
+    margin: 0 5px;
+    border: none;
+    border-radius: 6px;
+    background: #667eea;
+    color: white;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #5a6fd6;
+  }
+</style>
+<body>
+  <h2>{{ title }}</h2>
+  <div class="counter">{{ count }}</div>
+  <div>
+    <button @click="decrement">-</button>
+    <button @click="increment">+</button>
+    <button @click="reset">Reset</button>
+  </div>
+  <p v-if="count > 5">{{ message }}</p>
+</body>
+<script setup>
+  title = 'Counter App'
+  message = 'Count is getting high!'
+  count = 0
+
+  increment = () => {
+    count++
+  }
+
+  decrement = () => {
+    count--
+  }
+
+  reset = () => {
+    count = 0
+  }
+<\/script>
+</html>`
+  }
 
   handleClick = () => {
     $message.success('欢迎使用 vhtml！');
