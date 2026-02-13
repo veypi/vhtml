@@ -217,8 +217,6 @@
       "title": "Ecosystem - vhtml"
     },
     "examples": {
-      "condition": {},
-      "counter": {},
       "demoList": {
         "condition": "Conditional Rendering",
         "counter": "Counter",
@@ -226,17 +224,11 @@
         "tabs": "Tab Switching",
         "twoWay": "Two-way Data Binding"
       },
-      "list": {
-        "defaultTodos": {}
-      },
       "subtitle": "vhtml feature demos and code examples",
-      "tabs": {},
       "title": "Examples - vhtml",
-      "twoWay": {},
-      "viewExamples": ""
+      "viewExamples": "View Examples"
     },
     "home": {
-      "codeComments": {},
       "featureList": {
         "component": {
           "desc": "Support component encapsulation, props passing, event communication, easier code reuse",
@@ -269,7 +261,6 @@
       "title": "vhtml - Lightweight Reactive Frontend Framework",
       "viewExamples": "View Examples"
     },
-    "lang": {},
     "notFound": {
       "backHome": "Back to Home",
       "backPrev": "Back to Previous",
@@ -282,7 +273,6 @@
       "copyError": "Copy failed",
       "copySuccess": "Copied successfully",
       "emptyState": "No content yet, please edit code on the left",
-      "examples": {},
       "mode": {
         "split": "Split View",
         "switch": "Switch Mode"
@@ -340,7 +330,6 @@
         "title": "版本信息"
       }
     },
-    "apples": {},
     "code": {
       "copied": "已复制",
       "copy": "复制"
@@ -354,7 +343,7 @@
     },
     "docs": {
       "codeComments": {
-        "event": ""
+        "event": "点击我"
       },
       "content": {
         "api": {
@@ -512,8 +501,6 @@
       "title": "生态 - vhtml"
     },
     "examples": {
-      "condition": {},
-      "counter": {},
       "demoList": {
         "condition": "条件渲染",
         "counter": "计数器",
@@ -521,17 +508,11 @@
         "tabs": "Tab 切换",
         "twoWay": "双向数据绑定"
       },
-      "list": {
-        "defaultTodos": {}
-      },
       "subtitle": "vhtml 功能演示与代码示例",
-      "tabs": {},
       "title": "示例 - vhtml",
-      "twoWay": {},
-      "viewExamples": ""
+      "viewExamples": "查看示例"
     },
     "home": {
-      "codeComments": {},
       "featureList": {
         "component": {
           "desc": "支持组件封装、属性传递、事件通信，代码复用更简单",
@@ -564,7 +545,6 @@
       "title": "vhtml - 轻量级响应式前端框架",
       "viewExamples": "查看示例"
     },
-    "lang": {},
     "notFound": {
       "backHome": "返回首页",
       "backPrev": "返回上一页",
@@ -577,7 +557,6 @@
       "copyError": "复制失败",
       "copySuccess": "复制成功",
       "emptyState": "暂无内容，请在左侧编辑代码",
-      "examples": {},
       "mode": {
         "split": "左右分栏",
         "switch": "切换模式"
