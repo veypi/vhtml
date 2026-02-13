@@ -22,9 +22,9 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 - `/ui/root.html` - 非资源类后端请求的根页面
 - `/ui/routes.js` - 路由配置,默认导出一个[]route 列表
 - `/ui/env.js` - 定义全局 `$env` 变量, 引入$i18n.load 加载消息, 注册路由插件
-  - $env.$i18n.load(i18n) //{'zh-CN': {}, 'en-US': {}}
+  - $env.$i18n.load(await (await fetch('./langs.json')).json()) //{'zh-CN': {}, 'en-US': {}}
   - $env.$router.beforeEnter = async (to, from, next) =>{}
-- /ui/i18n.js - 定义翻译项消息
+- /ui/langs.json - 定义翻译项消息
 
 ### HTML 文件结构（强制模板）
 
@@ -352,7 +352,8 @@ $t("user.welcome", { locale: "en-US", name: "Tom" });
 - 嵌套键名通过 `.` 访问（如 `nav.user.name`）
 - 复数对象必须包含 `other`，可选 `zero`/`one`
 - 变量用 `{var}` 包裹，支持任意字符（不含 `}`）
-- 查询当前使用的 key: grep -r --include="\*.html" '$t' . | awk -F "['\"]" '{for(i=1;i<=NF;i++){if($i~/\$t\(/){print $(i+1)}}}' | sort | uniq
+- 查询当前使用的 key:
+  grep -r --include="\*.html" '$t' . | awk -F "['\"]" '{for(i=1;i<=NF;i++){if($i~/\$t\(/){print $(i+1)}}}' | sort | uniq
 
 ## 代码质量标准
 
