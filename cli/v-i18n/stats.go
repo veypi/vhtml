@@ -15,8 +15,8 @@ import (
 )
 
 var statsOpts = struct {
-	StatsOutput string `json:"statsOutput"`
-	StatsFormat string `json:"statsFormat"`
+	StatsOutput string `json:"statsOutput" desc:"统计输出文件路径"`
+	StatsFormat string `json:"statsFormat" desc:"统计格式：table、json、csv"`
 }{
 	StatsOutput: "",
 	StatsFormat: "table",

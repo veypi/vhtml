@@ -15,11 +15,11 @@ import (
 )
 
 var exportOpts = struct {
-	Dest           string   `json:"dest"`
-	ExportFormat   string   `json:"exportFormat"`
-	ExportLangs    []string `json:"exportLangs"`
-	Flat           bool     `json:"flat"`
-	OnlyMissing    bool     `json:"onlyMissing"`
+	Dest           string   `json:"dest" desc:"输出文件路径"`
+	ExportFormat   string   `json:"exportFormat" desc:"导出格式：csv、json"`
+	ExportLangs    []string `json:"exportLangs" desc:"要导出的语言列表，逗号分隔"`
+	Flat           bool     `json:"flat" desc:"是否扁平化输出（仅 JSON）"`
+	OnlyMissing    bool     `json:"onlyMissing" desc:"只导出缺失翻译的项"`
 }{
 	Dest:           "translations.csv",
 	ExportFormat:   "csv",

@@ -13,10 +13,10 @@ import (
 )
 
 var syncOpts = struct {
-	Source   string   `json:"source"`
-	Target   []string `json:"target"`
-	SyncFill string   `json:"syncFill"`
-	Mark     bool     `json:"mark"`
+	Source   string   `json:"source" desc:"源语言，作为同步的基准"`
+	Target   []string `json:"target" desc:"目标语言列表，为空则同步到所有其他语言"`
+	SyncFill string   `json:"syncFill" desc:"填充缺失翻译的值"`
+	Mark     bool     `json:"mark" desc:"是否标记新添加的翻译"`
 }{
 	Source:   "",
 	Target:   []string{},

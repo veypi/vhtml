@@ -19,15 +19,17 @@ import (
 
 // ========== add 命令 ==========
 var addOpts = struct {
-	Key    string `json:"key"`
-	Value  string `json:"value"`
-	Values string `json:"values"`
-	Nested bool   `json:"nested"`
+	Key    string `json:"key" desc:"要添加的翻译 key"`
+	Value  string `json:"value" desc:"翻译值（所有语言使用相同值）"`
+	Values string `json:"values" desc:"多语言值，JSON 格式如：{\"zh-CN\":\"中文\",\"en-US\":\"English\"}"`
+	Nested bool   `json:"nested" desc:"是否支持嵌套 key"`
+	Input  string `json:"input" desc:"从文件批量添加 key，每行一个"`
 }{
 	Key:    "",
 	Value:  "",
 	Values: "",
 	Nested: true,
+	Input:  "",
 }
 
 func init() {
@@ -42,6 +44,18 @@ func runAdd() error {
 
 	// 获取 key 参数
 	key := addOpts.Key
+
+	// 优先从文件读取
+	if addOpts.Input != "" {
+		keys, err := readKeysFromFile(addOpts.Input)
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			return addKeys(keys, config)
+		}
+		return fmt.Errorf("文件为空: %s", addOpts.Input)
+	}
 
 	// 如果没有提供 key，尝试从管道读取
 	if key == "" {
@@ -60,10 +74,32 @@ func runAdd() error {
 				return addKeys(keys, config)
 			}
 		}
-		return fmt.Errorf("请提供要添加的 key，使用 -key 参数指定")
+		return fmt.Errorf("请提供要添加的 key，使用 -key 参数指定或 -input 指定文件")
 	}
 
 	return addKeys([]string{key}, config)
+}
+
+// readKeysFromFile 从文件读取 key 列表
+func readKeysFromFile(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("打开文件失败: %w", err)
+	}
+	defer file.Close()
+
+	var keys []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		k := strings.TrimSpace(scanner.Text())
+		if k != "" && !strings.HasPrefix(k, "#") {
+			keys = append(keys, k)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("读取文件失败: %w", err)
+	}
+	return keys, nil
 }
 
 func addKeys(keys []string, config *Config) error {
@@ -105,9 +141,9 @@ func addKeys(keys []string, config *Config) error {
 
 // ========== remove 命令 ==========
 var removeOpts = struct {
-	Key         string `json:"key"`
-	Yes         bool   `json:"yes"`
-	UsePattern  bool   `json:"usePattern"`
+	Key        string `json:"key" desc:"要删除的 key 或正则模式"`
+	Yes        bool   `json:"yes" desc:"跳过确认直接删除"`
+	UsePattern bool   `json:"usePattern" desc:"将 key 视为正则表达式模式"`
 }{
 	Key:        "",
 	Yes:        false,
@@ -196,10 +232,10 @@ func runRemove() error {
 
 // ========== rename 命令 ==========
 var renameOpts = struct {
-	OldKey       string `json:"oldKey"`
-	NewKey       string `json:"newKey"`
-	UpdateSource bool   `json:"updateSource"`
-	DryRun       bool   `json:"dryRun"`
+	OldKey       string `json:"oldKey" desc:"原 key 名称"`
+	NewKey       string `json:"newKey" desc:"新 key 名称"`
+	UpdateSource bool   `json:"updateSource" desc:"是否更新源代码中的引用"`
+	DryRun       bool   `json:"dryRun" desc:"预览模式，不实际修改"`
 }{
 	OldKey:       "",
 	NewKey:       "",

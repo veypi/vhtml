@@ -17,17 +17,21 @@ import (
 )
 
 var scanOpts = struct {
-	Fix          bool   `json:"fix"`
-	RemoveUnused bool   `json:"removeUnused"`
-	ReportOutput string `json:"reportOutput"`
-	ReportFormat string `json:"reportFormat"`
-	Fill         string `json:"fill"`
+	Fix          bool   `json:"fix" desc:"自动修复，为缺失的 key 添加空翻译"`
+	RemoveUnused bool   `json:"removeUnused" desc:"删除未使用的 key"`
+	ReportOutput string `json:"reportOutput" desc:"报告输出文件路径"`
+	ReportFormat string `json:"reportFormat" desc:"报告格式：console、json"`
+	Fill         string `json:"fill" desc:"自动填充的值，用于修复时填充新 key"`
+	CheckEmpty   bool   `json:"checkEmpty" desc:"检查值为空的翻译项"`
+	Verbose      bool   `json:"verbose" desc:"显示所有结果，不省略"`
 }{
 	Fix:          false,
 	RemoveUnused: false,
 	ReportOutput: "",
 	ReportFormat: "console",
 	Fill:         "",
+	CheckEmpty:   true,
+	Verbose:      false,
 }
 
 func init() {
@@ -59,13 +63,26 @@ func runScan() error {
 	missingKeys := findMissingKeys(foundKeys, existingKeys)
 	unusedKeys := findUnusedKeys(foundKeys, existingKeys)
 
+	// 获取值为空的 keys（如果开启检查）
+	var emptyKeys map[string]map[string]bool // lang -> key -> bool
+	if scanOpts.CheckEmpty {
+		emptyKeys = make(map[string]map[string]bool)
+		for _, lang := range config.Languages {
+			emptyKeys[lang] = getEmptyKeys(translations, lang)
+		}
+	}
+
 	// 输出结果
 	if scanOpts.ReportOutput != "" {
-		return outputReport(foundKeys, missingKeys, unusedKeys, config)
+		return outputReport(foundKeys, missingKeys, unusedKeys, emptyKeys, config)
+	}
+	// 如果指定了 reportFormat=json 但没有指定输出文件，输出 JSON 到控制台
+	if scanOpts.ReportFormat == "json" {
+		return outputJSONToConsole(foundKeys, missingKeys, unusedKeys, emptyKeys, config)
 	}
 
 	// 控制台输出
-	printScanResult(foundKeys, missingKeys, unusedKeys, config)
+	printScanResult(foundKeys, missingKeys, unusedKeys, emptyKeys, config)
 
 	// 自动修复
 	if scanOpts.Fix && len(missingKeys) > 0 {
@@ -186,6 +203,43 @@ func extractKeys(data map[string]interface{}, prefix string, keys map[string]boo
 	}
 }
 
+// getEmptyKeys 获取所有值为空的 keys
+func getEmptyKeys(translations map[string]map[string]interface{}, lang string) map[string]bool {
+	emptyKeys := make(map[string]bool)
+	if items, ok := translations[lang]; ok {
+		extractEmptyKeys(items, "", emptyKeys)
+	}
+	return emptyKeys
+}
+
+func extractEmptyKeys(data map[string]interface{}, prefix string, emptyKeys map[string]bool) {
+	for k, v := range data {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		if nested, ok := v.(map[string]interface{}); ok {
+			extractEmptyKeys(nested, key, emptyKeys)
+		} else {
+			// 检查值是否为空
+			if isEmptyValue(v) {
+				emptyKeys[key] = true
+			}
+		}
+	}
+}
+
+// isEmptyValue 检查值是否为空
+func isEmptyValue(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	if s, ok := v.(string); ok {
+		return s == ""
+	}
+	return false
+}
+
 // findMissingKeys 找到缺失的 keys
 func findMissingKeys(found, existing map[string]bool) []string {
 	var missing []string
@@ -209,7 +263,7 @@ func findUnusedKeys(found, existing map[string]bool) []string {
 }
 
 // printScanResult 打印扫描结果
-func printScanResult(foundKeys map[string]bool, missingKeys, unusedKeys []string, config *Config) {
+func printScanResult(foundKeys map[string]bool, missingKeys, unusedKeys []string, emptyKeys map[string]map[string]bool, config *Config) {
 	fmt.Println("┌─────────────────────────────────────────────────────┐")
 	fmt.Println("│ 扫描结果                                            │")
 	fmt.Println("├─────────────────────────────────────────────────────┤")
@@ -237,9 +291,13 @@ func printScanResult(foundKeys map[string]bool, missingKeys, unusedKeys []string
 	// 显示缺失的 key 列表
 	if len(missingKeys) > 0 {
 		fmt.Println("├─────────────────────────────────────────────────────┤")
-		fmt.Println("│ 缺失 key 列表 (前 10 个):                           │")
+		if scanOpts.Verbose {
+			fmt.Println("│ 缺失 key 列表:                                      │")
+		} else {
+			fmt.Println("│ 缺失 key 列表 (前 10 个):                           │")
+		}
 		for i, key := range missingKeys {
-			if i >= 10 {
+			if !scanOpts.Verbose && i >= 10 {
 				fmt.Printf("│   ... 还有 %d 个                                   │\n", len(missingKeys)-10)
 				break
 			}
@@ -247,12 +305,54 @@ func printScanResult(foundKeys map[string]bool, missingKeys, unusedKeys []string
 		}
 	}
 
+	// 显示值为空的 keys
+	if scanOpts.CheckEmpty && emptyKeys != nil {
+		hasEmpty := false
+		for _, keys := range emptyKeys {
+			if len(keys) > 0 {
+				hasEmpty = true
+				break
+			}
+		}
+		if hasEmpty {
+			fmt.Println("├─────────────────────────────────────────────────────┤")
+			fmt.Println("│ 空值翻译                                            │")
+			for _, lang := range config.Languages {
+				if keys, ok := emptyKeys[lang]; ok && len(keys) > 0 {
+					fmt.Printf("│   ⚠️  %s: %d 个\n", lang, len(keys))
+				}
+			}
+			// 显示空值 key 列表（仅默认语言）
+			if defaultEmpty, ok := emptyKeys[config.DefaultLanguage]; ok && len(defaultEmpty) > 0 {
+				fmt.Println("├─────────────────────────────────────────────────────┤")
+				if scanOpts.Verbose {
+					fmt.Println("│ 空值 key 列表:                                      │")
+				} else {
+					fmt.Println("│ 空值 key 列表 (前 10 个):                           │")
+				}
+				count := 0
+				for key := range defaultEmpty {
+					if !scanOpts.Verbose && count >= 10 {
+						fmt.Printf("│   ... 还有 %d 个                                   │\n", len(defaultEmpty)-10)
+						break
+					}
+					fmt.Printf("│   - %s\n", key)
+					count++
+				}
+			}
+		}
+	}
+
 	// 显示未使用的 keys
 	if len(unusedKeys) > 0 {
 		fmt.Println("├─────────────────────────────────────────────────────┤")
-		fmt.Printf("│ 未使用 key (%d):                                    │\n", len(unusedKeys))
+		if scanOpts.Verbose {
+			fmt.Printf("│ 未使用 key (%d):                                    │\n", len(unusedKeys))
+		} else {
+			fmt.Printf("│ 未使用 key (%d, 前 5 个):                           │\n", len(unusedKeys))
+		}
 		for i, key := range unusedKeys {
-			if i >= 5 {
+			if !scanOpts.Verbose && i >= 5 {
 				fmt.Printf("│   ... 还有 %d 个                                   │\n", len(unusedKeys)-5)
 				break
 			}
@@ -359,16 +459,40 @@ func deleteNestedKey(data map[string]interface{}, key string) {
 }
 
 // outputReport 输出报告到文件
-func outputReport(foundKeys map[string]bool, missingKeys, unusedKeys []string, config *Config) error {
+func outputReport(foundKeys map[string]bool, missingKeys, unusedKeys []string, emptyKeys map[string]map[string]bool, config *Config) error {
 	// 简化实现，先支持 JSON 格式
 	if scanOpts.ReportFormat == "json" {
 		data := map[string]interface{}{
-			"found":   len(foundKeys),
-			"missing": missingKeys,
-			"unused":  unusedKeys,
+			"found":      len(foundKeys),
+			"missing":    missingKeys,
+			"unused":     unusedKeys,
+			"empty":      emptyKeys,
+			"emptyCount": countEmptyKeys(emptyKeys),
 		}
-		return os.WriteFile(scanOpts.ReportOutput, mustMarshalJSON(data), 0644)
+		return os.WriteFile(scanOpts.ReportOutput, mustMarshalJSON(data), 0o644)
 	}
+	return nil
+}
+
+// countEmptyKeys 统计空值 key 数量
+func countEmptyKeys(emptyKeys map[string]map[string]bool) map[string]int {
+	result := make(map[string]int)
+	for lang, keys := range emptyKeys {
+		result[lang] = len(keys)
+	}
+	return result
+}
+
+// outputJSONToConsole 输出 JSON 到控制台
+func outputJSONToConsole(foundKeys map[string]bool, missingKeys, unusedKeys []string, emptyKeys map[string]map[string]bool, config *Config) error {
+	data := map[string]interface{}{
+		"found":      len(foundKeys),
+		"missing":    missingKeys,
+		"unused":     unusedKeys,
+		"empty":      emptyKeys,
+		"emptyCount": countEmptyKeys(emptyKeys),
+	}
+	fmt.Println(string(mustMarshalJSON(data)))
 	return nil
 }
 

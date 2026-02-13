@@ -22,15 +22,15 @@ var version = "v0.1.0"
 
 // 全局配置参数
 var globalOpts = struct {
-	Entry           string   `json:"entry"`
-	Output          string   `json:"output"`
-	Languages       []string `json:"languages"`
-	DefaultLanguage string   `json:"defaultLanguage"`
-	Include         []string `json:"include"`
-	Exclude         []string `json:"exclude"`
-	Pattern         string   `json:"pattern"`
-	Indent          int      `json:"indent"`
-	SortKeys        bool     `json:"sortKeys"`
+	Entry           string   `json:"entry" desc:"入口目录，需要扫描的源代码目录"`
+	Output          string   `json:"output" desc:"输出文件路径，翻译文件的保存位置"`
+	Languages       []string `json:"languages" desc:"支持的语言列表，逗号分隔"`
+	DefaultLanguage string   `json:"defaultLanguage" desc:"默认语言，作为翻译的基准语言"`
+	Include         []string `json:"include" desc:"包含的文件模式，支持 glob 语法"`
+	Exclude         []string `json:"exclude" desc:"排除的文件模式，支持 glob 语法"`
+	Pattern         string   `json:"pattern" desc:"匹配翻译 key 的正则表达式"`
+	Indent          int      `json:"indent" desc:"JSON 缩进空格数"`
+	SortKeys        bool     `json:"sortKeys" desc:"是否对 key 进行排序"`
 }{
 	Entry:           "./ui",
 	Output:          "./ui/langs.json",

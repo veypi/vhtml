@@ -17,11 +17,11 @@ import (
 )
 
 var importOpts = struct {
-	Input     string `json:"input"`
-	Format    string `json:"format"`
-	Language  string `json:"language"`
-	Overwrite bool   `json:"overwrite"`
-	DryRun    bool   `json:"dryRun"`
+	Input     string `json:"input" desc:"输入文件路径"`
+	Format    string `json:"format" desc:"文件格式：auto、csv、json"`
+	Language  string `json:"language" desc:"指定导入的语言，为空则导入所有"`
+	Overwrite bool   `json:"overwrite" desc:"是否覆盖已存在的翻译"`
+	DryRun    bool   `json:"dryRun" desc:"预览模式，不实际修改文件"`
 }{
 	Input:     "",
 	Format:    "auto",
