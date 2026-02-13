@@ -141,11 +141,11 @@ func SaveTranslations(outputPath string, translations map[string]map[string]inte
 
 	// 确保目录存在
 	dir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(outputPath, data, 0644)
+	return os.WriteFile(outputPath, data, 0o644)
 }
 
 // sortTranslationKeys 对翻译 key 进行排序

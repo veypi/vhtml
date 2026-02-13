@@ -352,8 +352,18 @@ $t("user.welcome", { locale: "en-US", name: "Tom" });
 - 嵌套键名通过 `.` 访问（如 `nav.user.name`）
 - 复数对象必须包含 `other`，可选 `zero`/`one`
 - 变量用 `{var}` 包裹，支持任意字符（不含 `}`）
-- 查询当前使用的 key:
-  grep -r --include="\*.html" '$t' . | awk -F "['\"]" '{for(i=1;i<=NF;i++){if($i~/\$t\(/){print $(i+1)}}}' | sort | uniq
+
+### v-i18n 工具
+
+默认扫描路径 --entry ./ui 输出目录: --output ./ui/langs.json
+
+go install github.com/veypi/vhtml/cmd/v-i18n@latest
+v-i18n scan --fix # 扫描代码，自动添加缺失的翻译 key,-removeUnused 移除未用的 key
+v-i18n sync # 同步所有语言文件，保持 key 一致
+v-i18n stats # 查看翻译完成度
+v-i18n add --key "common.save" --value "保存" # 添加翻译
+v-i18n remove --key "old.key" --yes # 删除翻译
+所有命令加 --help 看详细参数。
 
 ## 代码质量标准
 
