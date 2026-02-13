@@ -17,11 +17,13 @@ import (
 )
 
 var importOpts = struct {
+	Input     string `json:"input"`
 	Format    string `json:"format"`
 	Language  string `json:"language"`
 	Overwrite bool   `json:"overwrite"`
 	DryRun    bool   `json:"dryRun"`
 }{
+	Input:     "",
 	Format:    "auto",
 	Language:  "",
 	Overwrite: false,
@@ -30,21 +32,19 @@ var importOpts = struct {
 
 func init() {
 	cmdImport := cmdMain.SubCommand("import", "从文件导入翻译")
+	cmdImport.AutoRegister(&globalOpts)
 	cmdImport.AutoRegister(&importOpts)
 	cmdImport.Command = runImport
 }
 
 func runImport() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	// 获取输入文件
-	if len(os.Args) < 3 {
-		return fmt.Errorf("用法: v-i18n import <input-file>")
+	input := importOpts.Input
+	if input == "" {
+		return fmt.Errorf("请提供输入文件，使用 -input 参数指定")
 	}
-	input := os.Args[2]
 
 	translations, err := LoadTranslations(config.Output)
 	if err != nil {

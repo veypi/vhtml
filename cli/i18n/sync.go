@@ -13,28 +13,26 @@ import (
 )
 
 var syncOpts = struct {
-	Source string   `json:"source"`
-	Target []string `json:"target"`
-	Fill   string   `json:"fill"`
-	Mark   bool     `json:"mark"`
+	Source   string   `json:"source"`
+	Target   []string `json:"target"`
+	SyncFill string   `json:"syncFill"`
+	Mark     bool     `json:"mark"`
 }{
-	Source: "",
-	Target: []string{},
-	Fill:   "",
-	Mark:   true,
+	Source:   "",
+	Target:   []string{},
+	SyncFill: "",
+	Mark:     true,
 }
 
 func init() {
 	cmdSync := cmdMain.SubCommand("sync", "同步语言文件（以源语言为基准）")
+	cmdSync.AutoRegister(&globalOpts)
 	cmdSync.AutoRegister(&syncOpts)
 	cmdSync.Command = runSync
 }
 
 func runSync() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	// 加载翻译文件
 	translations, err := LoadTranslations(config.Output)
@@ -83,7 +81,7 @@ func runSync() error {
 
 			if targetValue == nil {
 				// key 不存在，需要添加
-				fillValue := syncOpts.Fill
+				fillValue := syncOpts.SyncFill
 				if fillValue == "" {
 					// 使用源语言值作为填充
 					if sv, ok := sourceValue.(string); ok {

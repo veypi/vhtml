@@ -15,15 +15,16 @@ import (
 )
 
 var statsOpts = struct {
-	Output string `json:"output"`
-	Format string `json:"format"`
+	StatsOutput string `json:"statsOutput"`
+	StatsFormat string `json:"statsFormat"`
 }{
-	Output: "",
-	Format: "table",
+	StatsOutput: "",
+	StatsFormat: "table",
 }
 
 func init() {
 	cmdStats := cmdMain.SubCommand("stats", "显示翻译统计信息")
+	cmdStats.AutoRegister(&globalOpts)
 	cmdStats.AutoRegister(&statsOpts)
 	cmdStats.Command = runStats
 }
@@ -36,10 +37,7 @@ type LangStats struct {
 }
 
 func runStats() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	translations, err := LoadTranslations(config.Output)
 	if err != nil {
@@ -87,8 +85,8 @@ func runStats() error {
 	}
 
 	// 输出
-	if statsOpts.Output != "" {
-		return saveStats(stats, statsOpts.Output, statsOpts.Format)
+	if statsOpts.StatsOutput != "" {
+		return saveStats(stats, statsOpts.StatsOutput, statsOpts.StatsFormat)
 	}
 
 	printStats(stats)

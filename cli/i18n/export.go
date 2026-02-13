@@ -12,32 +12,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 )
 
 var exportOpts = struct {
-	Format      string   `json:"format"`
-	Languages   []string `json:"languages"`
-	Flat        bool     `json:"flat"`
-	OnlyMissing bool     `json:"onlyMissing"`
+	Dest           string   `json:"dest"`
+	ExportFormat   string   `json:"exportFormat"`
+	ExportLangs    []string `json:"exportLangs"`
+	Flat           bool     `json:"flat"`
+	OnlyMissing    bool     `json:"onlyMissing"`
 }{
-	Format:      "csv",
-	Languages:   []string{},
-	Flat:        false,
-	OnlyMissing: false,
+	Dest:           "translations.csv",
+	ExportFormat:   "csv",
+	ExportLangs:    []string{},
+	Flat:           false,
+	OnlyMissing:    false,
 }
 
 func init() {
 	cmdExport := cmdMain.SubCommand("export", "导出翻译文件")
+	cmdExport.AutoRegister(&globalOpts)
 	cmdExport.AutoRegister(&exportOpts)
 	cmdExport.Command = runExport
 }
 
 func runExport() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	translations, err := LoadTranslations(config.Output)
 	if err != nil {
@@ -45,24 +44,18 @@ func runExport() error {
 	}
 
 	// 确定要导出的语言
-	langs := exportOpts.Languages
+	langs := exportOpts.ExportLangs
 	if len(langs) == 0 {
 		langs = config.Languages
 	}
 
-	// 确定输出文件
-	output := "translations.csv"
-	if len(os.Args) > 2 && !strings.HasPrefix(os.Args[2], "-") {
-		output = os.Args[2]
-	}
-
-	switch exportOpts.Format {
+	switch exportOpts.ExportFormat {
 	case "csv":
-		return exportCSV(output, translations, langs, config)
+		return exportCSV(exportOpts.Dest, translations, langs, config)
 	case "json":
-		return exportJSON(output, translations, langs, config)
+		return exportJSON(exportOpts.Dest, translations, langs, config)
 	default:
-		return fmt.Errorf("不支持的格式: %s", exportOpts.Format)
+		return fmt.Errorf("不支持的格式: %s", exportOpts.ExportFormat)
 	}
 }
 

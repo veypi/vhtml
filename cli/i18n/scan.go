@@ -19,28 +19,26 @@ import (
 var scanOpts = struct {
 	Fix          bool   `json:"fix"`
 	RemoveUnused bool   `json:"removeUnused"`
-	Output       string `json:"output"`
-	Format       string `json:"format"`
+	ReportOutput string `json:"reportOutput"`
+	ReportFormat string `json:"reportFormat"`
 	Fill         string `json:"fill"`
 }{
 	Fix:          false,
 	RemoveUnused: false,
-	Output:       "",
-	Format:       "console",
+	ReportOutput: "",
+	ReportFormat: "console",
 	Fill:         "",
 }
 
 func init() {
 	cmdScan := cmdMain.SubCommand("scan", "扫描代码中的 i18n key")
+	cmdScan.AutoRegister(&globalOpts)
 	cmdScan.AutoRegister(&scanOpts)
 	cmdScan.Command = runScan
 }
 
 func runScan() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	// 加载现有翻译
 	translations, err := LoadTranslations(config.Output)
@@ -62,7 +60,7 @@ func runScan() error {
 	unusedKeys := findUnusedKeys(foundKeys, existingKeys)
 
 	// 输出结果
-	if scanOpts.Output != "" {
+	if scanOpts.ReportOutput != "" {
 		return outputReport(foundKeys, missingKeys, unusedKeys, config)
 	}
 
@@ -110,9 +108,13 @@ func scanFiles(config *Config) (map[string]bool, error) {
 
 		if info.IsDir() {
 			// 检查是否在排除列表中
+			base := filepath.Base(path)
 			for _, exclude := range config.Scan.Exclude {
-				matched, _ := filepath.Match(exclude, filepath.Base(path))
-				if matched {
+				if matched, _ := filepath.Match(exclude, base); matched {
+					return filepath.SkipDir
+				}
+				// 检查完全匹配
+				if exclude == base || strings.HasSuffix(path, exclude) {
 					return filepath.SkipDir
 				}
 			}
@@ -121,9 +123,18 @@ func scanFiles(config *Config) (map[string]bool, error) {
 
 		// 检查是否匹配包含模式
 		matched := false
+		ext := filepath.Ext(path)
 		for _, include := range config.Scan.Include {
-			matched, _ = filepath.Match(include, filepath.Base(path))
-			if matched {
+			// 处理 **/*.ext 模式
+			if strings.HasPrefix(include, "**/*") {
+				// include[3:] 会得到 *.html, 我们需要 .html
+				if ext != "" && strings.HasSuffix(include, ext) {
+					matched = true
+					break
+				}
+			}
+			// 基本 glob 匹配
+			if matched, _ = filepath.Match(include, filepath.Base(path)); matched {
 				break
 			}
 		}
@@ -350,13 +361,13 @@ func deleteNestedKey(data map[string]interface{}, key string) {
 // outputReport 输出报告到文件
 func outputReport(foundKeys map[string]bool, missingKeys, unusedKeys []string, config *Config) error {
 	// 简化实现，先支持 JSON 格式
-	if scanOpts.Format == "json" {
+	if scanOpts.ReportFormat == "json" {
 		data := map[string]interface{}{
 			"found":   len(foundKeys),
 			"missing": missingKeys,
 			"unused":  unusedKeys,
 		}
-		return os.WriteFile(scanOpts.Output, mustMarshalJSON(data), 0644)
+		return os.WriteFile(scanOpts.ReportOutput, mustMarshalJSON(data), 0644)
 	}
 	return nil
 }

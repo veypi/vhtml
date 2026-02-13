@@ -20,7 +20,34 @@ import (
 
 var version = "v0.1.0"
 
+// 全局配置参数
+var globalOpts = struct {
+	Entry           string   `json:"entry"`
+	Output          string   `json:"output"`
+	Languages       []string `json:"languages"`
+	DefaultLanguage string   `json:"defaultLanguage"`
+	Include         []string `json:"include"`
+	Exclude         []string `json:"exclude"`
+	Pattern         string   `json:"pattern"`
+	Indent          int      `json:"indent"`
+	SortKeys        bool     `json:"sortKeys"`
+}{
+	Entry:           "./ui",
+	Output:          "./ui/langs.json",
+	Languages:       []string{"zh-CN", "en-US"},
+	DefaultLanguage: "zh-CN",
+	Include:         []string{"**/*.html", "**/*.js"},
+	Exclude:         []string{"node_modules/**", "dist/**", ".git/**"},
+	Pattern:         `\$t\(['"]([^'"]+)['"]`,
+	Indent:          2,
+	SortKeys:        true,
+}
+
 var cmdMain = flags.New("v-i18n", "vhtml 项目的国际化（i18n）管理工具\nversion: "+version, nil)
+
+func init() {
+	cmdMain.AutoRegister(&globalOpts)
+}
 
 func main() {
 	cmdMain.Parse()
@@ -31,13 +58,13 @@ func main() {
 	}
 }
 
-// Config 配置文件结构
+// Config 配置结构
 type Config struct {
-	Entry           string   `json:"entry"`
-	Output          string   `json:"output"`
-	Languages       []string `json:"languages"`
-	DefaultLanguage string   `json:"defaultLanguage"`
-	Scan            ScanConfig `json:"scan"`
+	Entry           string       `json:"entry"`
+	Output          string       `json:"output"`
+	Languages       []string     `json:"languages"`
+	DefaultLanguage string       `json:"defaultLanguage"`
+	Scan            ScanConfig   `json:"scan"`
 	Format          FormatConfig `json:"format"`
 }
 
@@ -55,70 +82,24 @@ type FormatConfig struct {
 	TrailingComma bool `json:"trailingComma"`
 }
 
-// DefaultConfig 返回默认配置
-func DefaultConfig() *Config {
+// GetConfig 从全局参数获取配置
+func GetConfig() *Config {
 	return &Config{
-		Entry:           "./ui",
-		Output:          "./ui/langs.json",
-		Languages:       []string{"zh-CN", "en-US"},
-		DefaultLanguage: "zh-CN",
+		Entry:           globalOpts.Entry,
+		Output:          globalOpts.Output,
+		Languages:       globalOpts.Languages,
+		DefaultLanguage: globalOpts.DefaultLanguage,
 		Scan: ScanConfig{
-			Include: []string{"**/*.html", "**/*.js"},
-			Exclude: []string{"node_modules/**", "dist/**", ".git/**"},
-			Pattern: `\$t\(['"]([^'"]+)['"]`,
+			Include: globalOpts.Include,
+			Exclude: globalOpts.Exclude,
+			Pattern: globalOpts.Pattern,
 		},
 		Format: FormatConfig{
-			Indent:        2,
-			SortKeys:      true,
+			Indent:        globalOpts.Indent,
+			SortKeys:      globalOpts.SortKeys,
 			TrailingComma: false,
 		},
 	}
-}
-
-// LoadConfig 加载配置文件
-func LoadConfig(configPath string) (*Config, error) {
-	if configPath == "" {
-		// 尝试查找默认配置文件
-		for _, name := range []string{".v-i18n.json", "v-i18n.config.js", "v-i18n.config.json"} {
-			if _, err := os.Stat(name); err == nil {
-				configPath = name
-				break
-			}
-		}
-	}
-
-	if configPath == "" {
-		return nil, fmt.Errorf("未找到配置文件，请运行 'v-i18n init' 初始化")
-	}
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("读取配置文件失败: %w", err)
-	}
-
-	config := DefaultConfig()
-	if err := json.Unmarshal(data, config); err != nil {
-		return nil, fmt.Errorf("解析配置文件失败: %w", err)
-	}
-
-	// 转换相对路径为绝对路径
-	if !filepath.IsAbs(config.Entry) {
-		config.Entry = filepath.Join(filepath.Dir(configPath), config.Entry)
-	}
-	if !filepath.IsAbs(config.Output) {
-		config.Output = filepath.Join(filepath.Dir(configPath), config.Output)
-	}
-
-	return config, nil
-}
-
-// SaveConfig 保存配置文件
-func (c *Config) SaveConfig(configPath string) error {
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(configPath, data, 0644)
 }
 
 // LoadTranslations 加载翻译文件
@@ -149,7 +130,6 @@ func SaveTranslations(outputPath string, translations map[string]map[string]inte
 	}
 
 	if format.TrailingComma {
-		// Go 的 json 库不支持 trailing comma，需要手动处理
 		data, err = jsonMarshalWithTrailingComma(translations, format.Indent)
 	} else {
 		data, err = json.MarshalIndent(translations, "", strings.Repeat(" ", format.Indent))
@@ -206,6 +186,5 @@ func sortKeysRecursive(data map[string]interface{}) map[string]interface{} {
 
 // jsonMarshalWithTrailingComma 带尾随逗号的 JSON 序列化
 func jsonMarshalWithTrailingComma(v interface{}, indent int) ([]byte, error) {
-	// 简化实现，先使用标准序列化
-	return json.MarshalIndent(v, "", string(make([]byte, indent)))
+	return json.MarshalIndent(v, "", strings.Repeat(" ", indent))
 }

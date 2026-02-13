@@ -19,10 +19,12 @@ import (
 
 // ========== add 命令 ==========
 var addOpts = struct {
+	Key    string `json:"key"`
 	Value  string `json:"value"`
 	Values string `json:"values"`
 	Nested bool   `json:"nested"`
 }{
+	Key:    "",
 	Value:  "",
 	Values: "",
 	Nested: true,
@@ -30,21 +32,16 @@ var addOpts = struct {
 
 func init() {
 	cmdAdd := cmdMain.SubCommand("add", "添加翻译 key")
+	cmdAdd.AutoRegister(&globalOpts)
 	cmdAdd.AutoRegister(&addOpts)
 	cmdAdd.Command = runAdd
 }
 
 func runAdd() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	// 获取 key 参数
-	key := ""
-	if len(os.Args) > 2 && !strings.HasPrefix(os.Args[2], "-") {
-		key = os.Args[2]
-	}
+	key := addOpts.Key
 
 	// 如果没有提供 key，尝试从管道读取
 	if key == "" {
@@ -63,7 +60,7 @@ func runAdd() error {
 				return addKeys(keys, config)
 			}
 		}
-		return fmt.Errorf("请提供要添加的 key")
+		return fmt.Errorf("请提供要添加的 key，使用 -key 参数指定")
 	}
 
 	return addKeys([]string{key}, config)
@@ -108,33 +105,30 @@ func addKeys(keys []string, config *Config) error {
 
 // ========== remove 命令 ==========
 var removeOpts = struct {
-	Yes     bool `json:"yes"`
-	Pattern bool `json:"pattern"`
+	Key         string `json:"key"`
+	Yes         bool   `json:"yes"`
+	UsePattern  bool   `json:"usePattern"`
 }{
-	Yes:     false,
-	Pattern: false,
+	Key:        "",
+	Yes:        false,
+	UsePattern: false,
 }
 
 func init() {
 	cmdRemove := cmdMain.SubCommand("remove", "删除翻译 key")
+	cmdRemove.AutoRegister(&globalOpts)
 	cmdRemove.AutoRegister(&removeOpts)
 	cmdRemove.Command = runRemove
 }
 
 func runRemove() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	// 获取 key 参数
-	pattern := ""
-	if len(os.Args) > 2 && !strings.HasPrefix(os.Args[2], "-") {
-		pattern = os.Args[2]
-	}
+	pattern := removeOpts.Key
 
 	if pattern == "" {
-		return fmt.Errorf("请提供要删除的 key 或模式")
+		return fmt.Errorf("请提供要删除的 key 或模式，使用 -key 参数指定")
 	}
 
 	translations, err := LoadTranslations(config.Output)
@@ -144,7 +138,7 @@ func runRemove() error {
 
 	// 找到匹配的 keys
 	var keysToRemove []string
-	if removeOpts.Pattern {
+	if removeOpts.UsePattern {
 		re, err := regexp.Compile(pattern)
 		if err != nil {
 			return fmt.Errorf("正则表达式无效: %w", err)
@@ -202,32 +196,34 @@ func runRemove() error {
 
 // ========== rename 命令 ==========
 var renameOpts = struct {
-	UpdateSource bool `json:"updateSource"`
-	DryRun       bool `json:"dryRun"`
+	OldKey       string `json:"oldKey"`
+	NewKey       string `json:"newKey"`
+	UpdateSource bool   `json:"updateSource"`
+	DryRun       bool   `json:"dryRun"`
 }{
+	OldKey:       "",
+	NewKey:       "",
 	UpdateSource: true,
 	DryRun:       false,
 }
 
 func init() {
 	cmdRename := cmdMain.SubCommand("rename", "重命名翻译 key")
+	cmdRename.AutoRegister(&globalOpts)
 	cmdRename.AutoRegister(&renameOpts)
 	cmdRename.Command = runRename
 }
 
 func runRename() error {
-	config, err := LoadConfig("")
-	if err != nil {
-		return err
-	}
+	config := GetConfig()
 
 	// 获取 oldKey 和 newKey 参数
-	if len(os.Args) < 4 {
-		return fmt.Errorf("用法: v-i18n rename <oldKey> <newKey>")
-	}
+	oldKey := renameOpts.OldKey
+	newKey := renameOpts.NewKey
 
-	oldKey := os.Args[2]
-	newKey := os.Args[3]
+	if oldKey == "" || newKey == "" {
+		return fmt.Errorf("用法: v-i18n rename -oldKey <oldKey> -newKey <newKey>")
+	}
 
 	translations, err := LoadTranslations(config.Output)
 	if err != nil {
