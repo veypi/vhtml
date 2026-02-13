@@ -196,11 +196,28 @@ func extractKeys(data map[string]interface{}, prefix string, keys map[string]boo
 			key = prefix + "." + k
 		}
 		if nested, ok := v.(map[string]interface{}); ok {
+			// 检查是否为复数格式（包含 zero/one/other 的对象）
+			if isPluralObject(nested) {
+				// 复数对象本身也是合法键（如 $t("apples")）
+				keys[key] = true
+			}
 			extractKeys(nested, key, keys)
 		} else {
 			keys[key] = true
 		}
 	}
+}
+
+// isPluralObject 检查对象是否为复数格式
+// 复数对象包含 zero/one/other 中的至少一个键
+func isPluralObject(obj map[string]interface{}) bool {
+	pluralKeys := []string{"zero", "one", "other"}
+	for _, pk := range pluralKeys {
+		if _, ok := obj[pk]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // getEmptyKeys 获取所有值为空的 keys
@@ -219,6 +236,7 @@ func extractEmptyKeys(data map[string]interface{}, prefix string, emptyKeys map[
 			key = prefix + "." + k
 		}
 		if nested, ok := v.(map[string]interface{}); ok {
+			// 复数对象本身不检查空值，只检查其子键
 			extractEmptyKeys(nested, key, emptyKeys)
 		} else {
 			// 检查值是否为空
@@ -256,10 +274,28 @@ func findUnusedKeys(found, existing map[string]bool) []string {
 	var unused []string
 	for key := range existing {
 		if !found[key] {
+			// 检查父键是否被使用（处理复数对象的情况）
+			// 例如：apples.zero 的父键 apples 如果被使用，则 apples.zero 不算未使用
+			if isParentKeyUsed(key, found) {
+				continue
+			}
 			unused = append(unused, key)
 		}
 	}
 	return unused
+}
+
+// isParentKeyUsed 检查 key 的父键是否被使用
+// 例如 key = "apples.zero", 父键 "apples" 如果在 found 中，则返回 true
+func isParentKeyUsed(key string, found map[string]bool) bool {
+	parts := strings.Split(key, ".")
+	for i := len(parts) - 1; i > 0; i-- {
+		parentKey := strings.Join(parts[:i], ".")
+		if found[parentKey] {
+			return true
+		}
+	}
+	return false
 }
 
 // printScanResult 打印扫描结果
