@@ -258,12 +258,12 @@ function Wrap(data, root = undefined) {
       }
       let result = true
       if (Array.isArray(newValue) && Array.isArray(oldValue)) {
-        stopChecking = true
+        // stopChecking = true
         oldValue.length = 0
         for (let i = 0; i < newValue.length; i++) {
           oldValue.push(newValue[i])
         }
-        stopChecking = false
+        // stopChecking = false
       } else if (oldValue && oldValue[isProxy] && isProxyType(newValue)) {
         // 监听对象只赋值可迭代属性
         newValue = copyBind(oldValue, newValue)
@@ -360,6 +360,7 @@ const expose = {
   'TextDecoder': TextDecoder,
   'history': history,
   'requestAnimationFrame': requestAnimationFrame.bind(window),
+  'getComputedStyle': getComputedStyle.bind(window),
 }
 
 function newProxy(data, env, tmpenv) {

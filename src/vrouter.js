@@ -39,7 +39,7 @@ function parseUrlString(urlString, scoped) {
 class VRouter {
   #routes = []
   #history = []
-  #current = null
+  #current = vproxy.Wrap({})
   #scoped = ''
   #listeners = []
   #pageCache = new Map()
@@ -119,7 +119,7 @@ class VRouter {
   #setRouterPath(matchedRoute) {
     const oldRoute = this.#current
 
-    this.#current = {
+    this.#current = Object.assign(this.#current, {
       path: matchedRoute.path,
       fullPath: matchedRoute.fullPath,
       params: matchedRoute.params || {},
@@ -130,7 +130,7 @@ class VRouter {
       layout: matchedRoute.route?.layout || '',
       name: matchedRoute.route?.name,
       matched: matchedRoute.route ? [matchedRoute.route] : []
-    }
+    })
 
     this.#history.push(this.#current)
     if (this.#scoped && !matchedRoute.fullPath.startsWith('http')) {

@@ -141,6 +141,7 @@ import setupVdev from './vdev.js'
     scoped = null
     vget = vget
     vproxy = vproxy
+    Wrap = vproxy.Wrap
     __noproxy = true
     $router = vrouter.$router
     constructor(id) {

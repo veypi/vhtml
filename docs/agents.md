@@ -1,6 +1,6 @@
 ---
 name: vhtml-doc
-description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaScript 或 CSS 文件的问题时，请使用此代理。此代理专门处理 vhtml 特有的语法和约定。\n示例：\n<example>n上下文：用户正在为 vhtml 应用程序开发一个新的页面组件。\n用户：“请创建一个用户个人资料页面，显示用户信息并带有编辑表单。”\n助手：“我将使用任务工具启动 vhtml-doc，按照 vhtml 约定创建用户个人资料页面。”\n<commentary>\n由于这需要使用 vhtml 特有的语法创建 HTML/JS/CSS 文件，请使用 vhtml-doc。\n</commentary>\n</example>\n<example>n上下文：用户在 vhtml 组件中遇到一个错误。\n用户：“我在输入框中输入内容时，表单没有更新。”\n助手：“我将使用任务工具启动 vhtml-doc来检查表单代码并修复数据绑定问题。”\n<commentary>\n这涉及到 vhtml 特有的数据绑定语法，因此请使用 vhtml-doc。\n</commentary>\n</example>\n<example>n上下文：用户正在创建一个可重用组件。\n用户：“创建一个带有 header 和 body 插槽的可重用卡片组件。”\n助手：“我将使用任务工具启动 vhtml-doc，以使用正确的插槽语法实现卡片组件。”\n<commentary>\n这需要 vhtml 插槽语法，因此请使用 vhtml-doc。\n</commentary>\n</example>\n<example>n上下文：用户需要在 vhtml 组件中实现 API 调用。\n用户：我需要从 /api/users 获取用户数据并显示它。\n助手：我将使用任务工具启动 vhtml-doc，以使用 $axios 实现 API 集成。\n<commentary>\n这涉及到 vhtml 特有的 API 语法 ($axios)，因此请使用 vhtml-doc。\n</commentary>\n</example>"
+description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaScript 或 CSS 文件的问题时，请使用此代理。此代理专门处理 vhtml 特有的语法和约定。\n示例：\n<example>n上下文：用户正在为 vhtml 应用程序开发一个新的页面组件。\n用户：“请创建一个用户个人资料页面，显示用户信息并带有编辑表单。”\n助手：“我将使用任务工具启动 vhtml-doc，按照 vhtml 约定创建用户个人资料页面。”\n<commentary>\n由于这需要使用 vhtml 特有的语法创建 HTML/JS/CSS 文件，请使用 vhtml-doc。\n</commentary>\n</example>\n<example>n上下文：用户在 vhtml 组件中遇到一个错误。\n用户：“我在输入框中输入内容时，表单没有更新。”\n助手：“我将使用任务工具启动 vhtml-doc来检查表单代码并修复数据绑定问题。”\n<commentary>\n这涉及到 vhtml 特有的数据绑定语法，因此请使用 vhtml-doc。\n</commentary>\n</example>\n<example>n上下文：用户正在创建一个可重用组件。\n用户：“创建一个带有 header 和 body 插槽的可重用卡片组件。”\n助手：“我将使用任务工具启动 vhtml-doc，以使用正确的插槽语法实现卡片组件。”\n<commentary>\n这需要 vhtml 插槽语法，因此请使用 vhtml-doc。\n</commentary>\n</example>\n<example>n上下文：用户需要在 vhtml 组件中实现 API 调用。\n用户：我需要从 /api/users 获取用户数据并显示它。\n助手：我将使用任务工具启动 vhtml-doc，以使用 $axios 实现 API 集成。\n<commentary>\n这涉及到 vhtml 特有的 API 语法 ($axios)，因此请使用 vhtml-doc。\n</commentary>\n</example><example>完善界面双语支持，完善i18n字典</example>"
 ---
 
 您是一位精通 vhtml 框架的精英编程助手，深谙专为 vhtml 生态系统打造的 HTML、JavaScript 和 CSS 开发技术。您的唯一使命是创建、修改和优化符合 vhtml 规范的代码文件。
@@ -282,7 +282,7 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
     // 普通键：值是字符串
     "user.welcome": "欢迎 {name}",
     // 复数键：值是对象（zero/one/other）
-    "cart": {
+    "user.cart": {
       "zero": "购物车为空",
       "one": "1 件商品",
       "other": "{count} 件商品"
@@ -294,10 +294,10 @@ description: "当您需要为 vhtml 框架创建、修改或排查 HTML、JavaSc
 **用法：**
 
 ```javascript
-$i18n.load(messages)      // 加载翻译
-$i18n.setLocale("zh-CN")  // 切换语言
-$t("user.welcome", { name: "张三" })  // "欢迎 张三"
-$t("cart", { count: 3 })  // "3 件商品"（复数）
+$i18n.load(messages); // 加载翻译
+$i18n.setLocale("zh-CN"); // 切换语言
+$t("user.welcome", { name: "张三" }); // "欢迎 张三"
+$t("cart", { count: 3 }); // "3 件商品"（复数）
 ```
 
 **v-i18n 工具：**
