@@ -6,5 +6,4 @@
  * $global: 全局变量对象
  * */
 export default async ($env) => {
-  $env.$i18n.load(await (await fetch('./langs.json')).json())
 }

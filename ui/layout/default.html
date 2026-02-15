@@ -151,6 +151,7 @@
   </footer>
 </body>
 <script setup>
+  $env.$i18n.load(await(await fetch($env.scoped + '/langs.json')).json())
   currentLang = $i18n.getLocale() || 'zh-CN';
   switchLang = (lang) => {
     if (lang === currentLang) return;
