@@ -569,7 +569,7 @@ class Page {
       }
       layoutDom = layoutParser.body.cloneNode(true)
       layoutCache.set(layout, layoutDom)
-      dom.$refData = vproxy.Wrap({})
+      dom.$ref = vproxy.Wrap({})
       layoutDom.$refSlots = vproxy.Wrap({ ...slots })
       this.node.innerHTML = ''
       this.node.append(layoutDom)

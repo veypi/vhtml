@@ -359,7 +359,7 @@ import setupVdev from './vdev.js'
         })
       }
       dom.$refScope = data
-      dom.$refData = originData
+      dom.$ref = originData
       if (singleMode) {
         return originData
       }
@@ -490,7 +490,7 @@ import setupVdev from './vdev.js'
       if (attrs) {
         // just for body element
         Object.keys(attrs).forEach(k => {
-          this.parseAttr(dom, k, attrs[k], dom.$refData, env)
+          this.parseAttr(dom, k, attrs[k], dom.$ref, env)
         })
       }
       if (dom.hasAttribute('v-show')) {
