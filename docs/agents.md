@@ -209,6 +209,13 @@ No import needed: FontAwesome, animate.css, ECharts
 
 **Usage:** `$t("user.welcome", {name: "John"})`, `$t("user.cart", {count: 3})`
 
+```bash
+// v-i18n scanning tool
+go install github.com/veypi/vhtml/cmd/v-i18n@latest
+v-i18n scan --fix ---removeUnused    # Scan code and automatically add missing keys
+v-i18n -h         # View help documentation
+```
+
 ## Verification Checklist
 
 Before output:
