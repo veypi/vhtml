@@ -588,7 +588,7 @@ import setupVdev from './vdev.js'
         } else {
           console.warn('not found variables in:' + value)
         }
-      } else if (name === 'vdom') {
+      } else if (name === 'ref') {
         let vbind = findLastAccess(value, data)
         if (vbind && vbind.data && vbind.key) {
           vbind.data[vbind.key] = dom

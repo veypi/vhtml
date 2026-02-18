@@ -16,7 +16,7 @@ class Message {
    */
   init() {
     this.container = document.createElement('div');
-    this.container.className = 'message-container';
+    this.container.className = 'vmsg-container';
     document.body.appendChild(this.container);
 
     // 添加基础样式
@@ -29,16 +29,16 @@ class Message {
   addBaseStyles() {
     const style = document.createElement('style');
     style.textContent = `
-      .message-container {
+      .vmsg-container {
         position: fixed;
         top: 60px;
-        left: 50%; 
+        left: 50%;
         transform: translateX(-50%);
         z-index: 9999;
         width: 300px;
       }
-      
-      .message-item {
+
+      .vmsg-item {
         margin-bottom: 10px;
         padding: 15px;
         border-radius: 4px;
@@ -49,61 +49,61 @@ class Message {
         display: flex;
         align-items: flex-start;
       }
-      
-      .message-item.show {
+
+      .vmsg-item.show {
         transform: translateY(0);
         opacity: 1;
       }
-      
-      .message-icon {
+
+      .vmsg-icon {
         margin-right: 10px;
         font-size: 16px;
         line-height: 1;
       }
-      
-      .message-content {
+
+      .vmsg-content {
         flex: 1;
         font-size: 14px;
         line-height: 1.4;
       }
-      
-      .message-close {
+
+      .vmsg-close {
         margin-left: 10px;
         cursor: pointer;
         font-size: 16px;
         opacity: 0.7;
         transition: opacity 0.2s;
       }
-      
-      .message-close:hover {
+
+      .vmsg-close:hover {
         opacity: 1;
       }
-      
-      .message-success {
+
+      .vmsg-success {
         background-color: #f0f9eb;
         border: 1px solid #e1f3d8;
         color: var(--color-success, #67c23a);
       }
-      
-      .message-warning {
+
+      .vmsg-warning {
         background-color: #fdf6ec;
         border: 1px solid #faecd8;
         color: #e6a23c;
       }
-      
-      .message-error {
+
+      .vmsg-error {
         background-color: #fef0f0;
         border: 1px solid #fde2e2;
         color: #f56c6c;
       }
-      
-      .message-info {
+
+      .vmsg-info {
         background-color: #edf2fc;
         border: 1px solid #ebeef5;
         color: #409eff;
       }
-      
-      .prompt-overlay {
+
+      .vmsg-overlay {
         position: fixed;
         top: 0;
         left: 0;
@@ -117,12 +117,12 @@ class Message {
         opacity: 0;
         transition: opacity 0.3s ease;
       }
-      
-      .prompt-overlay.show {
+
+      .vmsg-overlay.show {
         opacity: 1;
       }
-      
-      .prompt-dialog {
+
+      .vmsg-dialog {
         background: white;
         border-radius: 8px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
@@ -131,26 +131,26 @@ class Message {
         transform: scale(0.8);
         transition: transform 0.3s ease;
       }
-      
-      .prompt-overlay.show .prompt-dialog {
+
+      .vmsg-overlay.show .vmsg-dialog {
         transform: scale(1);
       }
-      
-      .prompt-header {
+
+      .vmsg-header {
         padding: 20px 20px 10px;
         display: flex;
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid #eee;
       }
-      
-      .prompt-title {
+
+      .vmsg-title {
         font-size: 18px;
         font-weight: 500;
         margin: 0;
       }
-      
-      .prompt-close {
+
+      .vmsg-close-btn {
         cursor: pointer;
         font-size: 20px;
         color: #999;
@@ -163,23 +163,23 @@ class Message {
         align-items: center;
         justify-content: center;
       }
-      
-      .prompt-close:hover {
+
+      .vmsg-close-btn:hover {
         color: #666;
       }
-      
-      .prompt-body {
+
+      .vmsg-body {
         padding: 20px;
       }
-      
-      .prompt-content {
+
+      .vmsg-prompt-content {
         margin-bottom: 20px;
         font-size: 14px;
         line-height: 1.5;
         color: #333;
       }
-      
-      .prompt-input {
+
+      .vmsg-input {
         width: 100%;
         padding: 10px 12px;
         border: 1px solid #dcdfe6;
@@ -188,19 +188,19 @@ class Message {
         box-sizing: border-box;
         transition: border-color 0.2s;
       }
-      
-      .prompt-input:focus {
+
+      .vmsg-input:focus {
         outline: none;
         border-color: #409eff;
       }
-      
-      .prompt-footer {
+
+      .vmsg-footer {
         padding: 15px 20px;
         text-align: right;
         border-top: 1px solid #eee;
       }
-      
-      .prompt-btn {
+
+      .vmsg-btn {
         padding: 8px 16px;
         border: 1px solid #dcdfe6;
         border-radius: 4px;
@@ -209,24 +209,24 @@ class Message {
         margin-left: 10px;
         transition: all 0.2s;
       }
-      
-      .prompt-btn-cancel {
+
+      .vmsg-btn-cancel {
         background: white;
         color: #606266;
       }
-      
-      .prompt-btn-cancel:hover {
+
+      .vmsg-btn-cancel:hover {
         background: #f5f7fa;
         border-color: #c0c4cc;
       }
-      
-      .prompt-btn-confirm {
+
+      .vmsg-btn-confirm {
         background: #409eff;
         color: white;
         border-color: #409eff;
       }
-      
-      .prompt-btn-confirm:hover {
+
+      .vmsg-btn-confirm:hover {
         background: #66b1ff;
         border-color: #66b1ff;
       }
@@ -248,7 +248,7 @@ class Message {
     } = options;
 
     const messageItem = document.createElement('div');
-    messageItem.className = `message-item message-${type}`;
+    messageItem.className = `vmsg-item vmsg-${type}`;
 
     // 消息图标
     const icons = {
@@ -259,12 +259,12 @@ class Message {
     };
 
     const icon = document.createElement('span');
-    icon.className = 'message-icon';
+    icon.className = 'vmsg-icon';
     icon.textContent = icons[type] || icons.info;
 
     // 消息内容
     const contentEl = document.createElement('div');
-    contentEl.className = 'message-content';
+    contentEl.className = 'vmsg-content';
     contentEl.textContent = content;
 
     messageItem.appendChild(icon);
@@ -273,7 +273,7 @@ class Message {
     // 关闭按钮
     if (showClose) {
       const closeBtn = document.createElement('span');
-      closeBtn.className = 'message-close';
+      closeBtn.className = 'vmsg-close';
       closeBtn.innerHTML = '&times;';
       closeBtn.onclick = () => {
         this.removeMessage(messageItem);
@@ -370,22 +370,22 @@ class Message {
 
       // 创建遮罩层
       const overlay = document.createElement('div');
-      overlay.className = 'prompt-overlay';
+      overlay.className = 'vmsg-overlay';
 
       // 创建对话框
       const dialog = document.createElement('div');
-      dialog.className = 'prompt-dialog';
+      dialog.className = 'vmsg-dialog';
 
       // 头部
       const header = document.createElement('div');
-      header.className = 'prompt-header';
+      header.className = 'vmsg-header';
 
       const titleEl = document.createElement('h3');
-      titleEl.className = 'prompt-title';
+      titleEl.className = 'vmsg-title';
       titleEl.textContent = title;
 
       const closeBtn = document.createElement('button');
-      closeBtn.className = 'prompt-close';
+      closeBtn.className = 'vmsg-close-btn';
       closeBtn.innerHTML = '&times;';
 
       header.appendChild(titleEl);
@@ -393,10 +393,10 @@ class Message {
 
       // 主体
       const body = document.createElement('div');
-      body.className = 'prompt-body';
+      body.className = 'vmsg-body';
 
       const contentEl = document.createElement('div');
-      contentEl.className = 'prompt-content';
+      contentEl.className = 'vmsg-prompt-content';
       contentEl.textContent = content;
 
       body.appendChild(contentEl);
@@ -405,7 +405,7 @@ class Message {
       let inputEl = null;
       if (type === 'input') {
         inputEl = document.createElement('input');
-        inputEl.className = 'prompt-input';
+        inputEl.className = 'vmsg-input';
         inputEl.type = 'text';
         inputEl.value = inputValue;
         body.appendChild(inputEl);
@@ -413,14 +413,14 @@ class Message {
 
       // 底部按钮
       const footer = document.createElement('div');
-      footer.className = 'prompt-footer';
+      footer.className = 'vmsg-footer';
 
       const cancelBtn = document.createElement('button');
-      cancelBtn.className = 'prompt-btn prompt-btn-cancel';
+      cancelBtn.className = 'vmsg-btn vmsg-btn-cancel';
       cancelBtn.textContent = cancelText;
 
       const confirmBtn = document.createElement('button');
-      confirmBtn.className = 'prompt-btn prompt-btn-confirm';
+      confirmBtn.className = 'vmsg-btn vmsg-btn-confirm';
       confirmBtn.textContent = confirmText;
 
       footer.appendChild(cancelBtn);
