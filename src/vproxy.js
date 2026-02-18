@@ -10,8 +10,9 @@
 const callbackList = []
 /** @type {number[]} */
 const cacheUpdateList = []
-// 界面更新响应频率40hz
+let pending = false
 const sync = () => {
+  pending = false
   let list = new Set(cacheUpdateList.splice(0))
   let c = 0
   for (let l of list) {
@@ -20,13 +21,14 @@ const sync = () => {
       c++
     }
   }
-  if (c > 0) {
-    console.log(`update ${c}`)
-    // sync()
-  }
   return c
 }
-setInterval(sync, 25)
+const scheduleUpdate = () => {
+  if (!pending) {
+    pending = true
+    requestAnimationFrame(sync)
+  }
+}
 
 function GenUniqueID() {
   const timestamp = performance.now().toString(36);
@@ -291,6 +293,7 @@ function Wrap(data, root = undefined) {
                 console.log(`${did} set ${key}:`, '\n', callbackList[cb], '\n', oldValue, newValue)
               }
               cacheUpdateList.push(cb)
+              scheduleUpdate()
             }
           }
         }
@@ -316,6 +319,7 @@ function Wrap(data, root = undefined) {
             } else {
               i++
               cacheUpdateList.push(cb)
+              scheduleUpdate()
               if (window.vdev) {
                 console.log(`${did} del ${key}:`, '\n', callbackList[cb], '\n')
               }
@@ -395,22 +399,33 @@ function newProxy(data, env, tmpenv) {
   });
   return proxy
 }
+const runCache = new Map()
 // 运行dom属性绑定等小代码语句
 // for code snapshot
 function Run(originCode, data, env, tmpenv) {
-  let code = originCode.trim()
-  const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
-  const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
-  if (!isStatement && (code.indexOf('\n') === -1 || !cleanCode.includes(';'))) {
-    code = 'return ' + code
-  }
-  code = `
+  let fn = runCache.get(originCode)
+  if (!fn) {
+    let code = originCode.trim()
+    const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
+    const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
+    if (!isStatement && (code.indexOf('\n') === -1 || !cleanCode.includes(';'))) {
+      code = 'return ' + code
+    }
+    code = `
 with (sandbox) {
 ${code}
 }`
+    try {
+      fn = new Function('sandbox', code);
+      runCache.set(originCode, fn)
+    } catch (error) {
+      console.warn(`Run compile error:`, originCode, '\n', error)
+      return
+    }
+  }
+
   let res
   try {
-    const fn = new Function('sandbox', code);
     res = fn(newProxy(data, env, tmpenv))
   } catch (error) {
     console.warn(`Run error:`, originCode, '\n', error)
@@ -420,22 +435,23 @@ ${code}
 
 const AsyncFunction = Object.getPrototypeOf(async function() { }).constructor
 
+const asyncRunCache = new Map()
 // 运行大段代码库
 async function AsyncRun(originCode, data, env, tmpenv) {
-  let code = originCode.trim()
-  if (code.indexOf('\n') === -1) {
-    code = 'return ' + code
-  }
-  code = `
+  let fn = asyncRunCache.get(originCode)
+  if (!fn) {
+    let code = originCode.trim()
+    if (code.indexOf('\n') === -1) {
+      code = 'return ' + code
+    }
+    code = `
 with (sandbox) {
 ${code}
 }`
-  // try {
-  const fn = new AsyncFunction('sandbox', code);
+    fn = new AsyncFunction('sandbox', code);
+    asyncRunCache.set(originCode, fn)
+  }
   return await fn(newProxy(data, env, tmpenv))
-  // } catch (error) {
-  //   console.warn('AsyncRun error:', error, '\n', originCode)
-  // }
 }
 
 function resolvePath(relativePath, currentPath) {
