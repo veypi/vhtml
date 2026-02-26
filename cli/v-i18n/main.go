@@ -43,7 +43,7 @@ var globalOpts = struct {
 	SortKeys:        true,
 }
 
-var cmdMain = flags.New("v-i18n", "vhtml 项目的国际化（i18n）管理工具\nversion: "+version, nil)
+var cmdMain = flags.New("v-i18n", "vhtml 项目的国际化（i18n）管理工具\nversion: "+version)
 
 func init() {
 	cmdMain.AutoRegister(&globalOpts)
