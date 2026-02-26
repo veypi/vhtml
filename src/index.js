@@ -355,7 +355,11 @@ import setupVdev from './vdev.js'
         let s = target.setup.innerHTML
         s = await vproxy.ParseImport(s, originData, dom.$env, dom.$vsrc)
         await vproxy.AsyncRun(s, originData, dom.$env, {
-          $node: dom
+          $node: dom, $watch: (a, b, c) => {
+            setTimeout(() => {
+              vproxy.Watch(a, b, c)
+            }, 50)
+          }
         })
       }
       dom.$refScope = data
