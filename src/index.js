@@ -318,7 +318,6 @@ import setupVdev from './vdev.js'
       // env = target.env
       dom.$env = env
       dom.$vsrc = vsrc
-      env.$router = vrouter.$router
       env.$emit = (evt, ...args) => {
         evt = evt.toLowerCase()
         if (!dom.$vevent) {
