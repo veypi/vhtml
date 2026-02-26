@@ -124,7 +124,7 @@ You must **ONLY** write HTML, JavaScript, and CSS files that strictly follow vht
 | Type           | Syntax                         |
 | -------------- | ------------------------------ |
 | One-way prop   | `<comp :prop="parentVar">`     |
-| Two-way prop   | `<comp v:model="parentVar">`   |
+| Two-way prop   | `<comp v:prop="parentVar">`    |
 | Event (parent) | `<comp @event_name="handler">` |
 | Event (child)  | `$emit("event_name", data)`    |
 
