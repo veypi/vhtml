@@ -199,7 +199,7 @@ function Wrap(data, root = undefined) {
   if (root) {
     SetDataRoot(data, root)
   }
-  // data[DataID] = did
+  data[DataID] = did
   const listeners = {}
   const handler = {
     /**
@@ -493,7 +493,7 @@ async function ParseImport(code, data, env, src) {
   let scoped = env.scoped || ''
   let codeCopy = code
   let match;
-  src = src.startsWith('http') ? src : scoped + src
+  // src = src.startsWith('http') ? src : scoped + src
 
   const awaitImportRegex = /await import\(['"]([^'"]+)['"]\)/gm;
   while ((match = awaitImportRegex.exec(code)) !== null) {
@@ -518,7 +518,9 @@ async function ParseImport(code, data, env, src) {
       if (url.startsWith('/') && scoped) {
         url = scoped + url
       } else {
+        console.log(url, src)
         url = resolvePath(url, src)
+        console.log(url)
       }
     }
     if (url.startsWith('@')) {

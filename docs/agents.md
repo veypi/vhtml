@@ -226,3 +226,4 @@ Before output:
 - [ ] No forbidden tag/directive combinations
 - [ ] Component refs: hyphenated lowercase
 - [ ] Variables: camelCase; Events: snake_case
+- [ ] NO `template`, `fragment`, `transition` tags

@@ -17,6 +17,7 @@ import i18n from './i18n.js'
 class EnvManager {
   constructor() {
     this.envMap = new Map()
+    this.wrappers = []
     this.i18nLocale = vproxy.Wrap({
       locale: localStorage.getItem('i18n_locale') || 'zh-CN',
       fallback: 'en-US'
@@ -63,6 +64,8 @@ class EnvManager {
     env.$t = (key, params = {}) => env.$i18n.t(key, params)
 
     await this.loadEnvConfig(env, baseURL)
+    // 应用所有已注册的包装器
+    this.applyWrappers(scoped, env)
     return env
   }
 
@@ -75,8 +78,36 @@ class EnvManager {
     }
   }
 
+  /**
+   * 添加环境包装器，对已存在和未来创建的环境都生效
+   * @param {Function} wrapper - 修改函数 (scoped, env) => {}
+   */
+  addWrapper(wrapper) {
+    if (typeof wrapper !== 'function') {
+      console.warn('addWrapper: wrapper must be a function')
+      return
+    }
+    this.wrappers.push(wrapper)
+    // 立即应用到已存在的环境
+    for (const [scoped, env] of this.envMap) {
+      wrapper(scoped, env)
+    }
+  }
+
+  /**
+   * 应用所有包装器到指定环境
+   * @param {string} scoped - 作用域标识
+   * @param {Object} env - 环境变量对象
+   */
+  applyWrappers(scoped, env) {
+    for (const wrapper of this.wrappers) {
+      wrapper(scoped, env)
+    }
+  }
+
   clear() {
     this.envMap.clear()
+    this.wrappers = []
   }
 }
 
@@ -401,6 +432,14 @@ class VGet {
   }
 
   /**
+   * 添加环境包装器，对已存在和未来创建的环境都生效
+   * @param {Function} wrapper - 修改函数 (scoped, env) => {}
+   */
+  addWrapper(wrapper) {
+    return this.envManager.addWrapper(wrapper)
+  }
+
+  /**
    * 加载 HTML 组件
    * @param {string} url - 组件 URL
    * @param {Object} env - 环境变量
@@ -571,4 +610,6 @@ export default {
   getInstance: () => vget,
   // 新增：清除缓存
   clearCache: () => vget.clearCache(),
+  // 新增：添加环境包装器
+  addWrapper: (wrapper) => vget.addWrapper(wrapper),
 }

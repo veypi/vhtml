@@ -182,6 +182,7 @@ import setupVdev from './vdev.js'
         return
       } else if (dom.nodeType === 8) {
         // comment node
+        dom.remove()
         return
       } else if (dom.nodeType !== 1) {
         console.log('Other Node Type:', dom.nodeType, dom);
@@ -814,7 +815,7 @@ import setupVdev from './vdev.js'
             } else if (typeof valVal === 'object') {
               txtItems[valIdx - 1] = JSON.stringify(valVal)
             }
-            dom.nodeValue = txtItems.join('')
+            dom.nodeValue = txtItems.join('').trim()
           })
         }
       }
