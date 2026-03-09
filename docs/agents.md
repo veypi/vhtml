@@ -190,6 +190,36 @@ You must **ONLY** write HTML, JavaScript, and CSS files that strictly follow vht
 - Programmatic: `$router.push("/target")`
 - Paths: **NO** `/ui/page/` prefix, **NO** `.html` suffix. Example: `/ui/page/user_list.html` → `/user_list`
 
+### routes.js
+
+```javascript
+export default [
+  { path: '/', component: '/page/index.html', name: 'home' },
+  { path: '/user/:id', component: '/page/user.html', cacheKey: 'user' },
+  { path: '/edit/:id', component: '/page/edit.html', cacheKey: false },
+  {
+    path: '/admin',
+    component: '/page/admin.html',
+    layout: 'admin',
+    meta: { auth: true },
+    children: [
+      { path: 'settings', component: '/page/admin_settings.html' }
+    ]
+  },
+  { path: '*', component: '/page/404.html' }
+]
+```
+
+| Field | Description |
+|-------|-------------|
+| `path` | Route path, supports `:param` and `*` wildcard |
+| `component` | Page component path, relative to `/ui` |
+| `name` | Route name for `$router.push({name: 'xxx'})` |
+| `layout` | Layout name, maps to `/ui/layout/{name}.html` |
+| `meta` | Metadata object, accessible via `$router.current.meta` |
+| `children` | Nested routes, paths are auto-prefixed with parent |
+| `cacheKey` | `string` for shared instance / `false` to disable / undefined for path-based caching |
+
 ## Built-in Libraries
 
 No import needed: FontAwesome, animate.css, ECharts

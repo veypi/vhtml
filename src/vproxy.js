@@ -518,9 +518,7 @@ async function ParseImport(code, data, env, src) {
       if (url.startsWith('/') && scoped) {
         url = scoped + url
       } else {
-        console.log(url, src)
         url = resolvePath(url, src)
-        console.log(url)
       }
     }
     if (url.startsWith('@')) {

@@ -574,6 +574,7 @@ import setupVdev from './vdev.js'
             } else {
               res = data[attrName]
             }
+
             utils.SetAttr(dom, attrName, res)
           })
         }

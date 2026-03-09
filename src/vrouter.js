@@ -298,6 +298,33 @@ class VRouter {
     return path
   }
 
+  // 解析缓存键
+  resolveCacheKey(route, matchedRoute) {
+    const config = route.cacheKey
+
+    // 禁用缓存
+    if (config === false) {
+      return null
+    }
+
+    // 默认或 true：按完整路径缓存
+    if (config === undefined || config === true) {
+      return matchedRoute.fullPath
+    }
+
+    // 字符串：固定 key 共享
+    if (typeof config === 'string') {
+      return config
+    }
+
+    // 函数：动态计算
+    if (typeof config === 'function') {
+      return config(matchedRoute)
+    }
+
+    return matchedRoute.fullPath
+  }
+
   async #navigateTo(matchedRoute) {
     if (!matchedRoute) {
       console.warn(`No route matched`)
@@ -335,17 +362,34 @@ class VRouter {
       }
     }
 
-    const cacheKey = matchedRoute.fullPath
-    let page = this.#pageCache.get(cacheKey)
+    // 计算缓存键
+    const cacheKey = this.resolveCacheKey(route, matchedRoute)
 
     this.#setRouterPath(matchedRoute)
-    if (page) {
-      page.activate()
-    } else {
-      page = new Page(this.#vhtml, this.#node, matchedRoute)
-      await page.mount(this.#env, this.#originContent, to.layout)
+
+    // 检查是否已存在该缓存页面
+    if (cacheKey && this.#pageCache.has(cacheKey)) {
+      const page = this.#pageCache.get(cacheKey)
+      // 判断是否是共享页面（相同的 cacheKey 但不同的 fullPath）
+      const isSharedPage = page.matchedRoute.fullPath !== matchedRoute.fullPath
+      if (isSharedPage) {
+        // 共享页面：只更新 router 状态，让组件自治
+        page.updateRouter(matchedRoute)
+      } else {
+        // 普通缓存页面：重新激活显示
+        page.activate()
+      }
+      return
+    }
+
+    // 创建新页面
+    const page = new Page(this.#vhtml, this.#node, matchedRoute, cacheKey)
+
+    if (cacheKey) {
       this.#pageCache.set(cacheKey, page)
     }
+
+    await page.mount(this.#env, this.#originContent, to.layout)
 
   }
 
@@ -493,12 +537,37 @@ class RouteMatcher {
 const layoutCache = new Map()
 
 class Page {
-  constructor(vhtml, node, matchedRoute) {
+  constructor(vhtml, node, matchedRoute, cacheKey) {
     this.vhtml = vhtml
     this.node = node
     this.layoutDom = undefined
     this.matchedRoute = matchedRoute
+    this.cacheKey = cacheKey
     this.htmlPath = this.resolveHtmlPath(matchedRoute)
+    this.dom = null
+  }
+
+  // 更新 router 状态（共享页面复用时调用）
+  updateRouter(matchedRoute) {
+    this.matchedRoute = matchedRoute
+
+    // 获取页面内的环境
+    const pageEnv = this.dom?.$env
+    if (!pageEnv) return
+
+    // 更新 $router.current 对象（响应式，会触发 $watch）
+    const router = pageEnv.$router
+    if (!router) return
+
+    Object.assign(router.current, {
+      path: matchedRoute.path,
+      fullPath: matchedRoute.fullPath,
+      params: matchedRoute.params,
+      query: matchedRoute.query,
+      hash: new URL(matchedRoute.fullPath, window.location.origin).hash,
+      meta: matchedRoute.route?.meta || {},
+      name: matchedRoute.route?.name
+    })
   }
 
   resolveHtmlPath(matchedRoute) {
@@ -523,27 +592,27 @@ class Page {
     const parser = await vget.FetchUI(this.htmlPath, env)
     if (parser.err) {
       console.warn(parser.err)
-      let dom = document.createElement('div')
-      Object.assign(dom.style, { width: '100%', height: '100%' })
-      dom.append(...originContent)
+      this.dom = document.createElement('div')
+      Object.assign(this.dom.style, { width: '100%', height: '100%' })
+      this.dom.append(...originContent)
       this.node.innerHTML = ''
-      this.node.append(dom)
-      this.vhtml.parseRef(this.htmlPath, dom, {}, env, null, true)
+      this.node.append(this.dom)
+      this.vhtml.parseRef(this.htmlPath, this.dom, {}, env, null, true)
       return
     }
     this.title = parser.title || ''
 
 
     const slots = {}
-    const dom = document.createElement("div")
-    dom.setAttribute('vsrc', this.htmlPath)
-    slots[''] = [dom]
+    this.dom = document.createElement("div")
+    this.dom.setAttribute('vsrc', this.htmlPath)
+    slots[''] = [this.dom]
     this.slots = slots
 
     if (!layout) {
       this.node.innerHTML = ''
-      this.node.append(dom)
-      this.vhtml.parseRef(this.htmlPath, dom, {}, env, null)
+      this.node.append(this.dom)
+      this.vhtml.parseRef(this.htmlPath, this.dom, {}, env, null)
       return
     }
 
@@ -563,13 +632,13 @@ class Page {
       if (layoutParser.err) {
         console.warn(`get layout ${layoutUrl} failed.`, layoutParser.err)
         this.node.innerHTML = ''
-        this.node.append(dom)
-        this.vhtml.parseRef(this.htmlPath, dom, {}, env, null)
+        this.node.append(this.dom)
+        this.vhtml.parseRef(this.htmlPath, this.dom, {}, env, null)
         return
       }
       layoutDom = layoutParser.body.cloneNode(true)
       layoutCache.set(layout, layoutDom)
-      dom.$ref = vproxy.Wrap({})
+      this.dom.$ref = vproxy.Wrap({})
       layoutDom.$refSlots = vproxy.Wrap({ ...slots })
       this.node.innerHTML = ''
       this.node.append(layoutDom)
@@ -586,10 +655,7 @@ class Page {
     if (this.title) {
       let title = this.title.trim()
       if (title.indexOf("{{") >= 0) {
-        let target = this.slots['']
-        if (target instanceof Array && target.length > 0) {
-          target = target[0]
-        }
+        let target = this.layoutDom || this.dom
         let match
         let nstart = 0
         let start = -1;
@@ -608,7 +674,7 @@ class Page {
             start = -1
             nstart = match.index + 2
             vproxy.Watch(() => {
-              let valVal = vproxy.Run(valStr, {}, this.layoutDom.$env)
+              let valVal = vproxy.Run(valStr, {}, target.$env)
               txtItems[valIdx - 1] = valVal
               if (typeof valVal === 'function') {
                 txtItems[valIdx - 1] = valVal()
@@ -641,13 +707,11 @@ class Page {
         this.node.innerHTML = ''
       }
       this.node.append(layoutDom)
-    } else {
-      this.node.innerHTML = ''
-      const dom = this.slots['']
-      if (dom instanceof Array) {
-        this.node.append(...dom)
-      } else {
-        this.node.append(dom)
+    } else if (this.dom) {
+      // 无 layout 的页面，直接显示 this.dom
+      if (!this.dom.isConnected) {
+        this.node.innerHTML = ''
+        this.node.append(this.dom)
       }
     }
   }

@@ -221,6 +221,9 @@ function BindInputDomValue(dom, data, key, watch) {
 }
 
 function SetAttr(dom, key, value) {
+  if (typeof value === 'function') {
+    value = value()
+  }
   // 属性名映射表
   const propertyMap = {
     'htmlfor': 'htmlFor',
