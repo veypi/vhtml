@@ -80,6 +80,7 @@ class VRouter {
       matcher: new RouteMatcher(route.path, route.name),
       description: route.description || '',
       layout: route.layout || '',
+      cacheKey: route.cacheKey,
     }
 
     this.#routes.push(routeConfig)
@@ -475,9 +476,14 @@ class RouteMatcher {
   }
 
   pathToRegexp(path) {
-    const paramPattern = /:([^(/]+)/g
-    let regexpStr = path.replace(paramPattern, (match, key) => {
+    // 支持可选参数 :param? 和普通参数 :param
+    const paramPattern = /:([^(/?]+)(\?)?/g
+    let regexpStr = path.replace(paramPattern, (_, key, optional) => {
       this.keys.push(key)
+      if (optional) {
+        // 可选参数: 匹配 value 或空（注意不包含前面的/）
+        return `(?:(?<${key}>[^/]+))?`
+      }
       return `(?<${key}>[^/]+)`
     })
 
