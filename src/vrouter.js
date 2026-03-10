@@ -37,7 +37,8 @@ function parseUrlString(urlString, scoped) {
 
 
 class VRouter {
-  #routes = []
+  #stringRoutes = [] // 字符串路径路由，优先匹配
+  #regexRoutes = []  // 正则路径路由，后匹配
   #history = []
   #current = vproxy.Wrap({})
   #scoped = ''
@@ -54,7 +55,7 @@ class VRouter {
     this.init()
   }
 
-  get routes() { return this.#routes.slice() }
+  get routes() { return [...this.#stringRoutes, ...this.#regexRoutes] }
   get history() { return this.#history.slice() }
   get current() { return this.#current }
   get query() { return this.#current?.query || {} }
@@ -63,6 +64,12 @@ class VRouter {
 
   onChange(fc) {
     this.#listeners.push(fc)
+  }
+
+  // 判断路径是否包含正则特殊字符
+  #isRegexPath(path) {
+    // 包含 :param * ? ( ) [ ] { } ^ $ + . 等视为正则路径
+    return /[:*?()[\]{}^$+.]/.test(path)
   }
 
   addRoute(route) {
@@ -74,6 +81,7 @@ class VRouter {
     const routeConfig = {
       path: route.path,
       component: route.component,
+      redirect: route.redirect,
       name: route.name,
       meta: route.meta || {},
       children: route.children || [],
@@ -83,7 +91,13 @@ class VRouter {
       cacheKey: route.cacheKey,
     }
 
-    this.#routes.push(routeConfig)
+    // 根据路径类型分到不同数组（redirect 路由不需要渲染，放哪边都可以）
+    if (this.#isRegexPath(route.path)) {
+      this.#regexRoutes.push(routeConfig)
+    } else {
+      this.#stringRoutes.push(routeConfig)
+    }
+    // 注意：redirect 路由会在 #navigateTo 中处理，不会走到渲染逻辑
 
     // 如果有名称，添加到名称索引中
     if (route.name) {
@@ -175,10 +189,26 @@ class VRouter {
       return null
     }
 
-    // 按路径匹配
-    for (const route of this.#routes) {
+    // 1. 先按字符串精确匹配（优先级高）
+    for (const route of this.#stringRoutes) {
+      if (route.path === path && (route.component || route.redirect)) {
+        return {
+          route,
+          params: { ...params },
+          matched: path,
+          description: route.description,
+          layout: route.layout,
+          path,
+          query,
+          name: route.name
+        }
+      }
+    }
+
+    // 2. 再按正则匹配（优先级低）
+    for (const route of this.#regexRoutes) {
       const match = route.matcher.match(path)
-      if (match && route.component) {
+      if (match && (route.component || route.redirect)) {
         return {
           route,
           params: { ...match.params, ...params },
@@ -334,6 +364,15 @@ class VRouter {
 
     const { route, params, query } = matchedRoute
 
+    // Handle redirect
+    if (route.redirect) {
+      const redirectTarget = typeof route.redirect === 'function'
+        ? route.redirect(matchedRoute)
+        : route.redirect
+      this.push(redirectTarget)
+      return
+    }
+
     const to = {
       path: matchedRoute.path,
       fullPath: matchedRoute.fullPath,
@@ -477,13 +516,18 @@ class RouteMatcher {
 
   pathToRegexp(path) {
     // 支持可选参数 :param? 和普通参数 :param
-    const paramPattern = /:([^(/?]+)(\?)?/g
-    let regexpStr = path.replace(paramPattern, (_, key, optional) => {
+    // 先处理可选参数及其前面的 /
+    // 将 /:param? 或 :param? 转换为 (?:/(?<param>[^/]+))?
+    const optionalParamPattern = /\/:([^(/?]+)\?/g
+    let regexpStr = path.replace(optionalParamPattern, (_, key) => {
       this.keys.push(key)
-      if (optional) {
-        // 可选参数: 匹配 value 或空（注意不包含前面的/）
-        return `(?:(?<${key}>[^/]+))?`
-      }
+      return `(?:/(?<${key}>[^/]+))?`
+    })
+
+    // 处理普通参数（非可选）
+    const paramPattern = /:([^(/?]+)/g
+    regexpStr = regexpStr.replace(paramPattern, (_, key) => {
+      this.keys.push(key)
       return `(?<${key}>[^/]+)`
     })
 

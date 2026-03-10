@@ -471,7 +471,7 @@ class VGet {
     let tempenv = {}
 
     try {
-      const response = await fetch(url + '?random=' + Math.random())
+      const response = await fetch(url)
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)

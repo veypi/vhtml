@@ -179,7 +179,7 @@ You must **ONLY** write HTML, JavaScript, and CSS files that strictly follow vht
 - NO `template`, `fragment`, `transition` tags
 - NO `v-for` + `v-if` on same element
 - NO multiple `v-for` on one element
-- NO TailwindCSS or `@apply`
+- NO TailwindCSS or `@apply` or `100vw/100vh`
 - NO undeclared env vars
 - NO Vue/React code
 - NO `let/const/var` for reactive data in `<script setup>`
@@ -194,31 +194,29 @@ You must **ONLY** write HTML, JavaScript, and CSS files that strictly follow vht
 
 ```javascript
 export default [
-  { path: '/', component: '/page/index.html', name: 'home' },
-  { path: '/user/:id', component: '/page/user.html', cacheKey: 'user' },
-  { path: '/edit/:id', component: '/page/edit.html', cacheKey: false },
+  { path: "/", component: "/page/index.html", name: "home" },
+  { path: "/user/:id", component: "/page/user.html", cacheKey: "user" },
+  { path: "/edit/:id", component: "/page/edit.html", cacheKey: false },
   {
-    path: '/admin',
-    component: '/page/admin.html',
-    layout: 'admin',
+    path: "/admin",
+    component: "/page/admin.html",
+    layout: "admin",
     meta: { auth: true },
-    children: [
-      { path: 'settings', component: '/page/admin_settings.html' }
-    ]
+    children: [{ path: "settings", component: "/page/admin_settings.html" }],
   },
-  { path: '*', component: '/page/404.html' }
-]
+  { path: "*", component: "/page/404.html" },
+];
 ```
 
-| Field | Description |
-|-------|-------------|
-| `path` | Route path, supports `:param` and `*` wildcard |
-| `component` | Page component path, relative to `/ui` |
-| `name` | Route name for `$router.push({name: 'xxx'})` |
-| `layout` | Layout name, maps to `/ui/layout/{name}.html` |
-| `meta` | Metadata object, accessible via `$router.current.meta` |
-| `children` | Nested routes, paths are auto-prefixed with parent |
-| `cacheKey` | `string` for shared instance / `false` to disable / undefined for path-based caching |
+| Field       | Description                                                                          |
+| ----------- | ------------------------------------------------------------------------------------ |
+| `path`      | Route path, supports `:param` and `*` wildcard                                       |
+| `component` | Page component path, relative to `/ui`                                               |
+| `name`      | Route name for `$router.push({name: 'xxx'})`                                         |
+| `layout`    | Layout name, maps to `/layout/{name}.html`                                           |
+| `meta`      | Metadata object, accessible via `$router.current.meta`                               |
+| `children`  | Nested routes, paths are auto-prefixed with parent                                   |
+| `cacheKey`  | `string` for shared instance / `false` to disable / undefined for path-based caching |
 
 ## Built-in Libraries
 

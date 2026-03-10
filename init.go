@@ -39,16 +39,22 @@ func init() {
 		x.Header().Set("vhtml-scoped", Router.String())
 		x.Header().Set("vhtml-vdev", vdev)
 	}
+	var lfs ufs.ReadOnlyFS
 	if vdev != "" && current != "" {
 		Router.Get("vhtml.min.js", func(x *vigo.X) { _ = x.File(path.Join(utils.CurrentDir(0), "src", "index.js")) })
-		Router.Get("/{path:*}", renderEnv, ufs.New(path.Join(current, "src"), path.Join(current, "ui")).NewHandlerWithDefaultFile("root.html"))
+		srcfs, _ := ufs.NewLocalFS(path.Join(current, "src"))
+		uifs, _ := ufs.NewLocalFS(path.Join(current, "ui"))
+		lfs = ufs.NewMultiFS(srcfs, uifs)
 	} else {
 		Router.Get("vhtml.min.js", func(x *vigo.X) {
 			x.Header().Set("content-type", "text/javascript; charset=utf-8")
 			_, _ = x.Write([]byte(vhtmljs))
 		})
-		Router.Get("/{path:*}", renderEnv, ufs.New(ufs.Embed(srcfs, "src"), ufs.Embed(uifs, "ui")).NewHandlerWithDefaultFile("root.html"))
+		srcfs, _ := ufs.NewEmbedFS(srcfs, "src")
+		uifs, _ := ufs.NewEmbedFS(uifs, "ui")
+		lfs = ufs.NewMultiFS(srcfs, uifs)
 	}
+	Router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(lfs, "root.html"))
 }
 
 func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
@@ -60,11 +66,20 @@ func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 		for i := 0; i < len(args); i += 2 {
 			x.Header().Set("vhtml-"+args[i], args[i+1])
 		}
+		if vdev != "" {
+			x.Header().Set("Cache-Control", "no-cache")
+		}
 	}
+	var lfs ufs.ReadOnlyFS
+	var err error
 	if vdev != "" && current != "" {
-		router.Get("/{path:*}", renderEnv, ufs.New(path.Join(current, "ui")).NewHandlerWithDefaultFile("root.html"))
+		lfs, err = ufs.NewLocalFS(path.Join(current, "ui"))
 	} else {
-		router.Get("/{path:*}", renderEnv, ufs.New(ufs.Embed(uiFS, "ui")).NewHandlerWithDefaultFile("root.html"))
+		lfs, err = ufs.NewEmbedFS(uiFS, "ui")
 	}
+	if err != nil {
+		panic(err)
+	}
+	router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(lfs, "root.html"))
 	return router
 }

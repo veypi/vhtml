@@ -493,7 +493,10 @@ async function ParseImport(code, data, env, src) {
   let scoped = env.scoped || ''
   let codeCopy = code
   let match;
-  // src = src.startsWith('http') ? src : scoped + src
+  if (!src.startsWith('http') && !src.startsWith(scoped)) {
+    src = scoped + src
+
+  }
 
   const awaitImportRegex = /await import\(['"]([^'"]+)['"]\)/gm;
   while ((match = awaitImportRegex.exec(code)) !== null) {
