@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="runtime cache probe" details="用于验证 router 缓存页 active/deactive 的最小页面" />
+  <title>Runtime Cache Probe</title>
+</head>
+<style>
+  body {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 48px 24px 72px;
+    color: var(--text-color);
+  }
+
+  .hero {
+    margin-bottom: 24px;
+  }
+
+  .hero h1 {
+    margin: 0 0 12px;
+    font-size: 36px;
+  }
+
+  .hero p {
+    margin: 0;
+    color: var(--text-color-secondary);
+  }
+
+  .probe {
+    padding: 24px;
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    margin: 18px 0 22px;
+  }
+
+  .metric {
+    padding: 16px;
+    border-radius: 18px;
+    background: #f8fafc;
+  }
+
+  .metric-label {
+    display: block;
+    color: var(--text-color-secondary);
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .metric-value {
+    display: block;
+    margin-top: 6px;
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    font-size: 16px;
+    margin-bottom: 16px;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .links a {
+    display: inline-flex;
+    padding: 10px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #0f172a;
+    background: #dbeafe;
+  }
+</style>
+<body>
+  <section class="hero">
+    <h1>Cache Probe {{ routeName }}</h1>
+    <p>在 alpha 和 beta 之间来回切换。输入框内容应被保留，`active` 和 `deactive` 应持续增长，说明缓存页实例被复用而不是反复销毁。</p>
+  </section>
+
+  <section class="probe">
+    <div class="grid">
+      <div class="metric">
+        <span class="metric-label">active</span>
+        <span class="metric-value">{{ activeCount }}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">deactive</span>
+        <span class="metric-value">{{ deactiveCount }}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">current route</span>
+        <span class="metric-value">{{ routeName }}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">draft length</span>
+        <span class="metric-value">{{ draft.length }}</span>
+      </div>
+    </div>
+    <input class="input" v:value="draft" placeholder="输入任意文本，然后切换 alpha / beta 再回来" />
+    <div class="links">
+      <a href="/runtime-smoke/cache/alpha">切到 alpha</a>
+      <a href="/runtime-smoke/cache/beta">切到 beta</a>
+      <a href="/runtime-smoke">返回 smoke 首页</a>
+    </div>
+  </section>
+</body>
+<script setup>
+  activeCount = 0;
+  deactiveCount = 0;
+  draft = '';
+  routeName = '';
+</script>
+<script>
+  routeName = $router.params.name || '';
+</script>
+<script active>
+  routeName = $router.params.name || '';
+  activeCount += 1;
+</script>
+<script deactive>
+  deactiveCount += 1;
+</script>
+</html>

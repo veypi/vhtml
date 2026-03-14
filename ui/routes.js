@@ -14,6 +14,10 @@ const routes = [
   // 示例页面
   { path: '/examples', component: '/page/examples.html', name: 'examples', layout: 'default', description: '示例 - 功能演示与代码案例' },
 
+  // 运行时冒烟页
+  { path: '/runtime-smoke', component: '/page/runtime_smoke.html', name: 'runtime-smoke', layout: 'default', description: '运行时冒烟验证页' },
+  { path: '/runtime-smoke/cache/:name', component: '/page/runtime_cache_probe.html', name: 'runtime-smoke-cache', layout: 'default', cacheKey: 'runtime-smoke-cache', description: '运行时缓存页验证' },
+
   // 生态页面
   { path: '/ecosystem', component: '/page/ecosystem.html', name: 'ecosystem', layout: 'default', description: '生态 - 工具与资源' },
 

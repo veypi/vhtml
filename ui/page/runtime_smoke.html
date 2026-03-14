@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="runtime smoke" details="用于手工验证运行时生命周期、slot 和缓存页行为" />
+  <title>Runtime Smoke</title>
+</head>
+<style>
+  body {
+    color: var(--text-color);
+  }
+
+  .page {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 48px 24px 72px;
+  }
+
+  .hero {
+    margin-bottom: 32px;
+  }
+
+  .hero h1 {
+    margin: 0 0 12px;
+    font-size: 40px;
+  }
+
+  .hero p {
+    margin: 0;
+    max-width: 760px;
+    color: var(--text-color-secondary);
+  }
+
+  .grid {
+    display: grid;
+    gap: 24px;
+  }
+
+  .card {
+    padding: 24px;
+    border-radius: 24px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .card h2 {
+    margin: 0 0 10px;
+    font-size: 24px;
+  }
+
+  .card p {
+    margin: 0 0 16px;
+    color: var(--text-color-secondary);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 999px;
+    background: #0f172a;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .btn.light {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+
+  .panel {
+    padding: 18px;
+    border-radius: 20px;
+    background: #f8fafc;
+  }
+
+  .note {
+    padding: 16px 18px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #fff7ed, #fffbeb);
+    border: 1px solid rgba(245, 158, 11, 0.24);
+    color: #92400e;
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .links a {
+    display: inline-flex;
+    padding: 10px 14px;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #0f172a;
+    background: #e0f2fe;
+  }
+
+  .status {
+    margin-top: 14px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background: #eff6ff;
+    color: #1d4ed8;
+  }
+
+  .code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 14px;
+    color: #0f172a;
+  }
+</style>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>Runtime Smoke</h1>
+      <p>这页不是文档，而是运行时冒烟检查页。它只覆盖浏览器里可以直接观察的链路：组件生命周期、slot 投递、缓存页激活。`scoped` 仍然依赖模块响应头或模块入口环境注入，这里只做约束说明，不做伪验证。</p>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>组件 dispose</h2>
+        <p>切换下面的组件可直接观察 mount、active、dispose 的计数变化。这里不会触发 deactive，因为它是实际销毁，不是缓存失活。</p>
+        <div class="actions">
+          <button class="btn" @click="showProbe = !showProbe">{{ showProbe ? '移除组件' : '挂载组件' }}</button>
+          <button class="btn light" @click="probeMessage = 'message #' + (++probeVersion)">更新 slot 文本</button>
+        </div>
+        <div class="panel">
+          <local-runtime_probe_card v-if="showProbe" :title="'Disposable Probe'">
+            <div>{{ probeMessage }}</div>
+          </local-runtime_probe_card>
+          <div v-else class="note">当前 probe 已被移除。再次挂载会创建新实例，所以计数会重新开始。</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>slot 投递</h2>
+        <p>这个区域同时覆盖默认 slot 和命名 slot。点击按钮后，父组件数据更新应立即反映在子组件的 header、body、footer 三个 slot 里。</p>
+        <div class="actions">
+          <button class="btn" @click="slotVersion += 1">刷新 slot 内容</button>
+        </div>
+        <div class="panel">
+          <local-runtime_slot_shell :title="'Slot Shell Demo'">
+            <div vslot="header">header slot version {{ slotVersion }}</div>
+            <div>default slot payload version {{ slotVersion }}</div>
+            <div vslot="footer">footer slot version {{ slotVersion }}</div>
+          </local-runtime_slot_shell>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>缓存页 active/deactive</h2>
+        <p>下面两个链接指向同一个缓存页实例。路由切换时应该保留输入框状态，同时 active 和 deactive 计数持续累加。再用浏览器后退，应该回到上一个缓存页，而不是重复往 history 里 push。</p>
+        <div class="links">
+          <a href="/runtime-smoke/cache/alpha">打开 alpha</a>
+          <a href="/runtime-smoke/cache/beta">打开 beta</a>
+          <button class="btn light" @click="$router.back()">执行 back()</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>vmessage</h2>
+        <p>这块覆盖全局 message、confirm、prompt。它主要用于验证重写后的弹层清理链没有残留事件或定时器。</p>
+        <div class="actions">
+          <button class="btn" @click="showInfo">info</button>
+          <button class="btn" @click="openConfirm">confirm</button>
+          <button class="btn light" @click="openPrompt">prompt</button>
+        </div>
+        <div class="status">last action: {{ messageState }}</div>
+      </section>
+
+      <section class="card">
+        <h2>scoped 约束</h2>
+        <p>当前静态站点不能完整覆盖模块隔离验证，因为 `env.scoped` 需要模块入口或响应头注入。这里保留的是你这次重构后的预期规则，便于手工对照。</p>
+        <div class="note">
+          <div class="code">scoped = /xxx/auth</div>
+          <div class="code">组件 HTML: /xxx/auth/feature/panel.html</div>
+          <div class="code">$axios baseURL: https://host/xxx/auth</div>
+          <div class="code">接口请求: /api/profile -&gt; https://host/xxx/auth/api/profile</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+<script setup>
+  showProbe = true;
+  probeVersion = 1;
+  probeMessage = 'message #1';
+  slotVersion = 1;
+  messageState = 'idle';
+  showInfo = () => {
+    messageState = 'info opened';
+    $message.info('runtime smoke message');
+  };
+  openConfirm = async () => {
+    try {
+      await $message.confirm('确认当前 runtime 行为正常吗？');
+      messageState = 'confirm accepted';
+    } catch (error) {
+      messageState = 'confirm cancelled';
+    }
+  };
+  openPrompt = async () => {
+    try {
+      let value = await $message.prompt('输入任意文本验证 prompt', 'draft');
+      messageState = 'prompt value: ' + value;
+    } catch (error) {
+      messageState = 'prompt cancelled';
+    }
+  };
+</script>
+</html>

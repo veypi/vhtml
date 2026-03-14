@@ -1,257 +1,286 @@
 ---
 name: vhtml-frontend
-description: "Use for vhtml framework HTML/JS/CSS development. Handles components, data binding, slots, API integration, and i18n.\nExamples: user profile page creation, form bug fixing, reusable card component with slots, API data fetching with $axios, i18n updates."
+description: Use this guide when creating or modifying vhtml frontend code, including pages, reusable HTML components, layouts, routes, slots, bindings, scoped module env setup, router behavior, API integration, i18n setup and translation usage, and component communication. Read the full guide whenever a task involves vhtml-specific syntax or runtime concepts such as script setup, $data/$env/$scoped/$router, $t/$i18n, env.js, routes.js, vrouter, refs, lifecycle hooks, or real-DOM component composition.
 ---
 
-You are an elite programming assistant proficient in the **vhtml framework**, possessing deep knowledge of HTML, JavaScript, and CSS development tailored specifically for the vhtml ecosystem. Your sole mission is to create, modify, and optimize code files that strictly adhere to vhtml specifications.
+# vhtml Frontend Guide
 
-## Core Responsibilities
+## What vhtml is
 
-You must **ONLY** write HTML, JavaScript, and CSS files that strictly follow vhtml framework conventions. You are prohibited from creating other file types or using any other frameworks (e.g., Vue, React, TailwindCSS, etc.).
+`vhtml` is a browser-only HTML component runtime.
 
-## Directory Structure
+- No SSR
+- No hydration
+- No virtual DOM
+- Real DOM is the source of truth
+- One `.html` file can be a full page or a reusable component
+- `vrouter` is optional; without it, vhtml is just an HTML component framework
 
-| Path                      | Purpose                     | Notes                                            |
-| ------------------------- | --------------------------- | ------------------------------------------------ |
-| `/ui/`                    | Static assets root          | Reference without `/ui` prefix                   |
-| `/ui/assets/global.css`   | Global styles               | Already in `root.html`, **DO NOT** re-import     |
-| `/ui/layout/default.html` | Default layout              | -                                                |
-| `/ui/page/index.html`     | Homepage                    | -                                                |
-| `/ui/page/404.html`       | 404 page                    | -                                                |
-| `/ui/root.html`           | Root for non-asset requests | -                                                |
-| `/ui/routes.js`           | Route config                | Exports `[]route` list                           |
-| `/ui/env.js`              | Global env                  | Defines `$env`, loads `$i18n`, registers plugins |
-| `/ui/langs.json`          | i18n messages               | Flat structure                                   |
+Use vhtml patterns, not Vue/React patterns.
 
-**Component Naming Rule:**
+## File Layout
 
-- File: `/ui/form/user_create.html`
-- Tag: `<form-user_create></form-user_create>`
-- Rule: Replace `/` with `-`, remove `.html`, **lowercase only** (uppercase **FORBIDDEN**)
+Typical module layout:
 
-## HTML Template (MANDATORY)
+```txt
+ui/
+  root.html   # app entry
+  env.js      # module-scoped setup
+  routes.js   # router-view config
+  layout/     # router layouts
+  page/       # route pages
+  local/      # reusable local components
+```
+
+## Component Mapping
+
+Custom tags map to HTML files by kebab path:
+
+```html
+<user-card></user-card>   # /user/card.html
+<agent-list></agent-list> # /agent/list.html in the current module
+```
+
+## Component File Shape
+
+Recommended structure:
 
 ```html
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta
-      name="description"
-      content="Page/Component Name"
-      details="Description"
-    />
-    <title>Title or {{$t('key')}}</title>
-    <link rel="stylesheet" key="x" href="x" />
-    <script type="module" key="x" src="x"></script>
-  </head>
-  <style>
-    body {
-      /* Outermost wrapper */
-    }
-    .class {
-      /* Other styles */
-    }
-  </style>
-  <body>
-    <p>{{ message }}</p>
-    <button @click="updateMessage">Update</button>
-  </body>
-  <script setup>
-    // Runs ONCE before init. Use = for reactive state (NO let/const/var).
-    message = "Hello vhtml!";
-    count = 0;
-    items = [{ id: 1, name: "item1" }];
-    updateMessage = () => {
-      message = "Updated: " + ++count;
-    };
-  </script>
-  <script>
-    // Runs AFTER init. Access data via $data.x, DOM via $node, API via $axios.
-    $watch(() => {
-      console.log($data.message);
-      $emit("changed", $data.message);
-    });
-  </script>
+<head>
+  <meta name="description" content="Counter" details="Simple counter" />
+  <title>Counter</title>
+</head>
+
+<style>
+  body { display: flex; gap: 12px; align-items: center; }
+</style>
+
+<body>
+  <button @click="count--">-</button>
+  <span>{{ count }}</span>
+  <button @click="count++">+</button>
+</body>
+
+<script setup>
+  count = 0
+</script>
 </html>
 ```
 
-## Tag Specifications
+## Runtime Model
 
-| Tag            | Purpose         | Rules                                                                                                      |
-| -------------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `head`         | Metadata        | Must have `<title>`, `<meta>`, `<meta name="description">`. Only `<title>` allows dynamic binding          |
-| `style`        | CSS             | `body {}` = wrapper style. **NO TailwindCSS or `@apply`**. Use inline for <3 rules, `<style>` for complex  |
-| `body`         | HTML structure  | -                                                                                                          |
-| `script setup` | Pre-init logic  | Runs **once**. Reactive data: `var = value` (**NO let/const**). Methods: `fn = () => {}`. camelCase naming |
-| `script`       | Post-init logic | Access: `$data.x = value` (triggers update), `$node.querySelector()`, `$axios.*`                           |
+### `$data`
 
-## Data Binding
+Private state of the current component instance: variables from `<script setup>`, component methods, and props mapped into the instance.
 
-| Type         | Syntax      | Example                                    |
-| ------------ | ----------- | ------------------------------------------ |
-| Text         | `{{ var }}` | `{{ message }}`                            |
-| Dynamic attr | `:attr`     | `<a :href="url">`                          |
-| Event        | `@event`    | `<button @click="fn">`                     |
-| One-way      | `:prop`     | `<input :value="x">`, `<app :data="d">`    |
-| Two-way      | `v:prop`    | `<input v:value="x">`, `<comp v:data="d">` |
+### `$env`
 
-## Logic Directives
+Parent-to-child context chain, inherited through nesting; use it for local tree context such as `theme`, `mode`, `recordId`, not module-wide services:
 
 ```html
-<!-- Conditionals -->
-<div v-if="cond === 'v'">...</div>
-<div v-else-if="cond > 10">...</div>
-<div v-else>...</div>
-
-<!-- Loops - NEVER mix v-for with v-if on same element -->
-<div v-for="(item, idx) in list">
-  <div>{{ idx }}: {{ item.prop }}</div>
-  <div v-for="sub in item.subs">{{ sub }}</div>
-</div>
+<script setup> $env.recordId = 'abc123' </script> # children can read recordId
 ```
 
-**Critical:** No `v-for` + other directives on same element. No multiple `v-for` on one element. Nest instead. No `key` attr needed.
+### `$scoped`
 
-## Component Reference
+Module-scoped context, shared by the same module scope and not inherited through parent components; use it for `$axios`, `$i18n`, `$t`, `$bus`, auth, and module config.
 
-**Usage:**
+### `$router`
 
-- Hyphen mode (preferred): `<a-b-c-d>` for `/ui/A/B/C/D.html`
-- vsrc mode (fallback): `<div vsrc="/A/B/C/D.html">`
-
-**Props & Events:**
-
-| Type           | Syntax                         |
-| -------------- | ------------------------------ |
-| One-way prop   | `<comp :prop="parentVar">`     |
-| Two-way prop   | `<comp v:prop="parentVar">`    |
-| Event (parent) | `<comp @event_name="handler">` |
-| Event (child)  | `$emit("event_name", data)`    |
-
-- Event names: **snake_case**, must NOT conflict with native JS events
-
-## Environment Variables
-
-**Both `<script setup>` and `<script>`:**
-
-| Var        | Usage                                                                                 |
-| ---------- | ------------------------------------------------------------------------------------- |
-| `$axios`   | HTTP wrapper. Methods: `get/post/patch/put/delete`                                    |
-| `$data`    | All reactive data from setup                                                          |
-| `$emit`    | Trigger parent events                                                                 |
-| `$router`  | `push("/path")`, `back()`, `query.*`, `params.*`                                      |
-| `$message` | `info/warning/error/success("msg")`, `confirm(msg).then()`, `prompt(msg, def).then()` |
-| `$i18n`    | `load(data)`, `$t("key", params)`                                                     |
-
-**Only `<script>`:**
-
-| Var      | Usage                                                                                                                           |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `$watch` | `$watch(() => [v1, v2], () => {...})`. **DO NOT** modify watched vars inside (deadlock). Runs once immediately to register deps |
-| `$node`  | DOM node (parent of template root)                                                                                              |
-
-## Slots
-
-**Parent:**
-
-```html
-<my-card :title="t">
-  <div vslot="header">Override header</div>
-  <div>Default slot content</div>
-  <div vslot="footer">Footer</div>
-</my-card>
-```
-
-**Child (`my-card.html`):**
-
-```html
-<body>
-  <vslot name="header" class="card-h"><h3>Default</h3></vslot>
-  <vslot class="card-b"><p>Default</p></vslot>
-</body>
-<script setup>
-  title = "Default Title";
-</script>
-```
-
-## Prohibitions
-
-- NO `template`, `fragment`, `transition` tags
-- NO `v-for` + `v-if` on same element
-- NO multiple `v-for` on one element
-- NO TailwindCSS or `@apply` or `100vw/100vh`
-- NO undeclared env vars
-- NO Vue/React code
-- NO `let/const/var` for reactive data in `<script setup>`
-
-## Routing
-
-- Link: `<a href="/target">` (auto `a[active]` on path match)
-- Programmatic: `$router.push("/target")`
-- Paths: **NO** `/ui/page/` prefix, **NO** `.html` suffix. Example: `/ui/page/user_list.html` → `/user_list`
-
-### routes.js
-
-```javascript
-export default [
-  { path: "/", component: "/page/index.html", name: "home" },
-  { path: "/user/:id", component: "/page/user.html", cacheKey: "user" },
-  { path: "/edit/:id", component: "/page/edit.html", cacheKey: false },
-  {
-    path: "/admin",
-    component: "/page/admin.html",
-    layout: "admin",
-    meta: { auth: true },
-    children: [{ path: "settings", component: "/page/admin_settings.html" }],
-  },
-  { path: "*", component: "/page/404.html" },
-];
-```
-
-| Field       | Description                                                                          |
-| ----------- | ------------------------------------------------------------------------------------ |
-| `path`      | Route path, supports `:param` and `*` wildcard                                       |
-| `component` | Page component path, relative to `/ui`                                               |
-| `name`      | Route name for `$router.push({name: 'xxx'})`                                         |
-| `layout`    | Layout name, maps to `/layout/{name}.html`                                           |
-| `meta`      | Metadata object, accessible via `$router.current.meta`                               |
-| `children`  | Nested routes, paths are auto-prefixed with parent                                   |
-| `cacheKey`  | `string` for shared instance / `false` to disable / undefined for path-based caching |
-
-## Built-in Libraries
-
-No import needed: FontAwesome, animate.css, ECharts
+Nearest ancestor `vrouter` view; local to the current router subtree, not a module-level global, and only available inside a `vrouter`.
 
 ## i18n
 
-**Structure (Flat):**
+`$i18n` and `$t` come from `$scoped`, so translations are module-scoped by default. Common resource layout at the current module root:
+
+```txt
+env.js
+routes.js
+langs.json
+```
+
+```html
+<title>{{$t('agent.list_title')}}</title>
+<button>{{$t('common.save')}}</button>
+<div>{{ $t('agent.empty') }}</div>
+```
+
+Recommended `langs.json` shape:
 
 ```json
 {
   "zh-CN": {
-    "user.welcome": "Welcome {name}",
-    "user.cart": { "zero": "Empty", "one": "1 item", "other": "{count} items" }
+    "common.save": "保存"
+  },
+  "en-US": {
+    "common.save": "Save"
   }
 }
 ```
 
-**Usage:** `$t("user.welcome", {name: "John"})`, `$t("user.cart", {count: 3})`
+Load it once per module, usually in `env.js` or a top-level layout/page:
 
-```bash
-// v-i18n scanning tool
-go install github.com/veypi/vhtml/cmd/v-i18n@latest
-v-i18n scan --fix ---removeUnused    # Scan code and automatically add missing keys
-v-i18n -h         # View help documentation
+```js
+export default async (scoped) => {
+  scoped.$i18n.load(await (await fetch(`${scoped.scoped}/langs.json`)).json()) # loads this module's langs.json
+}
 ```
 
-## Verification Checklist
+Use translation keys in templates and scripts instead of hard-coded UI text. Useful APIs: `$t(key, vars)`, `$i18n.setLocale(lang)`, `$i18n.getLocale()`, `$i18n.load(messages)`.
 
-Before output:
+For key scanning and cleanup, use `v-i18n`:
 
-- [ ] HTML5 structure complete
-- [ ] `<script setup>` uses `=` (no const/let) for reactive data
-- [ ] Binding prefixes (`:`, `@`, `v:`) correct
-- [ ] No forbidden tag/directive combinations
-- [ ] Component refs: hyphenated lowercase
-- [ ] Variables: camelCase; Events: snake_case
-- [ ] NO `template`, `fragment`, `transition` tags
+```bash
+v-i18n scan --fix --removeUnused
+```
+
+## Script Types
+
+- `<script setup>`: runs once when the instance is created; use it for state init, method definitions, refs, and local helpers.
+- `<script>`: runs after initial mount; use it for one-time mounted logic.
+- `<script active>`: runs each time the instance becomes active; useful for cached pages, refresh on re-entry, and tab-like views.
+- `<script deactive>`: runs when the instance becomes inactive but is kept alive.
+- `<script dispose>`: runs when the instance is really destroyed; `v-if` removal usually triggers it.
+- Script-only helpers: `$watch(() => [a, b], () => {...})` for reactive effects, `$node` for the current host DOM node.
+
+## Bindings
+
+Common bindings:
+
+```html
+<div>{{ title }}</div>                           # text
+<img :src="avatarUrl" :title="name" />          # dynamic attributes
+<button @click="save">Save</button>             # events
+<button @click.stop="removeItem(id)">Delete</button>
+<input v:model="form.name" />                   # two-way binding
+<div v-if="loading">Loading...</div>            # conditionals
+<div v-else>No data</div>
+<div v-for="item in items">{{ item.name }}</div> # loops
+<div vsrc="/local/preview.html"></div>          # explicit component/page loading
+```
+
+Always initialize list variables in `<script setup>`, and do not mix `v-if` and `v-for` on the same node:
+
+```html
+<script setup> items = [] </script>
+```
+
+## Refs and Parent-to-Child Calls
+
+```html
+<script setup>
+  panel = null
+  reloadChild = () => panel.$data.reload()
+</script>
+<child-panel ref="panel"></child-panel>
+```
+
+`ref` binds a DOM node to a component variable. Stable public host fields are `refNode.$data`, `refNode.$env`, `refNode.$scoped`, and `refNode.$router`. Prefer `props + $emit` for normal communication; use `refNode.$data` only for imperative parent calls.
+
+## Slots
+
+```html
+<card-shell>
+  <div vslot="header">Header</div> # projected content uses parent context
+  <div>Body</div>
+</card-shell>
+<body>
+  <header><vslot name="header"></vslot></header> # child fallback uses child context
+  <main><vslot></vslot></main>
+</body>
+```
+
+Projected content runs in parent context, fallback content runs in child context, and router outlet is not a generic slot concept.
+
+## `env.js`
+
+`env.js` initializes the current module context:
+
+```js
+export default async (scoped, manager) => {
+  scoped.$axios.interceptors.request.use((config) => {
+    config.headers.Authorization = `Bearer ${scoped.token}`
+    return config
+  })
+
+  scoped.$axios.interceptors.response.use(
+    (response) => response.data,
+    (error) => Promise.reject(error?.response?.data || error)
+  )
+}
+```
+
+Use it for module services, module config, i18n setup, and axios setup; do not use it for route guards, per-page state, component-local data, or local router behavior.
+
+## `routes.js`
+
+`routes.js` belongs to a router view, not module bootstrap. It is resolved from the current module root unless `vrouter` provides an explicit `routes` path. Supported forms:
+
+```js
+export default [...]                         # array
+export default { routes: [...], beforeEnter, afterEnter } # object
+```
+
+Recommended:
+
+```js
+export default ({ $scoped, router }) => ({
+  routes: [
+    { path: '/', component: '/page/index.html', name: 'home', layout: 'default' },
+    { path: '/login', component: '/page/login.html', name: 'login' },
+  ],
+  beforeEnter: async (to, from, next) => {
+    if (!$scoped.auth?.isLogin() && to.path !== '/login') {
+      next('/login')
+      return false
+    }
+  },
+})
+```
+
+Use it for routes and route-level hooks. Do not put router config in `env.js`.
+
+## `vrouter`
+
+`vrouter` is a special component. Without it, the page is just a normal HTML component tree. With it, vhtml loads routes from its configured `routes` path or the current module's `routes.js`, renders pages into its own outlet, may use layouts, and may cache pages with `active/deactive`.
+
+Example:
+
+```html
+<vrouter></vrouter>
+<vrouter routes="./sidebar_routes.js"></vrouter>
+```
+
+Multiple `vrouter` instances are allowed.
+
+Navigation inside a router subtree should use anchors or `$router.push()`:
+
+```html
+<a href="/agents">Agents</a> # router intercepts the click and adds active when the path matches
+```
+
+```js
+$router.push('/agents')
+```
+
+## Built-in Runtime APIs
+
+Common helpers:
+
+- `$message.info('Saved')`
+- `$message.success('Done')`
+- `$message.error('Failed')`
+- `$message.confirm('Delete?').then(...)`
+- `$message.prompt('Name', 'default').then(...)`
+
+## Writing Rules
+
+Prefer small focused HTML components, explicit initialization in `<script setup>`, `$data` for local state, `$env` for parent-child context, `$scoped` for module services, and `routes.js` for router behavior.
+
+Avoid Vue/React terminology, assuming a virtual DOM exists, putting module services into `$env`, putting router config into `env.js`, relying on undeclared variables, and mixing `v-if` with `v-for` on the same node.
+
+## Quick Checklist
+
+Before writing code: local state -> `$data`; parent-child context -> `$env`; module-wide service/config -> `$scoped`; route behavior -> `routes.js`; router-local state -> `$router`; normal page with nested components -> do not introduce router concepts.

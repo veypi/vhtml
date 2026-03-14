@@ -11,22 +11,27 @@ const callbackList = []
 /** @type {number[]} */
 const cacheUpdateList = []
 let pending = false
-const sync = () => {
+const scheduleFrame = typeof requestAnimationFrame === 'function'
+  ? requestAnimationFrame.bind(window)
+  : (callback) => setTimeout(callback, 16)
+
+const flushUpdates = () => {
   pending = false
-  let list = new Set(cacheUpdateList.splice(0))
-  let c = 0
-  for (let l of list) {
-    if (callbackList[l]) {
-      callbackList[l]()
-      c++
+  const list = new Set(cacheUpdateList.splice(0))
+  let count = 0
+  for (const index of list) {
+    if (callbackList[index]) {
+      callbackList[index]()
+      count++
     }
   }
-  return c
+  return count
 }
+
 const scheduleUpdate = () => {
   if (!pending) {
     pending = true
-    requestAnimationFrame(sync)
+    scheduleFrame(flushUpdates)
   }
 }
 
@@ -45,8 +50,9 @@ function ForceUpdate() {
 }
 
 window.$vupdate = (id) => {
-  console.log('update', id)
-  callbackList[id]()
+  if (typeof callbackList[id] === 'function') {
+    callbackList[id]()
+  }
 }
 
 function deepAccess(obj, seen = new Set()) {
@@ -237,9 +243,6 @@ function Wrap(data, root = undefined) {
           listeners[lkey].push(idx)
         }
       }
-      if (window.vdev) {
-        console.log(`${did} get ${key.toString()}:|${value}| `)
-      }
       if (isProxyType(value) && !value[isProxy]) {
         let newValue = Wrap(value, undefined)
         Reflect.set(target, key, newValue, receiver)
@@ -280,18 +283,12 @@ function Wrap(data, root = undefined) {
         }
         if (listeners[lkey]) {
           let i = 0
-          if (window.vdev) {
-            console.log(`before set ${key} listeners:`, listeners[lkey], target)
-          }
           while (i < listeners[lkey].length) {
             let cb = listeners[lkey][i]
             if (!callbackList[cb]) {
               listeners[lkey].splice(i, 1);
             } else {
               i++
-              if (window.vdev) {
-                console.log(`${did} set ${key}:`, '\n', callbackList[cb], '\n', oldValue, newValue)
-              }
               cacheUpdateList.push(cb)
               scheduleUpdate()
             }
@@ -301,9 +298,6 @@ function Wrap(data, root = undefined) {
       return result;
     },
     deleteProperty(target, key) {
-      if (window.vdev) {
-        console.log(`del ${key}`)
-      }
       const result = Reflect.deleteProperty(target, key);
       if (result && listen_tags.length === 0) {
         let lkey = key
@@ -320,9 +314,6 @@ function Wrap(data, root = undefined) {
               i++
               cacheUpdateList.push(cb)
               scheduleUpdate()
-              if (window.vdev) {
-                console.log(`${did} del ${key}:`, '\n', callbackList[cb], '\n')
-              }
             }
           }
         }
@@ -367,7 +358,10 @@ const expose = {
   'getComputedStyle': getComputedStyle.bind(window),
 }
 
-function newProxy(data, env, tmpenv) {
+function newProxy(data, env = {}, tmpenv = {}) {
+  const runtimeEnv = env || {}
+  const runtimeTmpEnv = tmpenv || {}
+  const runtimeScoped = runtimeEnv?.$scoped || null
   const proxy = new Proxy(data, {
     // 拦截所有属性，防止到 Proxy 对象以外的作用域链查找。
     has(target, key) {
@@ -378,13 +372,17 @@ function newProxy(data, env, tmpenv) {
       if (key === '$data') {
         v = data
       } else if (key === '$env') {
-        v = env
+        v = runtimeEnv
+      } else if (key === '$scoped') {
+        v = runtimeScoped
       } else if (key in target) {
         v = Reflect.get(target, key, receiver);
-      } else if (key in env) {
-        v = env[key]
-      } else if (tmpenv && key in tmpenv) {
-        v = tmpenv[key]
+      } else if (runtimeTmpEnv && key in runtimeTmpEnv) {
+        v = runtimeTmpEnv[key]
+      } else if (key in runtimeEnv) {
+        v = runtimeEnv[key]
+      } else if (runtimeScoped && key in runtimeScoped) {
+        v = runtimeScoped[key]
       } else if (key in expose) {
         v = expose[key]
       } else if (key in window) {
@@ -400,37 +398,88 @@ function newProxy(data, env, tmpenv) {
   return proxy
 }
 const runCache = new Map()
-// 运行dom属性绑定等小代码语句
-// for code snapshot
-function Run(originCode, data, env, tmpenv) {
-  let fn = runCache.get(originCode)
-  if (!fn) {
-    let code = originCode.trim()
-    const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
-    const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
-    if (!isStatement && (code.indexOf('\n') === -1 || !cleanCode.includes(';'))) {
-      code = 'return ' + code
-    }
-    code = `
+function compileSandboxCode(originCode, cache, compiler, options = {}) {
+  let fn = cache.get(originCode)
+  if (fn) {
+    return fn
+  }
+  let code = originCode.trim()
+  const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
+  const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
+  const isSingleLineExpression = code.indexOf('\n') === -1
+  if (options.returnExpression !== false && !isStatement && isSingleLineExpression) {
+    code = `return ${code}`
+  }
+  const wrappedCode = `
 with (sandbox) {
 ${code}
 }`
-    try {
-      fn = new Function('sandbox', code);
-      runCache.set(originCode, fn)
-    } catch (error) {
-      console.warn(`Run compile error:`, originCode, '\n', error)
-      return
-    }
-  }
-
-  let res
   try {
-    res = fn(newProxy(data, env, tmpenv))
+    fn = compiler(wrappedCode)
+    cache.set(originCode, fn)
+    return fn
   } catch (error) {
-    console.warn(`Run error:`, originCode, '\n', error)
+    console.warn(`${options.label || 'Run'} compile error:`, originCode, '\n', error)
+    return null
   }
-  return res
+}
+
+function toPreview(value, maxLength = 400) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+  const text = value.trim()
+  if (text.length <= maxLength) {
+    return text
+  }
+  return `${text.slice(0, maxLength)}...`
+}
+
+function buildErrorContext(originCode, data, env, tmpenv, label, error) {
+  return {
+    label,
+    code: toPreview(originCode),
+    dataKeys: Object.keys(data || {}),
+    envKeys: Object.keys(env || {}),
+    tmpEnvKeys: Object.keys(tmpenv || {}),
+    message: error?.message || String(error),
+    stack: error?.stack || '',
+  }
+}
+
+function logSandboxError(originCode, data, env, tmpenv, label, error) {
+  console.error(`${label} error`, buildErrorContext(originCode, data, env, tmpenv, label, error))
+}
+
+function executeSandboxCode(fn, originCode, data, env, tmpenv, label) {
+  if (!fn) {
+    return undefined
+  }
+  try {
+    return fn(newProxy(data, env, tmpenv))
+  } catch (error) {
+    logSandboxError(originCode, data, env, tmpenv, label, error)
+  }
+  return undefined
+}
+
+async function executeSandboxCodeAsync(fn, originCode, data, env, tmpenv, label) {
+  if (!fn) {
+    return undefined
+  }
+  try {
+    return await fn(newProxy(data, env, tmpenv))
+  } catch (error) {
+    logSandboxError(originCode, data, env, tmpenv, label, error)
+    throw error
+  }
+}
+
+// 运行dom属性绑定等小代码语句
+// for code snapshot
+function Run(originCode, data, env, tmpenv) {
+  const fn = compileSandboxCode(originCode, runCache, (code) => new Function('sandbox', code), { label: 'Run' })
+  return executeSandboxCode(fn, originCode, data, env, tmpenv, 'Run')
 }
 
 const AsyncFunction = Object.getPrototypeOf(async function() { }).constructor
@@ -438,136 +487,14 @@ const AsyncFunction = Object.getPrototypeOf(async function() { }).constructor
 const asyncRunCache = new Map()
 // 运行大段代码库
 async function AsyncRun(originCode, data, env, tmpenv) {
-  let fn = asyncRunCache.get(originCode)
-  if (!fn) {
-    let code = originCode.trim()
-    if (code.indexOf('\n') === -1) {
-      code = 'return ' + code
-    }
-    code = `
-with (sandbox) {
-${code}
-}`
-    fn = new AsyncFunction('sandbox', code);
-    asyncRunCache.set(originCode, fn)
-  }
-  return await fn(newProxy(data, env, tmpenv))
-}
-
-function resolvePath(relativePath, currentPath) {
-  // 如果相对路径已经是绝对路径，直接返回
-  if (relativePath.startsWith('/')) {
-    return relativePath;
-  }
-
-  // 获取当前路径的目录部分（去掉文件名）
-  const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
-
-  // 分割路径段
-  const currentSegments = currentDir.split('/').filter(segment => segment !== '');
-  const relativeSegments = relativePath.split('/').filter(segment => segment !== '');
-
-  // 处理相对路径段
-  for (const segment of relativeSegments) {
-    if (segment === '..') {
-      // 返回上一级目录
-      if (currentSegments.length > 0) {
-        currentSegments.pop();
-      }
-    } else if (segment === '.') {
-      // 当前目录，不做任何操作
-      continue;
-    } else {
-      // 普通目录或文件名
-      currentSegments.push(segment);
-    }
-  }
-
-  // 构建绝对路径
-  return '/' + currentSegments.join('/');
-}
-
-
-async function ParseImport(code, data, env, src) {
-  data = data || {}
-  let scoped = env.scoped || ''
-  let codeCopy = code
-  let match;
-  if (!src.startsWith('http') && !src.startsWith(scoped)) {
-    src = scoped + src
-
-  }
-
-  const awaitImportRegex = /await import\(['"]([^'"]+)['"]\)/gm;
-  while ((match = awaitImportRegex.exec(code)) !== null) {
-    let url = match[1]
-    if (!url.startsWith('http')) {
-      url = resolvePath(url, src)
-      url = window.location.origin + url
-    }
-    codeCopy = codeCopy.replace(match[0], `await import('${url}')`)
-  }
-
-  const importRegex = /^[\s/]*import\s+([\w{},\s]+)\s+from\s+['"]([^'"]+)['"][;\s]*$/gm;
-
-  // 提取所有匹配的模块路径
-  while ((match = importRegex.exec(code)) !== null) {
-    codeCopy = codeCopy.replace(match[0], '')
-    if (match[0].trim().startsWith('//')) {
-      continue
-    }
-    let url = match[2]
-    if (!url.startsWith('http') && !url.startsWith('@')) {
-      if (url.startsWith('/') && scoped) {
-        url = scoped + url
-      } else {
-        url = resolvePath(url, src)
-      }
-    }
-    if (url.startsWith('@')) {
-      url = url.slice(1)
-    }
-    if (!url.endsWith('.js')) {
-      url += '.js'
-    }
-    if (!url.startsWith('http')) {
-      url = window.location.origin + url
-    }
-    let packname = match[1].trim()
-    try {
-      let packs = null
-      if (/^\w+$/.test(packname)) {
-        packs = packname
-      } else if (/^{[\w\s,]+}$/.test(packname)) {
-        packs = packname.slice(1, -1).split(',').map(p => p.trim())
-      } else {
-        throw new Error('unsupported import: ' + match[0])
-      }
-      // window.$env = env
-      const module = await import(url)
-      if (typeof packs === 'string') {
-        if (module.default) {
-          data[packs] = module.default
-        } else {
-          data[packs] = module
-        }
-      } else {
-        packs.forEach((p) => {
-          if (p in module) {
-            data[p] = module[p]
-          } else if (p in module.default) {
-            data[p] = module.default[p]
-          }
-        })
-      }
-    } catch (error) {
-      console.error(`模块加载失败 (${match[0]}):`, error.message);
-    }
-  }
-  return codeCopy.trim()
+  const fn = compileSandboxCode(originCode, asyncRunCache, (code) => new AsyncFunction('sandbox', code), {
+    label: 'AsyncRun',
+    returnExpression: true,
+  })
+  return await executeSandboxCodeAsync(fn, originCode, data, env, tmpenv, 'AsyncRun')
 }
 
 export default {
   Wrap, Watch, Cancel, ForceUpdate, SetDataRoot,
-  DataID, GenUniqueID, Run, AsyncRun, ParseImport
+  DataID, GenUniqueID, Run, AsyncRun
 }

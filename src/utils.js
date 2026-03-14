@@ -121,12 +121,22 @@ const EventsList = [
   'visibilitychange'
 ];
 
-function BindInputDomValue(dom, data, key, watch) {
+function BindInputDomValue(dom, data, key, watch, scope) {
   const element = typeof dom === 'string' ? document.querySelector(dom) : dom;
 
   if (!element) {
     console.error('DOM元素未找到');
     return;
+  }
+  const bindWatch = (target, callback) => {
+    return watch(target, callback)
+  }
+  const bindEvent = (event, handler) => {
+    if (scope?.addEventListener) {
+      scope.addEventListener(element, event, handler)
+    } else {
+      element.addEventListener(event, handler)
+    }
   }
   // 根据元素类型进行双向绑定
   const elementType = element.type || element.tagName.toLowerCase();
@@ -148,33 +158,32 @@ function BindInputDomValue(dom, data, key, watch) {
     case 'week':
     case 'hidden':
     case 'textarea':
-      watch(() => data[key], (value) => {
+      bindWatch(() => data[key], (value) => {
         if (value === undefined) {
           element.value = ''
         } else {
           element.value = value
         }
       })
-      element.addEventListener('input', function() {
+      bindEvent('input', function() {
         data[key] = this.value;
       });
       break;
     case 'checkbox':
-      watch(function() {
+      bindWatch(function() {
         element.checked = !!data[key];
       });
-      element.addEventListener('change', function() {
+      bindEvent('change', function() {
         data[key] = this.checked;
-        console.log(data, data[key])
       });
       break;
     // 单选框
     case 'radio':
       // 初始化
-      watch(() => {
+      bindWatch(() => {
         element.checked = element.value === data[key];
       })
-      element.addEventListener('change', function() {
+      bindEvent('change', function() {
         if (this.checked) {
           data[key] = this.value;
         }
@@ -184,7 +193,7 @@ function BindInputDomValue(dom, data, key, watch) {
     // 下拉选择框
     case 'select-one':
     case 'select-multiple':
-      watch(() => {
+      bindWatch(() => {
         let newValue = data[key]
         if (element.multiple) {
           const values = Array.isArray(newValue) ? newValue : [];
@@ -196,7 +205,7 @@ function BindInputDomValue(dom, data, key, watch) {
         }
       });
       // 监听变化
-      element.addEventListener('change', function() {
+      bindEvent('change', function() {
         if (this.multiple) {
           // 多选
           const selectedValues = [];
@@ -293,4 +302,3 @@ function SetAttr(dom, key, value) {
 
 
 export default { CamelToKebabCase, EventsList, BindInputDomValue, SetAttr, AddClicker }
-

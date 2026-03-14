@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="description" content="runtime slot shell" details="用于验证默认 slot 和命名 slot 的组件" />
+  <title>Runtime Slot Shell</title>
+</head>
+<style>
+  body {
+    display: block;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  }
+
+  .header {
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #dbeafe, #f0f9ff);
+    border-bottom: 1px solid rgba(59, 130, 246, 0.18);
+  }
+
+  .title {
+    margin: 0;
+    font-size: 18px;
+    color: #0f172a;
+  }
+
+  .body {
+    padding: 20px;
+    color: #334155;
+  }
+
+  .footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(15, 23, 42, 0.08);
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 14px;
+  }
+</style>
+<body>
+  <div class="header">
+    <h3 class="title">{{ title }}</h3>
+    <vslot name="header">
+      <div>default header slot</div>
+    </vslot>
+  </div>
+  <div class="body">
+    <vslot>
+      <div>default body slot</div>
+    </vslot>
+  </div>
+  <div class="footer">
+    <vslot name="footer">
+      <div>default footer slot</div>
+    </vslot>
+  </div>
+</body>
+<script setup>
+  title = 'Slot Shell';
+</script>
+</html>
