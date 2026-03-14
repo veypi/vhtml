@@ -1,7 +1,7 @@
 import vproxy from '../vproxy.js'
 import { createInstance, detachInstance } from './instance.js'
 import ComponentScope from './scope.js'
-import { clearNodeState, findNearestInstance, findNearestRouter, getEnv, getInstance, getScope, getScoped, getVforData, isParsed, setEnv, setInstance, setRef, setRouter, setScope, setScoped, setVforData } from './dom.js'
+import { clearNodeState, disposeRuntimeSubtree, findNearestInstance, findNearestRouter, getEnv, getInstance, getScope, getScoped, getSourceNodes, getVforData, isParsed, setEnv, setInstance, setRef, setRouter, setScope, setScoped, setVforData } from './dom.js'
 
 const varRegex = /{{|}}/g
 const vforRegex = /^(\s*(\w+)\s+in\s+|\((\w+),\s*(\w+)\)\s+in\s+)([\w\?\$\.\[\]\(\)'"]+)$/
@@ -161,15 +161,17 @@ export function parseVfor(renderer, vfortxt, dom, data, env) {
       const { key, cacheKey, value } = items[index]
       const currentDom = cache[cacheKey]
       if (currentDom) {
+        const currentData = getVforData(currentDom)
+        if (currentData) {
+          currentData[valueName] = value
+        }
         if (keyName) {
-          getVforData(currentDom)[keyName] = key === '0' ? 0 : (Number(key) || key)
+          currentData[keyName] = key === '0' ? 0 : (Number(key) || key)
         }
-        if (currentDom.isConnected) {
-          if (currentDom.nextSibling !== refNode) {
-            anchor.parentNode.insertBefore(currentDom, refNode)
-          }
-          refNode = currentDom
+        if (currentDom.nextSibling !== refNode || !currentDom.isConnected) {
+          anchor.parentNode.insertBefore(currentDom, refNode)
         }
+        refNode = currentDom
         continue
       }
 
@@ -244,7 +246,8 @@ export function parseVif(renderer, nodes, data, env) {
     const ifList = ifData.conds.map((cond) => cond === '' ? 'true' : `Boolean(${cond})`)
     const ifExpr = `let res = [${ifList.join(',')}]\n return res.indexOf(true)`
     renderer.watch(resolveContext(renderer, ifData.now, env).scope, () => {
-      let targetDom = ifData.doms[vproxy.Run(ifExpr, data, env)]
+      const targetIndex = vproxy.Run(ifExpr, data, env)
+      let targetDom = ifData.doms[targetIndex]
       if (!targetDom) {
         targetDom = document.createElement('div')
         targetDom.style.display = 'none'
@@ -258,7 +261,19 @@ export function parseVif(renderer, nodes, data, env) {
         node.replaceWith(targetDom)
         ifData.now = targetDom
       })
-      if (!isParsed(targetDom)) {
+      const targetScope = getScope(targetDom)
+      const needReparse = !isParsed(targetDom) || targetScope?.state === 'disposed'
+      if (needReparse) {
+        if (targetScope?.state === 'disposed') {
+          disposeRuntimeSubtree(targetDom)
+        }
+        const sourceNodes = getSourceNodes(targetDom)
+        if (sourceNodes?.length) {
+          targetDom.innerHTML = ''
+          sourceNodes.forEach((child) => {
+            targetDom.appendChild(child.cloneNode(true))
+          })
+        }
         ensureStructuralBoundary(targetDom, data, env)
         renderer.parseDom(targetDom, data, env, resolveContext(renderer, targetDom, env).scope)
       }

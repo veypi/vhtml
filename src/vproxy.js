@@ -73,25 +73,29 @@ var listen_tags = []
 */
 function Watch(target, callback, options) {
   let idx = callbackList.length
-  listen_tags.push(idx)
+  const runTarget = () => {
+    listen_tags.push(idx)
+    try {
+      const res = target()
+      if (options && options.deep) {
+        deepAccess(res)
+      }
+      return res
+    } catch (e) {
+      console.warn('running \n%s\n failed:', target, e)
+      return undefined
+    } finally {
+      listen_tags.pop()
+    }
+  }
   if (typeof callback === 'function') {
     callbackList.push(() => {
-      callback(target())
+      callback(runTarget())
     })
   } else {
-    callbackList.push(target)
+    callbackList.push(runTarget)
   }
-  let res
-  try {
-    res = target()
-    if (options && options.deep) {
-      deepAccess(res)
-    }
-  } catch (e) {
-    console.warn('running \n%s\n failed:', target, e)
-  } finally {
-    listen_tags.pop()
-  }
+  const res = runTarget()
   if (typeof callback === 'function') {
     callback(res)
   }

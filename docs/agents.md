@@ -69,11 +69,17 @@ Recommended structure:
 </html>
 ```
 
+`<script setup>` declaration rules:
+
+- `a = xxx` or `save = () => {}` declares reactive state or public methods for the component instance. They are registered onto `$data` and can be accessed from template bindings, other scripts, refs, and parent imperative calls.
+- `const`, `let`, and `function` declare local helpers only. They are not registered onto `$data` and should be used for temporary values, derived variables, and private helper functions.
+- Do not abuse bare `=` for short-lived locals. If a value does not need to be exposed as component state or method, use `const` or `let`.
+
 ## Runtime Model
 
 ### `$data`
 
-Private state of the current component instance: variables from `<script setup>`, component methods, and props mapped into the instance.
+Private state of the current component instance: only bare assignments from `<script setup>` such as `count = 0` or `save = () => {}` and props are mapped into the instance. `const`/`let`/`function` locals stay private to setup and do not appear on `$data`.
 
 ### `$env`
 
@@ -138,7 +144,7 @@ v-i18n scan --fix --removeUnused
 
 ## Script Types
 
-- `<script setup>`: runs once when the instance is created; use it for state init, method definitions, refs, and local helpers.
+- `<script setup>`: runs once when the instance is created; use bare `=` only for component state, refs, and public methods that should be exposed on `$data`. Use `const`/`let`/`function` for temporary and local-only helpers.
 - `<script>`: runs after initial mount; use it for one-time mounted logic.
 - `<script active>`: runs each time the instance becomes active; useful for cached pages, refresh on re-entry, and tab-like views.
 - `<script deactive>`: runs when the instance becomes inactive but is kept alive.
@@ -155,6 +161,7 @@ Common bindings:
 <button @click="save">Save</button>             # events
 <button @click.stop="removeItem(id)">Delete</button>
 <input v:model="form.name" />                   # two-way binding
+<div v-show="loading">Loading...</div>          
 <div v-if="loading">Loading...</div>            # conditionals
 <div v-else>No data</div>
 <div v-for="item in items">{{ item.name }}</div> # loops
@@ -216,11 +223,12 @@ Use it for module services, module config, i18n setup, and axios setup; do not u
 
 ## `routes.js`
 
-`routes.js` belongs to a router view, not module bootstrap. It is resolved from the current module root unless `vrouter` provides an explicit `routes` path. Supported forms:
+`routes.js` belongs to a router view, not module bootstrap. It is resolved from the current module root unless `vrouter` provides an explicit `routes` path. Supported exports:
 
 ```js
-export default [...]                         # array
-export default { routes: [...], beforeEnter, afterEnter } # object
+export default [...] # route array
+export default { routes: [...], beforeEnter, afterEnter } # route object
+export default ({ $scoped, router }) => ({ routes: [...], beforeEnter, afterEnter }) # factory
 ```
 
 Recommended:
@@ -230,6 +238,16 @@ export default ({ $scoped, router }) => ({
   routes: [
     { path: '/', component: '/page/index.html', name: 'home', layout: 'default' },
     { path: '/login', component: '/page/login.html', name: 'login' },
+    { path: '/user/:id', component: '/page/user.html', cacheKey: 'user' },
+    { path: '/edit/:id', component: '/page/edit.html', cacheKey: false },
+    {
+      path: '/admin',
+      component: '/page/admin.html',
+      layout: 'admin',
+      meta: { auth: true },
+      children: [{ path: 'settings', component: '/page/admin_settings.html' }],
+    },
+    { path: '*', component: '/page/404.html' },
   ],
   beforeEnter: async (to, from, next) => {
     if (!$scoped.auth?.isLogin() && to.path !== '/login') {
@@ -239,6 +257,22 @@ export default ({ $scoped, router }) => ({
   },
 })
 ```
+
+Route record fields:
+
+- `path`: required. Supports static paths, `:param`, optional param like `:id?`, named wildcard like `*rest`, and catch-all `*`.
+- `component`: required. HTML file path relative to `/ui`, usually under `/page`.
+- `name`: optional route name for named navigation such as `$router.push({ name: 'home', params: {...} })`.
+- `layout`: optional layout name, resolved to `/layout/{name}.html`.
+- `meta`: optional route metadata; read it from the current route rather than duplicating auth flags elsewhere.
+- `children`: optional nested routes. Child `path` values are relative to the parent, so `'settings'` under `/admin` becomes `/admin/settings`.
+- `cacheKey`: optional page cache policy. Use a string to reuse one page instance across matching routes, `false` to disable caching, and leave it undefined to use default path-based caching.
+
+Behavior notes:
+
+- `beforeEnter(to, from, next)` and `afterEnter(to, from)` belong in `routes.js`, not `env.js`.
+- `path: '*'` should normally be the last route and used for a 404 page.
+- A layout should expose a default `<vslot>` so the router can mount the matched page into it.
 
 Use it for routes and route-level hooks. Do not put router config in `env.js`.
 

@@ -11,7 +11,7 @@ import { parseAttrs as parseAttrsRuntime, parseAHref as parseAHrefRuntime, parse
 import { parseTextNode as parseTextNodeRuntime, parseVfor as parseVforRuntime, parseVif as parseVifRuntime } from './structure.js'
 import { parseSlots as parseSlotsRuntime } from './slots.js'
 import { parseRaw as parseRawRuntime, parseRef as parseRefRuntime, setupRef as setupRefRuntime, mountRef as mountRefRuntime } from './component.js'
-import { clearParsed, disposeRuntimeSubtree, findNearestInstance, getEnv, getScope, isParsed, markParsed } from './dom.js'
+import { clearParsed, disposeRuntimeSubtree, findNearestInstance, getEnv, getScope, getSourceNodes, isParsed, markParsed, setSourceNodes } from './dom.js'
 
 let rendererBootstrapped = false
 
@@ -234,6 +234,9 @@ function ensureRendererRuntime() {
       }
       if (dom.hasAttribute('no-vhtml') || isParsed(dom)) {
         return
+      }
+      if (!getSourceNodes(dom)) {
+        setSourceNodes(dom, Array.from(dom.childNodes).map((node) => node.cloneNode(true)))
       }
 
       let vfortxt = dom.getAttribute('v-for')
