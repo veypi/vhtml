@@ -620,6 +620,9 @@ class RouterView {
       this.push(redirectTarget)
       return
     }
+    if (this.activePage && this.current?.fullPath === matchedRoute.fullPath) {
+      return
+    }
     const to = {
       path: matchedRoute.path,
       fullPath: matchedRoute.fullPath,

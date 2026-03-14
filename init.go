@@ -9,8 +9,10 @@ package vhtml
 
 import (
 	"embed"
+	"net/http"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/veypi/vigo"
 	"github.com/veypi/vigo/contrib/ufs"
@@ -36,6 +38,13 @@ func init() {
 	current := utils.CurrentDir(0)
 	vdev := os.Getenv("vdev")
 	renderEnv := func(x *vigo.X) {
+		pathParam := x.PathParams.Get("path")
+		requestPath := x.Request.URL.Path
+		if pathParam == "" && !strings.HasSuffix(requestPath, "/") {
+			http.Redirect(x.ResponseWriter(), x.Request, requestPath+"/", http.StatusMovedPermanently)
+			x.Stop()
+			return
+		}
 		x.Header().Set("vhtml-scoped", Router.String())
 		x.Header().Set("vhtml-vdev", vdev)
 	}
@@ -61,6 +70,13 @@ func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 	current := utils.CurrentDir(1)
 	vdev := os.Getenv("vdev")
 	renderEnv := func(x *vigo.X) {
+		pathParam := x.PathParams.Get("path")
+		requestPath := x.Request.URL.Path
+		if pathParam == "" && !strings.HasSuffix(requestPath, "/") {
+			http.Redirect(x.ResponseWriter(), x.Request, requestPath+"/", http.StatusMovedPermanently)
+			x.Stop()
+			return
+		}
 		x.Header().Set("vhtml-scoped", router.String())
 		x.Header().Set("vhtml-vdev", vdev)
 		for i := 0; i < len(args); i += 2 {
