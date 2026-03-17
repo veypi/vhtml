@@ -41,13 +41,22 @@
 - slot 渲染
 - 真实 DOM 更新
 
-### 2. 上下文系统
+### 2. runtime 变量池
 
-当前运行时围绕 3 层上下文工作：
+当前运行时围绕四层变量池工作：
 
+- `$sys`
 - `$data`
-- `$env`
-- `$scoped`
+- `$ctx`
+- `$mod`
+
+其中 `$sys/$ctx/$mod` 会被打包成 `runtime` 传递，`$data` 保持组件实例私有。
+
+表达式解析顺序固定为：
+
+```text
+$sys > $data > $ctx > $mod
+```
 
 这是组件运行、模块隔离、router 局部化的核心边界。
 
@@ -76,7 +85,7 @@
 
 同一页面可以存在多个 `<vrouter>`，它们共享浏览器地址，但各自维护自己的匹配结果和缓存。
 
-## 上下文模型
+## 变量池模型
 
 ### `$data`
 
@@ -94,14 +103,24 @@
 - 不向子组件自动继承
 - 生命周期跟组件实例一致
 
-### `$env`
+### `$sys`
+
+系统变量池。
+
+默认提供：
+
+- `$router`
+- `$emit`
+- `$message`
+
+### `$ctx`
 
 父子组件上下文链。
 
 来源：
 
 - 父组件显式传递
-- 运行时创建子组件时基于父组件派生
+- 运行时创建子组件时基于父组件派生原型链
 - 组件运行时显式写入
 
 特点：
@@ -109,15 +128,16 @@
 - 表示组件树上下文
 - 适合页面、布局、局部业务上下文
 - 不承担模块能力
+- 子组件默认读取父级最新值，除非自己覆盖同名键
 
-### `$scoped`
+### `$mod`
 
 模块级上下文池。
 
 来源：
 
 - 由 `scoped` 唯一标识
-- 同一个 `scoped` 共享同一个 `$scoped`
+- 同一个 `scoped` 共享同一个 `$mod`
 - 不沿组件树继承
 
 特点：
@@ -126,13 +146,12 @@
 - 只按模块隔离
 - 保存模块能力与模块资源
 
-当前模块能力都从 `$scoped` 暴露：
+当前模块能力都从 `$mod` 暴露：
 
 - `$axios`
 - `$i18n`
 - `$t`
 - `$bus`
-- `$message`
 
 ## 模块入口文件规范
 
@@ -452,6 +471,14 @@ export default ({ $scoped, router }) => ({
 - fallback content 独立保存
 - router outlet 与普通 slot 已经分离
 
+当前约束：
+
+- projected content 必须显式绑定调用方 runtime
+- projected content 继续使用调用方的 `$sys/$data/$ctx/$mod`
+- outlet `vbind` 只叠加这一次渲染的临时参数
+- fallback content 仍然使用子组件自己的 runtime
+- 子模块组件不能在执行 slot 表达式时抢走调用方 `$mod`
+
 ## router 设计
 
 `vrouter` 是特殊组件，不是全局应用对象。
@@ -511,7 +538,7 @@ export default ({ $scoped, router }) => ({
 ## 当前设计约束
 
 - 不回退到单体 `index.js` 运行时
-- 不回退到混合 `env`
+- 不回退到混合 `env/context` 命名
 - 不回退到 DOM 侧挂字段作为主状态模型
 - 不为 router 污染普通组件和 slot 语义
 - 不为了兼容旧行为继续保留静默 fallback

@@ -1,8 +1,8 @@
 
-/* 初始化所有环境变量
- * $axios: axios 对象
- * $bus: 全局事件总线对象
- * $global: 全局变量对象
+/* 初始化模块变量池
+ * $mod.$axios: axios 对象
+ * $mod.$bus: 模块事件总线对象
+ * $mod.scoped: 模块根路径
  * */
-export default async ($env) => {
+export default async ($mod) => {
 }

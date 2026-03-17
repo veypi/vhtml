@@ -122,7 +122,7 @@
   <div class="page">
     <section class="hero">
       <h1>Runtime Smoke</h1>
-      <p>这页不是文档，而是运行时冒烟检查页。它只覆盖浏览器里可以直接观察的链路：组件生命周期、slot 投递、缓存页激活。`scoped` 仍然依赖模块响应头或模块入口环境注入，这里只做约束说明，不做伪验证。</p>
+      <p>这页不是文档，而是运行时冒烟检查页。它只覆盖浏览器里可以直接观察的链路：组件生命周期、slot 投递、缓存页激活。模块隔离仍然依赖模块入口环境注入，这里只做约束说明，不做伪验证。</p>
     </section>
 
     <div class="grid">
@@ -143,7 +143,7 @@
 
       <section class="card">
         <h2>slot 投递</h2>
-        <p>这个区域同时覆盖默认 slot 和命名 slot。点击按钮后，父组件数据更新应立即反映在子组件的 header、body、footer 三个 slot 里。</p>
+        <p>这个区域同时覆盖默认 slot 和命名 slot。点击按钮后，父组件数据更新应立即反映在子组件的 header、body、footer 三个 slot 里。slot projected content 必须继续使用调用方的 `$sys/$data/$ctx/$mod`，不能被子组件模块 runtime 抢走。</p>
         <div class="actions">
           <button class="btn" @click="slotVersion += 1">刷新 slot 内容</button>
         </div>
@@ -178,12 +178,12 @@
       </section>
 
       <section class="card">
-        <h2>scoped 约束</h2>
-        <p>当前静态站点不能完整覆盖模块隔离验证，因为 `env.scoped` 需要模块入口或响应头注入。这里保留的是你这次重构后的预期规则，便于手工对照。</p>
+        <h2>$mod.scoped 约束</h2>
+        <p>当前静态站点不能完整覆盖模块隔离验证，因为 `$mod.scoped` 需要模块入口或响应头注入。这里保留的是这次重构后的预期规则，便于手工对照。</p>
         <div class="note">
-          <div class="code">scoped = /xxx/auth</div>
+          <div class="code">$mod.scoped = /xxx/auth</div>
           <div class="code">组件 HTML: /xxx/auth/feature/panel.html</div>
-          <div class="code">$axios baseURL: https://host/xxx/auth</div>
+          <div class="code">$mod.$axios baseURL: https://host/xxx/auth</div>
           <div class="code">接口请求: /api/profile -&gt; https://host/xxx/auth/api/profile</div>
         </div>
       </section>

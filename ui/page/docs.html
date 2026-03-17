@@ -369,9 +369,10 @@
       <div v-if="currentSection === 'api'">
         <h1>{{ $t('docs.content.api.title') }}</h1>
         <p>{{ $t('docs.content.api.desc') }}</p>
+        <p>运行时变量池固定为 <code>$sys &gt; $data &gt; $ctx &gt; $mod</code>。其中系统能力来自 <code>$sys</code>，模块能力来自 <code>$mod</code>。</p>
         <h2>{{ $t('docs.content.api.get') }}</h2>
         <pre><code>&lt;script&gt;
-            $axios.get('/api/users')
+            $mod.$axios.get('/api/users')
             .then(data =&gt; {
             console.log('Users:', data);
             })
@@ -381,7 +382,7 @@
             &lt;/script&gt;</code></pre>
         <h2>{{ $t('docs.content.api.post') }}</h2>
         <pre><code>&lt;script&gt;
-            $axios.post('/api/users', { name: 'User', age: 25 })
+            $mod.$axios.post('/api/users', { name: 'User', age: 25 })
             .then(data =&gt; {
             $message.success('{{ $t('docs.content.api.success') }}');
             });
@@ -391,6 +392,7 @@
       <!-- 插槽 -->
       <div v-if="currentSection === 'slots'">
         <h1>{{ $t('docs.content.slots.title') }}</h1>
+        <p>slot projected content 始终使用调用方的 <code>$sys/$data/$ctx/$mod</code>；子组件里的 fallback content 才使用子组件自己的 runtime。</p>
         <h2>{{ $t('docs.content.slots.default') }}</h2>
         <pre><code>&lt;!-- {{ $t('docs.content.slots.componentSide') }} --&gt;
             &lt;vslot&gt;
@@ -413,6 +415,15 @@
             &lt;h1&gt;Custom Title&lt;/h1&gt;
             &lt;/div&gt;
             &lt;/my-component&gt;</code></pre>
+        <h2>Runtime</h2>
+        <pre><code>&lt;script setup&gt;
+            count = 0;
+            save = async () =&gt; {
+            await $mod.$axios.post('/api/save', { id: $ctx.recordId, count });
+            $message.success($t('common.saved'));
+            };
+            $ctx.recordId = 'abc123';
+            &lt;/script&gt;</code></pre>
       </div>
     </main>
   </div>

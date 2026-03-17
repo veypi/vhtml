@@ -221,6 +221,36 @@ ui/
 
 ## 响应式数据与脚本
 
+## 变量池与 runtime
+
+运行时只保留四层变量池：
+
+- `$sys`：系统变量池，默认提供 `$router`、`$emit`、`$message`
+- `$data`：当前组件实例自己的响应式数据和公开方法
+- `$ctx`：组件树上下文，沿父子组件继承
+- `$mod`：模块变量池，默认提供 `scoped`、`$axios`、`$i18n`、`$t`、`$bus`
+
+表达式解析顺序固定为：
+
+```text
+$sys > $data > $ctx > $mod
+```
+
+源码内部会把 `$sys/$ctx/$mod` 打包成 `runtime` 传递，`$data` 单独传递。
+
+例如：
+
+```html
+<script setup>
+  count = 0
+  submit = async () => {
+    await $mod.$axios.post('/api/save', { id: $ctx.recordId, count })
+    $message.success($t('common.saved'))
+  }
+  $ctx.recordId = 'abc123'
+</script>
+```
+
 ## `<script setup>`
 
 `setup` 用来声明组件实例私有状态，也就是 `$data`。
@@ -365,27 +395,30 @@ ui/
 - 支持命名 slot
 - 支持 fallback content
 - 支持 `vbind`
+- projected content 始终使用调用方的 `$sys/$data/$ctx/$mod`
+- fallback content 使用子组件自己的 runtime
+- `vbind` 只追加本次 outlet 渲染的临时变量，不覆盖调用方 runtime
 
 ## `ref`
+
+`ref="xxx"` 现在会自动写入当前组件的 `$data.$refs.xxx`，所以大多数场景不需要先在 `<script setup>` 里声明 `xxx = null`。
 
 ### DOM ref
 
 ```html
-<div ref="panel"></div>
-```
-
-当前组件里可以直接拿到：
-
-```html
 <script setup>
-  panel = null
+  focusPanel = () => {
+    $refs.panel.focus()
+  }
 </script>
+
+<input ref="panel">
 ```
 
-然后：
+然后也可以直接在脚本里读取：
 
 ```js
-panel.classList.add('ready')
+$refs.panel.classList.add('ready')
 ```
 
 ### 子组件 ref
@@ -393,34 +426,30 @@ panel.classList.add('ready')
 如果 `ref` 绑定的是子组件宿主节点，当前正式公开这几个入口：
 
 - `childRef.$data`
-- `childRef.$env`
-- `childRef.$scoped`
+- `childRef.$ctx`
+- `childRef.$mod`
 - `childRef.$router`
 
 例如：
 
 ```html
-<user-form ref="formRef"></user-form>
-```
-
-```html
 <script setup>
-  formRef = null
-
   submitForm = async () => {
-    await formRef.$data.submit()
+    await $refs.formRef.$data.submit()
   }
 </script>
+
+<user-form ref="formRef"></user-form>
 ```
 
 这意味着当前推荐方式是：
 
-- 父组件拿到子组件宿主
-- 直接访问子组件 `$data`
+- 通过 `$refs.xxx` 拿到 DOM 或子组件宿主
+- 需要父调子时再访问 `$refs.xxx.$data`
 
 不需要额外 `expose`
 
-## 当前上下文说明
+## 当前变量池说明
 
 ### `$data`
 
@@ -432,7 +461,17 @@ panel.classList.add('ready')
 - 当前组件方法
 - props 映射值
 
-### `$env`
+### `$sys`
+
+系统变量池。
+
+默认提供：
+
+- `$router`
+- `$emit`
+- `$message`
+
+### `$ctx`
 
 父子组件上下文链。
 
@@ -447,17 +486,17 @@ panel.classList.add('ready')
 
 ```html
 <script setup>
-  $env.userId = 'u_001'
+  $ctx.userId = 'u_001'
 </script>
 ```
 
 子组件里可以继续访问：
 
 ```html
-{{ $env.userId }}
+{{ $ctx.userId }}
 ```
 
-### `$scoped`
+### `$mod`
 
 模块级上下文池。
 
@@ -470,18 +509,12 @@ panel.classList.add('ready')
 - `$message`
 - 模块配置
 
-### `$router`
-
-当前组件最近祖先 `<vrouter>` 对应的 router view。
-
-不是全局单例语义。
-
 ## 模块环境：`env.js`
 
 每个模块都可以提供：
 
 ```text
-/$scoped/env.js
+/$mod.scoped/env.js
 ```
 
 例如：
@@ -493,20 +526,20 @@ panel.classList.add('ready')
 推荐导出：
 
 ```js
-export default async (env, manager) => {
-  env.auth = createAuthService()
-  env.featureFlags = { debug: true }
+export default async ($mod, manager) => {
+  $mod.auth = createAuthService()
+  $mod.featureFlags = { debug: true }
 }
 ```
 
-这里的 `env` 就是当前模块的 `$scoped`。
+这里的 `$mod` 就是当前模块变量池。
 
 `env.js` 应该做的事：
 
-- 初始化模块级 `$axios`
-- 初始化模块级 `$i18n`
+- 初始化 `$mod.$axios`
+- 初始化 `$mod.$i18n`
 - 初始化模块级业务能力
-- 写入模块配置到 `$scoped`
+- 写入模块配置到 `$mod`
 
 `env.js` 不应该做的事：
 
@@ -519,7 +552,7 @@ export default async (env, manager) => {
 只有页面使用 `<vrouter>` 时，才会加载：
 
 ```text
-/$scoped/routes.js
+/$mod.scoped/routes.js
 ```
 
 ### 最简单写法
@@ -546,16 +579,16 @@ export default {
 
 ### 推荐：工厂函数
 
-如果路由钩子需要模块能力，推荐直接读取 `$scoped`：
+如果路由钩子需要模块能力，推荐直接读取 `$mod`：
 
 ```js
-export default ({ $scoped, router }) => ({
+export default ({ $mod, router }) => ({
   routes: [
     { path: '/', component: '/page/index.html', name: 'home' },
     { path: '/login', component: '/page/login.html', name: 'login' },
   ],
   beforeEnter: async (to, from, next) => {
-    if (!$scoped.auth.isLogin() && to.path !== '/login') {
+    if (!$mod.auth.isLogin() && to.path !== '/login') {
       next('/login')
       return false
     }

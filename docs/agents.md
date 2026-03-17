@@ -77,21 +77,33 @@ Recommended structure:
 
 ## Runtime Model
 
+When an expression uses a bare identifier without an explicit prefix such as `$data.xxx` or `$mod.xxx`, runtime resolution follows this fixed order:
+
+```text
+$sys > $data > $ctx > $mod
+```
+
+Use explicit prefixes when the source matters for readability or to avoid shadowing.
+
 ### `$data`
 
 Private state of the current component instance: only bare assignments from `<script setup>` such as `count = 0` or `save = () => {}` and props are mapped into the instance. `const`/`let`/`function` locals stay private to setup and do not appear on `$data`.
 
-### `$env`
+### `$sys`
+
+System variable pool. Default entries are `$router`, `$emit`, and `$message`.
+
+### `$ctx`
 
 Parent-to-child context chain, inherited through nesting; use it for local tree context such as `theme`, `mode`, `recordId`, not module-wide services:
 
 ```html
-<script setup> $env.recordId = 'abc123' </script> # children can read recordId
+<script setup> $ctx.recordId = 'abc123' </script> # children can read recordId
 ```
 
-### `$scoped`
+### `$mod`
 
-Module-scoped context, shared by the same module scope and not inherited through parent components; use it for `$axios`, `$i18n`, `$t`, `$bus`, auth, and module config.
+Module-scoped context, shared by the same module scope and not inherited through parent components; use it for `scoped`, `$axios`, `$i18n`, `$t`, `$bus`, auth, and module config.
 
 ### `$router`
 
@@ -99,7 +111,7 @@ Nearest ancestor `vrouter` view; local to the current router subtree, not a modu
 
 ## i18n
 
-`$i18n` and `$t` come from `$scoped`, so translations are module-scoped by default. Common resource layout at the current module root:
+`$i18n` and `$t` come from `$mod`, so translations are module-scoped by default. Common resource layout at the current module root:
 
 ```txt
 env.js
@@ -129,8 +141,8 @@ Recommended `langs.json` shape:
 Load it once per module, usually in `env.js` or a top-level layout/page:
 
 ```js
-export default async (scoped) => {
-  scoped.$i18n.load(await (await fetch(`${scoped.scoped}/langs.json`)).json()) # loads this module's langs.json
+export default async ($mod) => {
+  $mod.$i18n.load(await (await fetch(`${$mod.scoped}/langs.json`)).json()) # loads this module's langs.json
 }
 ```
 
@@ -176,15 +188,16 @@ Always initialize list variables in `<script setup>`, and do not mix `v-if` and 
 
 ## Refs and Parent-to-Child Calls
 
+`ref="xxx"` is automatically collected into the current component's `$data.$refs.xxx`, so you usually do not need to declare `xxx = null` in `<script setup>`.
+
 ```html
 <script setup>
-  panel = null
-  reloadChild = () => panel.$data.reload()
+  reloadChild = () => $refs.panel.$data.reload()
 </script>
 <child-panel ref="panel"></child-panel>
 ```
 
-`ref` binds a DOM node to a component variable. Stable public host fields are `refNode.$data`, `refNode.$env`, `refNode.$scoped`, and `refNode.$router`. Prefer `props + $emit` for normal communication; use `refNode.$data` only for imperative parent calls.
+`ref` stores the host node into `$refs.xxx`. Stable public host fields are `refNode.$data`, `refNode.$ctx`, `refNode.$mod`, and `refNode.$router`. Prefer `props + $emit` for normal communication; use `refNode.$data` only for imperative parent calls.
 
 ## Slots
 
@@ -199,20 +212,20 @@ Always initialize list variables in `<script setup>`, and do not mix `v-if` and 
 </body>
 ```
 
-Projected content runs in parent context, fallback content runs in child context, and router outlet is not a generic slot concept.
+Projected content runs in the caller runtime, fallback content runs in the child runtime, and router outlet is not a generic slot concept.
 
 ## `env.js`
 
 `env.js` initializes the current module context:
 
 ```js
-export default async (scoped, manager) => {
-  scoped.$axios.interceptors.request.use((config) => {
-    config.headers.Authorization = `Bearer ${scoped.token}`
+export default async ($mod, manager) => {
+  $mod.$axios.interceptors.request.use((config) => {
+    config.headers.Authorization = `Bearer ${$mod.token}`
     return config
   })
 
-  scoped.$axios.interceptors.response.use(
+  $mod.$axios.interceptors.response.use(
     (response) => response.data,
     (error) => Promise.reject(error?.response?.data || error)
   )
