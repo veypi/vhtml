@@ -3,51 +3,66 @@ import axios from '../axios.min.js'
 import I18n from '../i18n.js'
 import vmessage from '../vmessage.js'
 
-export function createEnvContext(parent = null, initial = {}) {
-  const env = Object.create(parent || null)
-  if (initial && typeof initial === 'object') {
-    Object.assign(env, initial)
+export function getModuleContext(source = null) {
+  if (!source || typeof source !== 'object') {
+    return null
   }
-  return env
+  return source.$mod || source
 }
 
-export function cloneOwnEnv(env = null) {
-  if (!env || typeof env !== 'object') {
-    return {}
-  }
-  return Object.assign({}, env)
+export function getModulePath(source = null) {
+  const mod = getModuleContext(source)
+  return mod?.scoped || ''
 }
 
-export function applyScopedAliases(target, scoped) {
-  if (!target || !scoped) {
-    return target
-  }
-  target.scoped = scoped.scoped || ''
-  target.$scoped = scoped
-  target.$axios = scoped.$axios
-  target.$i18n = scoped.$i18n
-  target.$message = scoped.$message
-  target.$bus = scoped.$bus
-  target.$t = scoped.$t
-  target.$module = scoped.$module
-  return target
+export function getBaseURL(source = null) {
+  const mod = getModuleContext(source)
+  return mod?.baseURL || window.location.origin
 }
 
-export function createScopedContext(scoped, baseURL, sharedLocale, initial = {}) {
-  const scopedContext = {
+export function createModuleContext(scoped, baseURL, sharedLocale, initial = {}) {
+  const mod = {
     ...initial,
     scoped,
+    baseURL,
+    origin: window.location.origin,
     $bus: new EventBus(),
-    $axios: axios.create({ baseURL }),
     $i18n: new I18n(sharedLocale),
-    $message: vmessage,
-    $emit: null,
-    $module: {
-      scoped,
-      origin: window.location.origin,
-      baseURL,
-    },
   }
-  scopedContext.$t = (key, params = {}) => scopedContext.$i18n.t(key, params)
-  return scopedContext
+  mod.$t = (key, params = {}) => mod.$i18n.t(key, params)
+  return mod
+}
+
+export function createSystemContext(parent = null, initial = {}) {
+  const sys = Object.create(parent || null)
+  if (!Object.prototype.hasOwnProperty.call(sys, '$message')) {
+    sys.$message = vmessage
+  }
+  if (initial && typeof initial === 'object') {
+    Object.assign(sys, initial)
+  }
+  return sys
+}
+
+export function createCtxContext(parent = null, initial = {}) {
+  const ctx = Object.create(parent || null)
+  if (initial && typeof initial === 'object') {
+    Object.assign(ctx, initial)
+  }
+  return ctx
+}
+
+export function createRuntimeContext(parent = null, mod = null, initialSys = {}, initialCtx = {}) {
+  const parentSys = parent?.$sys || null
+  const parentCtx = parent?.$ctx || null
+  const runtime = {
+    $sys: createSystemContext(parentSys, initialSys),
+    $ctx: createCtxContext(parentCtx, initialCtx),
+    $mod: mod || parent?.$mod || null,
+  }
+  return runtime
+}
+
+export function createModuleHttpClient(baseURL) {
+  return axios.create({ baseURL })
 }

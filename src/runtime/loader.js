@@ -1,5 +1,6 @@
 import vcss from '../vcss.js'
-import moduleEnvManager, { inferScopedFromUrl, normalizeScoped, resolveScopedUrl, scopedBaseURL } from './env.js'
+import moduleContextManager, { inferScopedFromUrl, normalizeScoped, resolveScopedUrl, scopedBaseURL } from './env.js'
+import { getModulePath } from './context.js'
 
 function normalizeFetchUrl(url, scoped = '') {
   if (!url || url === '/') {
@@ -40,8 +41,8 @@ class ResourceLoader {
     return normalizeFetchUrl(url, scoped)
   }
 
-  loadLink(dom, env) {
-    const href = this.resolveUrl(dom.getAttribute('href'), env?.scoped)
+  loadLink(dom, runtime) {
+    const href = this.resolveUrl(dom.getAttribute('href'), getModulePath(runtime))
     const key = dom.getAttribute('key')
     const cacheKey = key || href
     if (!cacheKey || this.loadedLinks.has(cacheKey)) {
@@ -53,8 +54,8 @@ class ResourceLoader {
     document.head.appendChild(link)
   }
 
-  async loadScript(dom, env) {
-    const src = this.resolveUrl(dom.getAttribute('src'), env?.scoped)
+  async loadScript(dom, runtime) {
+    const src = this.resolveUrl(dom.getAttribute('src'), getModulePath(runtime))
     const key = dom.getAttribute('key')
     const cacheKey = key || src
     if (!cacheKey || this.loadedScripts.has(cacheKey)) {
@@ -91,13 +92,13 @@ class ResourceLoader {
     document.head.appendChild(style)
   }
 
-  async loadHeads(heads, env, descriptor) {
+  async loadHeads(heads, runtime, descriptor) {
     for (const node of heads) {
       const nodeName = node.nodeName.toLowerCase()
       if (nodeName === 'link') {
-        this.loadLink(node, env)
+        this.loadLink(node, runtime)
       } else if (nodeName === 'script') {
-        await this.loadScript(node, env)
+        await this.loadScript(node, runtime)
       } else if (nodeName === 'title') {
         descriptor.title = node.innerText
       }
@@ -110,11 +111,11 @@ class TemplateParser {
     this.resourceLoader = resourceLoader
   }
 
-  createDescriptor(text, env, url, scoped, doc) {
+  createDescriptor(text, mod, url, scoped, doc) {
     return {
       url,
       scoped,
-      env,
+      mod,
       heads: Array.from(doc.querySelector('head')?.children || []),
       body: document.createElement('div'),
       setup: undefined,
@@ -180,30 +181,30 @@ class TemplateParser {
     })
   }
 
-  async parse(text, env, url, ignoreScoped = false) {
+  async parse(text, mod, url, ignoreScoped = false) {
     const doc = new DOMParser().parseFromString(text, 'text/html')
     if (doc.body.hasAttribute('scoped') && !ignoreScoped) {
       throw new Error('HTTP error! status: 404')
     }
-    const descriptor = this.createDescriptor(text, env, url, env?.scoped || '', doc)
+    const descriptor = this.createDescriptor(text, mod, url, getModulePath(mod), doc)
     this.processStyles(descriptor)
     this.processBody(descriptor)
     this.processScripts(descriptor)
     this.syncRefOwnerId(descriptor.body, url)
     if (!ignoreScoped) {
-      await this.resourceLoader.loadHeads(descriptor.heads, env, descriptor)
+      await this.resourceLoader.loadHeads(descriptor.heads, mod, descriptor)
     }
     return descriptor
   }
 
-  create404Descriptor(url, env, error) {
+  create404Descriptor(url, mod, error) {
     const body = document.createElement('div')
     body.style.cssText = 'background:#aaa;height:100%;width:100%;display:grid;place-items:center;'
     body.innerHTML = `<div style="width:20rem;height:15rem;border-radius:1rem;padding:1rem;background:#cfc0aa;display:grid;place-items:center;"><div style="font-size:2rem">404</div><p>${url}</p></div>`
     return {
       url,
-      scoped: env?.scoped || '',
-      env,
+      scoped: getModulePath(mod),
+      mod,
       heads: [],
       body,
       setup: undefined,
@@ -219,8 +220,8 @@ class TemplateParser {
 }
 
 class TemplateLoader {
-  constructor(envManager = moduleEnvManager) {
-    this.envManager = envManager
+  constructor(moduleManager = moduleContextManager) {
+    this.moduleManager = moduleManager
     this.cache = new CacheStore()
     this.resourceLoader = new ResourceLoader()
     this.parser = new TemplateParser(this.resourceLoader)
@@ -228,15 +229,15 @@ class TemplateLoader {
 
   clear() {
     this.cache.clear()
-    this.envManager.clear()
+    this.moduleManager.clear()
   }
 
   addWrapper(wrapper) {
-    this.envManager.addWrapper(wrapper)
+    this.moduleManager.addWrapper(wrapper)
   }
 
-  async getEnv(scoped, temp) {
-    return this.envManager.getEnv(scoped, temp)
+  async getModule(scoped, temp) {
+    return this.moduleManager.getModule(scoped, temp)
   }
 
   async fetchFile(url) {
@@ -247,22 +248,22 @@ class TemplateLoader {
     return response.text()
   }
 
-  async parseUI(text, env, url, ignoreScoped = false) {
+  async parseUI(text, runtime, url, ignoreScoped = false) {
     const descriptorUrl = url?.endsWith('.html') ? url.slice(0, -5) : (url || '#inline')
-    const inferredScoped = normalizeScoped(env?.scoped || inferScopedFromUrl(descriptorUrl) || '')
-    const descriptorEnv = await this.envManager.getEnv(inferredScoped, { ...(env || {}), scoped: inferredScoped })
-    return this.parser.parse(text, descriptorEnv, descriptorUrl, ignoreScoped)
+    const inferredScoped = normalizeScoped(getModulePath(runtime) || inferScopedFromUrl(descriptorUrl) || '')
+    const descriptorModule = await this.moduleManager.getModule(inferredScoped, { ...(runtime?.$mod || runtime || {}), scoped: inferredScoped })
+    return this.parser.parse(text, descriptorModule, descriptorUrl, ignoreScoped)
   }
 
-  async fetchUI(url, env = {}, ignoreScoped = false) {
-    const fetchUrl = normalizeFetchUrl(url, env?.scoped)
+  async fetchUI(url, runtime = {}, ignoreScoped = false) {
+    const fetchUrl = normalizeFetchUrl(url, getModulePath(runtime))
     if (this.cache.templates.has(fetchUrl)) {
       return this.cache.templates.get(fetchUrl)
     }
     if (this.cache.pending.has(fetchUrl)) {
       return this.cache.pending.get(fetchUrl)
     }
-    const pending = this.doFetchUI(fetchUrl, env, ignoreScoped)
+    const pending = this.doFetchUI(fetchUrl, runtime, ignoreScoped)
     this.cache.pending.set(fetchUrl, pending)
     return pending.finally(() => {
       this.cache.pending.delete(fetchUrl)
@@ -271,6 +272,7 @@ class TemplateLoader {
 
   async doFetchUI(fetchUrl, tempEnv = {}, ignoreScoped = false) {
     tempEnv = tempEnv || {}
+    const tempScoped = getModulePath(tempEnv)
     let scopedHeaders = {}
     const inferredScoped = inferScopedFromUrl(fetchUrl)
     try {
@@ -283,17 +285,17 @@ class TemplateLoader {
           scopedHeaders[key.slice(6)] = value
         }
       }
-      const responseScoped = normalizeScoped(scopedHeaders.scoped || tempEnv.scoped || inferredScoped || '')
-      const descriptorEnv = await this.envManager.getEnv(responseScoped, { ...tempEnv, ...scopedHeaders, scoped: responseScoped })
+      const responseScoped = normalizeScoped(scopedHeaders.scoped || tempScoped || inferredScoped || '')
+      const descriptorModule = await this.moduleManager.getModule(responseScoped, { ...(tempEnv?.$mod || tempEnv || {}), ...scopedHeaders, scoped: responseScoped })
       const text = await response.text()
       const descriptorUrl = fetchUrl.endsWith('.html') ? fetchUrl.slice(0, -5) : fetchUrl
-      const descriptor = await this.parser.parse(text, descriptorEnv, descriptorUrl, ignoreScoped)
+      const descriptor = await this.parser.parse(text, descriptorModule, descriptorUrl, ignoreScoped)
       this.cache.templates.set(fetchUrl, descriptor)
       return descriptor
     } catch (error) {
-      const fallbackScoped = normalizeScoped(scopedHeaders.scoped || tempEnv.scoped || inferredScoped || '')
-      const fallbackEnv = await this.envManager.getEnv(fallbackScoped, { ...tempEnv, ...scopedHeaders, scoped: fallbackScoped })
-      const descriptor = this.parser.create404Descriptor(fetchUrl, fallbackEnv, error)
+      const fallbackScoped = normalizeScoped(scopedHeaders.scoped || tempScoped || inferredScoped || '')
+      const fallbackModule = await this.moduleManager.getModule(fallbackScoped, { ...(tempEnv?.$mod || tempEnv || {}), ...scopedHeaders, scoped: fallbackScoped })
+      const descriptor = this.parser.create404Descriptor(fetchUrl, fallbackModule, error)
       this.cache.templates.set(fetchUrl, descriptor)
       return descriptor
     }

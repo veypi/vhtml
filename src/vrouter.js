@@ -2,10 +2,11 @@ import vproxy from './vproxy.js'
 import vget from './vget.js'
 import { createRuntimeEnv } from './runtime/env.js'
 import { resolveScopedUrl } from './runtime/env.js'
+import { getModulePath } from './runtime/context.js'
 import { createInstance, detachInstance } from './runtime/instance.js'
 import NavigationRuntime from './runtime/navigation.js'
 import { normalizeRoutesModule, parseUrlString, prepareLayoutDom, RouteMatcher } from './runtime/routes.js'
-import { findNearestInstance, getEnv, getScope, setRouter } from './runtime/dom.js'
+import { findNearestInstance, getRuntime, getScope, setRouter } from './runtime/dom.js'
 
 function runRuntimeTreeLifecycle(root, method) {
   if (!root || typeof method !== 'string') {
@@ -122,7 +123,7 @@ class Page {
 
   updateRouter(matchedRoute) {
     this.matchedRoute = matchedRoute
-    const router = this.env()?.$router
+    const router = this.runtime()?.$sys?.$router
     if (!router) {
       return
     }
@@ -144,8 +145,8 @@ class Page {
     return this.instance.host ? [this.instance.host] : []
   }
 
-  env() {
-    return this.instance.env || this.layoutInstance?.env || getEnv(this.dom) || getEnv(this.layoutDom) || null
+  runtime() {
+    return this.instance.runtime || this.layoutInstance?.runtime || getRuntime(this.dom) || getRuntime(this.layoutDom) || null
   }
 
   outlet() {
@@ -168,9 +169,9 @@ class Page {
         outlet.append(this.dom)
       }
       this.layoutInstance.host = this.layoutDom
-      this.layoutInstance.env = getEnv(this.layoutDom) || this.env()
+      this.layoutInstance.runtime = getRuntime(this.layoutDom) || this.runtime()
       this.instance.host = this.dom
-      this.instance.env = getEnv(this.dom) || this.layoutInstance.env
+      this.instance.runtime = getRuntime(this.dom) || this.layoutInstance.runtime
       return
     }
     if (this.dom && !this.dom.isConnected) {
@@ -178,11 +179,11 @@ class Page {
       this.node.append(this.dom)
     }
     this.instance.host = this.dom
-    this.instance.env = getEnv(this.dom) || this.ownerView.instance.env
+    this.instance.runtime = getRuntime(this.dom) || this.ownerView.instance.runtime
   }
 
-  async mount(env, layout) {
-    const parser = await vget.FetchUI(this.htmlPath, env)
+  async mount(runtime, layout) {
+    const parser = await vget.FetchUI(this.htmlPath, runtime)
     if (parser.err) {
       throw new Error(`load page failed: ${this.htmlPath} ${parser.err}`)
     }
@@ -193,9 +194,9 @@ class Page {
     if (!layout) {
       this.node.innerHTML = ''
       this.node.append(this.dom)
-      await this.vhtml.parseRef(this.htmlPath, this.dom, {}, env, null)
+      await this.vhtml.parseRef(this.htmlPath, this.dom, {}, runtime, null)
       this.instance.host = this.dom
-      this.instance.env = getEnv(this.dom) || env || null
+      this.instance.runtime = getRuntime(this.dom) || runtime || null
       this.activate()
       return
     }
@@ -209,7 +210,7 @@ class Page {
     if (!layoutUrl.startsWith('/layout')) {
       layoutUrl = `/layout${layoutUrl}`
     }
-    const layoutParser = await vget.FetchUI(layoutUrl, env)
+    const layoutParser = await vget.FetchUI(layoutUrl, runtime)
     if (layoutParser.err) {
       throw new Error(`load layout failed: ${layoutUrl} ${layoutParser.err}`)
     }
@@ -217,13 +218,13 @@ class Page {
     this.layoutDom?.setAttribute('data-vrouter-layout', '')
     this.node.innerHTML = ''
     this.node.append(this.layoutDom)
-    await this.vhtml.parseRef(`/layout/${layout}`, this.layoutDom, {}, env, null, true)
-    this.layoutInstance.env = getEnv(this.layoutDom) || env || null
+    await this.vhtml.parseRef(`/layout/${layout}`, this.layoutDom, {}, runtime, null, true)
+    this.layoutInstance.runtime = getRuntime(this.layoutDom) || runtime || null
     this.outlet().innerHTML = ''
     this.outlet().append(this.dom)
-    await this.vhtml.parseRef(this.htmlPath, this.dom, {}, env, null)
+    await this.vhtml.parseRef(this.htmlPath, this.dom, {}, runtime, null)
     this.instance.host = this.dom
-    this.instance.env = getEnv(this.dom) || this.layoutInstance.env
+    this.instance.runtime = getRuntime(this.dom) || this.layoutInstance.runtime
     this.activate()
   }
 
@@ -241,7 +242,7 @@ class Page {
     if (!target) {
       return
     }
-    const targetEnv = this.env() || {}
+    const titleRuntime = this.runtime() || {}
     const varRegex = /{{|}}/g
     let match
     let nextStart = 0
@@ -260,7 +261,7 @@ class Page {
         nextStart = match.index + 2
         start = -1
         const watchId = vproxy.Watch(() => {
-          let value = vproxy.Run(expr, {}, targetEnv || {})
+          let value = vproxy.Run(expr, {}, titleRuntime || {})
           if (typeof value === 'function') {
             value = value()
           } else if (typeof value === 'object' && value) {
@@ -337,9 +338,9 @@ class RouterView {
   get current() { return this.instance.data }
   get query() { return this.instance.data?.query || {} }
   get params() { return this.instance.data?.params || {} }
-  get scoped() { return this.instance.scoped || '' }
+  get modulePath() { return getModulePath(this.instance.runtime) }
   get routesSource() { return this.instance.meta.routesSource }
-  get env() { return this.instance.env }
+  get runtime() { return this.instance.runtime }
   get activePage() { return this.instance.currentPage || null }
   set activePage(value) { this.instance.currentPage = value || null }
   get beforeEnter() { return this.instance.meta.beforeEnter }
@@ -403,8 +404,8 @@ class RouterView {
     } else {
       this.instance.meta.history.push(nextSnapshot)
     }
-    const targetUrl = this.scoped && !matchedRoute.fullPath.startsWith('http')
-      ? `${this.scoped}${matchedRoute.fullPath}`
+    const targetUrl = this.modulePath && !matchedRoute.fullPath.startsWith('http')
+      ? `${this.modulePath}${matchedRoute.fullPath}`
       : matchedRoute.fullPath
     if (mode === 'replace') {
       history.replaceState({}, '', targetUrl)
@@ -479,7 +480,7 @@ class RouterView {
     let hash = ''
     let name
     if (typeof to === 'string') {
-      const parsed = parseUrlString(to, this.scoped)
+      const parsed = parseUrlString(to, this.modulePath)
       if (!parsed) {
         return null
       }
@@ -488,7 +489,7 @@ class RouterView {
       hash = parsed.hash
     } else if (to && typeof to === 'object') {
       if (to.path) {
-        const parsed = parseUrlString(to.path, this.scoped)
+        const parsed = parseUrlString(to.path, this.modulePath)
         if (!parsed) {
           return null
         }
@@ -510,8 +511,8 @@ class RouterView {
     if (path && !path.startsWith('/')) {
       path = `/${path}`
     }
-    if (this.scoped && path?.startsWith(this.scoped)) {
-      path = path.slice(this.scoped.length) || '/'
+    if (this.modulePath && path?.startsWith(this.modulePath)) {
+      path = path.slice(this.modulePath.length) || '/'
     }
     if (path && !path.startsWith('/')) {
       path = `/${path}`
@@ -667,7 +668,7 @@ class RouterView {
     if (cacheKey) {
       this.pageCache.set(cacheKey, page)
     }
-    await page.mount(this.env, to.layout)
+    await page.mount(this.runtime, to.layout)
     this.activePage = page
     if (typeof this.afterEnter === 'function') {
       this.afterEnter(to, this.current)
@@ -694,19 +695,19 @@ class RouterView {
     this.#nav.forward()
   }
 
-  resolveRoutesUrl(source = this.routesSource, env = this.env || {}) {
+  resolveRoutesUrl(source = this.routesSource, runtime = this.runtime || {}) {
     const routesSource = source || '/routes.js'
     if (/^https?:\/\//.test(routesSource)) {
       return routesSource
     }
     if (routesSource.startsWith('/')) {
-      return resolveScopedUrl(routesSource, env.scoped || '')
+      return resolveScopedUrl(routesSource, getModulePath(runtime))
     }
-    return resolveScopedUrl(`/${routesSource.replace(/^\.?\//, '')}`, env.scoped || '')
+    return resolveScopedUrl(`/${routesSource.replace(/^\.?\//, '')}`, getModulePath(runtime))
   }
 
   async loadRoutes() {
-    const routesUrl = this.resolveRoutesUrl(this.routesSource, this.env || {})
+    const routesUrl = this.resolveRoutesUrl(this.routesSource, this.runtime || {})
     return normalizeRoutesModule(await import(routesUrl))
   }
 
@@ -723,12 +724,11 @@ class RouterView {
     await this.#navigateTo(matchedRoute, method)
   }
 
-  async mount(vhtml, node, env) {
+  async mount(vhtml, node, runtime) {
     this.hostNode = node
-    this.instance.env = createRuntimeEnv(env || null, env?.$scoped || null, { $router: this })
+    this.instance.runtime = createRuntimeEnv(runtime || null, runtime?.$mod || runtime || null, { $router: this })
     this.instance.host = node
     this.instance.router = this
-    this.instance.scoped = env.scoped || ''
     setRouter(node, this)
     this.instance.meta.routesSource = node.getAttribute('routes') || '/routes.js'
     this.renderer = vhtml
@@ -773,13 +773,13 @@ class RouterRuntime {
     this.#nav.forward()
   }
 
-  mountView(vhtml, node, env) {
+  mountView(vhtml, node, runtime) {
     let view = this.#views.get(node)
     if (!view) {
       view = new RouterView(this.#nav)
       this.#views.set(node, view)
     }
-    view.mount(vhtml, node, env)
+    view.mount(vhtml, node, runtime)
     return view
   }
 }

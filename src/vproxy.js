@@ -362,10 +362,12 @@ const expose = {
   'getComputedStyle': getComputedStyle.bind(window),
 }
 
-function newProxy(data, env = {}, tmpenv = {}) {
-  const runtimeEnv = env || {}
-  const runtimeTmpEnv = tmpenv || {}
-  const runtimeScoped = runtimeEnv?.$scoped || null
+function newProxy(data, runtime = {}, execArgs = {}) {
+  const runtimeState = runtime || {}
+  const runtimeExecArgs = execArgs || {}
+  const runtimeSys = runtimeState?.$sys || null
+  const runtimeCtx = runtimeState?.$ctx || null
+  const runtimeMod = runtimeState?.$mod || null
   const proxy = new Proxy(data, {
     // 拦截所有属性，防止到 Proxy 对象以外的作用域链查找。
     has(target, key) {
@@ -375,18 +377,22 @@ function newProxy(data, env = {}, tmpenv = {}) {
       let v
       if (key === '$data') {
         v = data
-      } else if (key === '$env') {
-        v = runtimeEnv
-      } else if (key === '$scoped') {
-        v = runtimeScoped
+      } else if (key === '$sys') {
+        v = runtimeSys
+      } else if (key === '$ctx') {
+        v = runtimeCtx
+      } else if (key === '$mod') {
+        v = runtimeMod
+      } else if (runtimeSys && key in runtimeSys) {
+        v = runtimeSys[key]
       } else if (key in target) {
         v = Reflect.get(target, key, receiver);
-      } else if (runtimeTmpEnv && key in runtimeTmpEnv) {
-        v = runtimeTmpEnv[key]
-      } else if (key in runtimeEnv) {
-        v = runtimeEnv[key]
-      } else if (runtimeScoped && key in runtimeScoped) {
-        v = runtimeScoped[key]
+      } else if (runtimeCtx && key in runtimeCtx) {
+        v = runtimeCtx[key]
+      } else if (runtimeMod && key in runtimeMod) {
+        v = runtimeMod[key]
+      } else if (runtimeExecArgs && key in runtimeExecArgs) {
+        v = runtimeExecArgs[key]
       } else if (key in expose) {
         v = expose[key]
       } else if (key in window) {
@@ -439,63 +445,63 @@ function toPreview(value, maxLength = 400) {
   return `${text.slice(0, maxLength)}...`
 }
 
-function buildErrorContext(originCode, data, env, tmpenv, label, error) {
+function buildErrorContext(originCode, data, runtime, execArgs, label, error) {
   return {
     label,
     code: toPreview(originCode),
     dataKeys: Object.keys(data || {}),
-    envKeys: Object.keys(env || {}),
-    tmpEnvKeys: Object.keys(tmpenv || {}),
+    runtimeKeys: Object.keys(runtime || {}),
+    execArgKeys: Object.keys(execArgs || {}),
     message: error?.message || String(error),
     stack: error?.stack || '',
   }
 }
 
-function logSandboxError(originCode, data, env, tmpenv, label, error) {
-  console.error(`${label} error`, buildErrorContext(originCode, data, env, tmpenv, label, error))
+function logSandboxError(originCode, data, runtime, execArgs, label, error) {
+  console.error(`${label} error`, buildErrorContext(originCode, data, runtime, execArgs, label, error))
 }
 
-function executeSandboxCode(fn, originCode, data, env, tmpenv, label) {
+function executeSandboxCode(fn, originCode, data, runtime, execArgs, label) {
   if (!fn) {
     return undefined
   }
   try {
-    return fn(newProxy(data, env, tmpenv))
+    return fn(newProxy(data, runtime, execArgs))
   } catch (error) {
-    logSandboxError(originCode, data, env, tmpenv, label, error)
+    logSandboxError(originCode, data, runtime, execArgs, label, error)
   }
   return undefined
 }
 
-async function executeSandboxCodeAsync(fn, originCode, data, env, tmpenv, label) {
+async function executeSandboxCodeAsync(fn, originCode, data, runtime, execArgs, label) {
   if (!fn) {
     return undefined
   }
   try {
-    return await fn(newProxy(data, env, tmpenv))
+    return await fn(newProxy(data, runtime, execArgs))
   } catch (error) {
-    logSandboxError(originCode, data, env, tmpenv, label, error)
+    logSandboxError(originCode, data, runtime, execArgs, label, error)
     throw error
   }
 }
 
 // 运行dom属性绑定等小代码语句
 // for code snapshot
-function Run(originCode, data, env, tmpenv) {
+function Run(originCode, data, runtime, execArgs) {
   const fn = compileSandboxCode(originCode, runCache, (code) => new Function('sandbox', code), { label: 'Run' })
-  return executeSandboxCode(fn, originCode, data, env, tmpenv, 'Run')
+  return executeSandboxCode(fn, originCode, data, runtime, execArgs, 'Run')
 }
 
 const AsyncFunction = Object.getPrototypeOf(async function() { }).constructor
 
 const asyncRunCache = new Map()
 // 运行大段代码库
-async function AsyncRun(originCode, data, env, tmpenv) {
+async function AsyncRun(originCode, data, runtime, execArgs) {
   const fn = compileSandboxCode(originCode, asyncRunCache, (code) => new AsyncFunction('sandbox', code), {
     label: 'AsyncRun',
     returnExpression: true,
   })
-  return await executeSandboxCodeAsync(fn, originCode, data, env, tmpenv, 'AsyncRun')
+  return await executeSandboxCodeAsync(fn, originCode, data, runtime, execArgs, 'AsyncRun')
 }
 
 export default {

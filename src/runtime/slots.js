@@ -1,5 +1,6 @@
 import vproxy from '../vproxy.js'
-import { findNearestInstance, getInstance, getScope, getSlotContents, getSlotOutletState, setSlotOutletState } from './dom.js'
+import { findNearestInstance, getInstance, getScope, getSlotContents, getSlotOutletState, setRuntime, setScope, setSlotOutletState } from './dom.js'
+import { ensureRuntimeBoundary } from './structure.js'
 
 function resolveContext(renderer, dom) {
   return renderer.contextOf ? renderer.contextOf(dom) : {
@@ -75,11 +76,22 @@ function createOutletState(dom) {
   return nextState
 }
 
-function renderSlotNodes(renderer, dom, templates, data, env) {
+function renderSlotNodes(renderer, dom, templates, data, runtime) {
   dom.innerHTML = ''
   dom.append(...cloneNodes(templates))
-  const children = renderer.parseVif(Array.from(dom.childNodes), data, env)
-  children.forEach((node) => renderer.parseDom(node, data, env, resolveContext(renderer, node).scope))
+  const projectedScope = resolveContext(renderer, dom).scope
+  const children = renderer.parseVif(Array.from(dom.childNodes), data, runtime)
+  children.forEach((node) => {
+    if (node.nodeType === 1) {
+      ensureRuntimeBoundary(node, data, runtime)
+    } else {
+      setRuntime(node, runtime)
+      if (projectedScope) {
+        setScope(node, projectedScope)
+      }
+    }
+    renderer.parseDom(node, data, runtime, projectedScope)
+  })
 }
 
 function resetOutletState(state) {
@@ -87,14 +99,14 @@ function resetOutletState(state) {
   state.cleanup = null
 }
 
-function evaluateSlotName(dom, data, env) {
+function evaluateSlotName(dom, data, runtime) {
   if (dom.hasAttribute(':name')) {
-    return normalizeSlotName(vproxy.Run(dom.getAttribute(':name'), data, env))
+    return normalizeSlotName(vproxy.Run(dom.getAttribute(':name'), data, runtime))
   }
   return normalizeSlotName(dom.getAttribute('name'))
 }
 
-export function createSlotContents(sourceNodes, data, env) {
+export function createSlotContents(sourceNodes, data, runtime) {
   const slots = Object.create(null)
   sourceNodes.forEach((node) => {
     const template = node.cloneNode(true)
@@ -106,7 +118,7 @@ export function createSlotContents(sourceNodes, data, env) {
         name: slotName,
         templates: [],
         data,
-        env,
+        runtime,
       }
     }
     slots[slotName].templates.push(template)
@@ -114,22 +126,22 @@ export function createSlotContents(sourceNodes, data, env) {
   return slots
 }
 
-export function parseSlots(renderer, dom, data, env) {
+export function parseSlots(renderer, dom, data, runtime) {
   if (dom.hasAttribute?.('data-vrouter-managed')) {
-    renderer.parseAttrs(dom, data, env)
+    renderer.parseAttrs(dom, data, runtime)
     return dom
   }
   const owner = resolveSlotOwner(dom)
   if (!owner) {
     renderer.onMountedRun(dom, (node) => {
-      parseSlots(renderer, node, data, env)
+      parseSlots(renderer, node, data, runtime)
     })
     return dom
   }
   const state = createOutletState(dom)
-  const context = resolveContext(renderer, dom)
-  renderer.watch(context.scope, () => {
-    const slotName = evaluateSlotName(dom, data, env)
+  const slotOutletRuntime = resolveContext(renderer, dom)
+  renderer.watch(slotOutletRuntime.scope, () => {
+    const slotName = evaluateSlotName(dom, data, runtime)
     const ownerInstance = findNearestInstance(owner, null)
     const slotContents = ownerInstance?.slots || getSlotContents(owner) || {}
     const selected = slotContents[slotName] || null
@@ -142,7 +154,7 @@ export function parseSlots(renderer, dom, data, env) {
       }
       resetOutletState(state)
       const slotBinding = createSlotBindingData(renderer, dom, data, selected.data)
-      renderSlotNodes(renderer, dom, selected.templates, slotBinding.data, selected.env)
+      renderSlotNodes(renderer, dom, selected.templates, slotBinding.data, selected.runtime)
       state.currentKey = renderKey
       state.currentMode = 'projected'
       state.cleanup = slotBinding.cleanup
@@ -153,10 +165,10 @@ export function parseSlots(renderer, dom, data, env) {
       return
     }
     resetOutletState(state)
-    renderSlotNodes(renderer, dom, state.fallbackTemplates, data, env)
+    renderSlotNodes(renderer, dom, state.fallbackTemplates, data, runtime)
     state.currentKey = renderKey
     state.currentMode = 'fallback'
   })
-  renderer.parseAttrs(dom, data, env)
+  renderer.parseAttrs(dom, data, runtime)
   return dom
 }

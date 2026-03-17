@@ -1,3 +1,5 @@
+import { getModulePath } from './context.js'
+
 function resolvePath(relativePath, currentPath) {
   if (relativePath.startsWith('/')) {
     return relativePath
@@ -75,8 +77,8 @@ async function injectImportedModule(binding, module, target) {
   })
 }
 
-export async function parseImports(code, data = {}, env = {}, src = '') {
-  const scoped = env?.scoped || ''
+export async function parseImports(code, data = {}, runtime = {}, src = '') {
+  const scoped = getModulePath(runtime)
   const normalizedSrc = normalizeSourcePath(src, scoped)
   let codeCopy = code
   let match

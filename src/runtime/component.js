@@ -7,23 +7,23 @@ import { createRuntimeEnv } from './env.js'
 import { parseImports } from './imports.js'
 import { registerScriptLifecycle } from './lifecycle.js'
 import { createSlotContents } from './slots.js'
-import { findNearestInstance, findNearestRouter, getEnv, getEvents, getInstance, getScope, getSourceNodes, getVsrc, setEnv, setInstance, setRef, setRouter, setScope, setScoped, setSlotContents, setSourceNodes, setVsrc } from './dom.js'
+import { findNearestInstance, findNearestRouter, getData, getEvents, getInstance, getRuntime, getScope, getSourceNodes, getVsrc, setData, setInstance, setRouter, setRuntime, setScope, setSlotContents, setSourceNodes, setVsrc } from './dom.js'
 
-function resolveContext(renderer, dom, fallbackEnv = null) {
-  return renderer.contextOf ? renderer.contextOf(dom, fallbackEnv) : {
+function resolveRuntime(renderer, dom, fallbackRuntime = null) {
+  return renderer.runtimeOf ? renderer.runtimeOf(dom, fallbackRuntime) : {
     instance: getInstance(dom),
     scope: getScope(dom),
-    env: getEnv(dom) || fallbackEnv,
+    runtime: getRuntime(dom) || fallbackRuntime,
   }
 }
 
-export async function parseRaw(renderer, dom, data, env, code) {
+export async function parseRaw(renderer, dom, data, runtime, code) {
   const tmpId = `_${Math.random().toString(36).slice(2)}`
-  const target = await vget.ParseUI(code, env || {}, tmpId)
-  renderer.parseRef(tmpId, dom, data || {}, { ...env }, target)
+  const target = await vget.ParseUI(code, runtime || {}, tmpId)
+  renderer.parseRef(tmpId, dom, data || {}, { ...runtime }, target)
 }
 
-export async function parseRef(renderer, vsrc, dom, data, env, target, singleMode = false) {
+export async function parseRef(renderer, vsrc, dom, data, runtime, target, singleMode = false) {
   const previousInstance = getInstance(dom)
   const parentInstance = findNearestInstance(dom.parentNode || null, null)
   const currentScope = getScope(dom)
@@ -37,22 +37,22 @@ export async function parseRef(renderer, vsrc, dom, data, env, target, singleMod
   setInstance(dom, instance)
   setScope(dom, new ComponentScope(dom))
   dom.setAttribute('vparsing', '')
-  const parentEnv = env
+  const parentRuntime = runtime
   const refOf = dom.getAttribute('vrefof')
   const parentRef = dom.closest(`*[vref='${refOf}']`)
   if (parentRef) {
-    env = getEnv(parentRef)
+    runtime = getRuntime(parentRef)
   }
   if (!target && vsrc) {
     if (!vsrc.endsWith('.html')) {
       vsrc = `${vsrc}.html`
     }
-    target = await vget.FetchUI(vsrc, env, dom.hasAttribute('scoped'))
+    target = await vget.FetchUI(vsrc, runtime, dom.hasAttribute('scoped'))
   }
-  const scopedContext = target?.env || env?.$scoped || null
-  const runtimeRouter = findNearestRouter(dom, env?.$router || null)
-  const runtimeEnv = createRuntimeEnv(env || null, scopedContext, { $router: runtimeRouter })
-  runtimeEnv.$emit = (evt, ...args) => {
+  const mod = target?.mod || runtime?.$mod || null
+  const runtimeRouter = findNearestRouter(dom, runtime?.$sys?.$router || null)
+  const componentRuntime = createRuntimeEnv(runtime || null, mod, { $router: runtimeRouter })
+  componentRuntime.$sys.$emit = (evt, ...args) => {
     evt = evt.toLowerCase()
     const events = getEvents(dom)
     if (!events) {
@@ -63,37 +63,38 @@ export async function parseRef(renderer, vsrc, dom, data, env, target, singleMod
       callback(...args)
     }
   }
-  setEnv(dom, runtimeEnv)
-  setScoped(dom, scopedContext)
+  setRuntime(dom, componentRuntime)
   setRouter(dom, runtimeRouter)
   setVsrc(dom, vsrc)
-  const originData = await setupRef(renderer, dom, data, parentEnv, target, singleMode)
+  const originData = await setupRef(renderer, dom, data, parentRuntime, target, singleMode)
   if (singleMode) {
-    renderer.parseAttrs(dom, originData, runtimeEnv, target?.customAttrs)
+    renderer.parseAttrs(dom, originData, componentRuntime, target?.customAttrs)
   } else {
-    renderer.parseAttrs(dom, data, parentEnv, target?.customAttrs)
+    renderer.parseAttrs(dom, data, parentRuntime, target?.customAttrs)
   }
-  const children = renderer.parseVif(Array.from(dom.childNodes), originData, runtimeEnv)
+  const children = renderer.parseVif(Array.from(dom.childNodes), originData, componentRuntime)
   for (const child of children) {
-    renderer.parseDom(child, originData, runtimeEnv)
+    renderer.parseDom(child, originData, componentRuntime)
   }
   dom.removeAttribute('vparsing')
-  mountRef(renderer, dom, originData, runtimeEnv, target)
-  resolveContext(renderer, dom, runtimeEnv).scope?.activate(dom)
+  mountRef(renderer, dom, originData, componentRuntime, target)
+  resolveRuntime(renderer, dom, componentRuntime).scope?.activate(dom)
 }
 
-export async function setupRef(renderer, dom, data, parentEnv, target, singleMode = false) {
-  const originData = vproxy.Wrap({})
-  const componentContext = resolveContext(renderer, dom, parentEnv)
+export async function setupRef(renderer, dom, data, parentRuntime, target, singleMode = false) {
+  const originData = vproxy.Wrap({
+    $refs: vproxy.Wrap({}),
+  })
+  const componentRuntime = resolveRuntime(renderer, dom, parentRuntime)
   if (target.setup) {
     let script = target.setup.innerHTML
-    script = await parseImports(script, originData, componentContext.env, getVsrc(dom))
-    await vproxy.AsyncRun(script, originData, componentContext.env, {
+    script = await parseImports(script, originData, componentRuntime.runtime, getVsrc(dom))
+    await vproxy.AsyncRun(script, originData, componentRuntime.runtime, {
       $node: dom,
       $watch: (target, callback, options) => {
-        const scope = resolveContext(renderer, dom, componentContext.env).scope
+        const scope = resolveRuntime(renderer, dom, componentRuntime.runtime).scope
         const register = () => {
-          renderer.watch(resolveContext(renderer, dom, componentContext.env).scope, target, callback, options)
+          renderer.watch(resolveRuntime(renderer, dom, componentRuntime.runtime).scope, target, callback, options)
         }
         if (scope) {
           scope.setTimeout(register, 50)
@@ -103,14 +104,17 @@ export async function setupRef(renderer, dom, data, parentEnv, target, singleMod
       },
     })
   }
-  setRef(dom, originData)
+  if (!originData.$refs || typeof originData.$refs !== 'object') {
+    originData.$refs = vproxy.Wrap({})
+  }
+  setData(dom, originData)
   if (singleMode) {
     return originData
   }
   if (!getSourceNodes(dom)) {
     setSourceNodes(dom, Array.from(dom.childNodes).map((node) => node.cloneNode(true)))
   }
-  const slotContents = createSlotContents(getSourceNodes(dom) || [], data, parentEnv)
+  const slotContents = createSlotContents(getSourceNodes(dom) || [], data, parentRuntime)
   setSlotContents(dom, slotContents)
   dom.innerHTML = ''
   const bodyClone = target.body.cloneNode(true)
@@ -136,11 +140,11 @@ export async function setupRef(renderer, dom, data, parentEnv, target, singleMod
       dom.removeAttribute(`:${localKey}`)
       delete originData[key]
       if (expr) {
-        renderer.watch(resolveContext(renderer, dom, parentEnv).scope, () => vproxy.Run(expr, data, parentEnv), () => {
-          originData[key] = vproxy.Run(expr, data, parentEnv)
+        renderer.watch(resolveRuntime(renderer, dom, parentRuntime).scope, () => vproxy.Run(expr, data, parentRuntime), () => {
+          originData[key] = vproxy.Run(expr, data, parentRuntime)
         }, { deep: true })
       } else {
-        renderer.watch(resolveContext(renderer, dom, parentEnv).scope, () => data[key], () => {
+        renderer.watch(resolveRuntime(renderer, dom, parentRuntime).scope, () => data[key], () => {
           originData[key] = data[key]
         }, { deep: true })
       }
@@ -161,10 +165,10 @@ export async function setupRef(renderer, dom, data, parentEnv, target, singleMod
       if (args.data[args.key] !== undefined && args.data[args.key] !== null) {
         delete originData[key]
       }
-      renderer.watch(resolveContext(renderer, dom, parentEnv).scope, () => args.data[args.key], () => {
+      renderer.watch(resolveRuntime(renderer, dom, parentRuntime).scope, () => args.data[args.key], () => {
         originData[key] = args.data[args.key]
       })
-      renderer.watch(resolveContext(renderer, dom, parentEnv).scope, () => originData[key], () => {
+      renderer.watch(resolveRuntime(renderer, dom, parentRuntime).scope, () => originData[key], () => {
         args.data[args.key] = originData[key]
       })
     }
@@ -172,7 +176,7 @@ export async function setupRef(renderer, dom, data, parentEnv, target, singleMod
 
   let attrs = Array.from(bodyClone.attributes)
   attrs = attrs.filter((attr) => {
-    if (renderer.parseAttr(dom, attr.name, attr.value, originData, resolveContext(renderer, dom, parentEnv).env)) {
+    if (renderer.parseAttr(dom, attr.name, attr.value, originData, resolveRuntime(renderer, dom, parentRuntime).runtime)) {
       bodyClone.removeAttribute(attr.name)
       return false
     }
@@ -202,11 +206,11 @@ export async function setupRef(renderer, dom, data, parentEnv, target, singleMod
   return originData
 }
 
-export function mountRef(renderer, dom, scopedData, env, target) {
-  if (!resolveContext(renderer, dom, env).scope) {
+export function mountRef(renderer, dom, componentData, runtime, target) {
+  if (!resolveRuntime(renderer, dom, runtime).scope) {
     setScope(dom, new ComponentScope(dom))
   }
   for (const script of target.scripts) {
-    registerScriptLifecycle(script, dom, scopedData, env)
+    registerScriptLifecycle(script, dom, componentData, runtime)
   }
 }

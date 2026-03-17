@@ -6,8 +6,10 @@ export class ComponentInstance {
     this.children = new Set()
     this.vsrc = ''
     this.data = null
-    this.env = null
-    this.scoped = null
+    this.runtime = null
+    this.ctx = null
+    this.mod = null
+    this.sys = null
     this.router = null
     this.route = null
     this.cacheKey = null

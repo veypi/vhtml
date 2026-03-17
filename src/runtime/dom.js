@@ -48,21 +48,28 @@ function ensurePublicNodeAPI(node) {
       configurable: true,
       enumerable: false,
       get() {
-        return getRef(node)
+        return getData(node)
       },
     },
-    $env: {
+    $sys: {
       configurable: true,
       enumerable: false,
       get() {
-        return getEnv(node)
+        return getSys(node)
       },
     },
-    $scoped: {
+    $ctx: {
       configurable: true,
       enumerable: false,
       get() {
-        return getScoped(node)
+        return getCtx(node)
+      },
+    },
+    $mod: {
+      configurable: true,
+      enumerable: false,
+      get() {
+        return getMod(node)
       },
     },
     $router: {
@@ -109,30 +116,74 @@ export function setScope(node, scope) {
   return writeValue(node, 'scope', scope)
 }
 
-export function getEnv(node) {
-  return getInstance(node)?.env ?? readValue(node, 'env')
+export function getRuntime(node) {
+  return getInstance(node)?.runtime ?? readValue(node, 'runtime')
 }
 
-export function setEnv(node, env) {
+export function setRuntime(node, runtime) {
   ensurePublicNodeAPI(node)
   const instance = getInstance(node)
   if (instance) {
-    instance.env = env || null
+    instance.runtime = runtime || null
+    instance.sys = runtime?.$sys || null
+    instance.ctx = runtime?.$ctx || null
+    instance.mod = runtime?.$mod || null
   }
-  return writeValue(node, 'env', env)
+  writeValue(node, 'sys', runtime?.$sys || null)
+  writeValue(node, 'ctx', runtime?.$ctx || null)
+  writeValue(node, 'mod', runtime?.$mod || null)
+  return writeValue(node, 'runtime', runtime)
 }
 
-export function getScoped(node) {
-  return getInstance(node)?.scoped ?? readValue(node, 'scoped')
+export function getSys(node) {
+  return getInstance(node)?.sys ?? readValue(node, 'sys')
 }
 
-export function setScoped(node, scoped) {
+export function setSys(node, sys) {
   ensurePublicNodeAPI(node)
   const instance = getInstance(node)
   if (instance) {
-    instance.scoped = scoped || null
+    instance.sys = sys || null
   }
-  return writeValue(node, 'scoped', scoped)
+  return writeValue(node, 'sys', sys)
+}
+
+export function getCtx(node) {
+  return getInstance(node)?.ctx ?? readValue(node, 'ctx')
+}
+
+export function setCtx(node, ctx) {
+  ensurePublicNodeAPI(node)
+  const instance = getInstance(node)
+  if (instance) {
+    instance.ctx = ctx || null
+  }
+  return writeValue(node, 'ctx', ctx)
+}
+
+export function getMod(node) {
+  return getInstance(node)?.mod ?? readValue(node, 'mod')
+}
+
+export function setMod(node, mod) {
+  ensurePublicNodeAPI(node)
+  const instance = getInstance(node)
+  if (instance) {
+    instance.mod = mod || null
+  }
+  return writeValue(node, 'mod', mod)
+}
+
+export function getModulePath(node) {
+  return getMod(node)?.scoped || ''
+}
+
+export function setModulePath(node, modulePath) {
+  const mod = getMod(node)
+  if (mod && typeof mod === 'object') {
+    mod.scoped = modulePath || ''
+  }
+  return writeValue(node, 'scoped', modulePath)
 }
 
 export function getRouter(node) {
@@ -191,17 +242,17 @@ export function ensureEvents(node) {
   return instance?.events || store.events
 }
 
-export function getRef(node) {
-  return getInstance(node)?.data ?? readValue(node, 'ref')
+export function getData(node) {
+  return getInstance(node)?.data ?? readValue(node, 'data')
 }
 
-export function setRef(node, value) {
+export function setData(node, value) {
   ensurePublicNodeAPI(node)
   const instance = getInstance(node)
   if (instance) {
     instance.data = value || null
   }
-  return writeValue(node, 'ref', value)
+  return writeValue(node, 'data', value)
 }
 
 export function getSlotContents(node) {

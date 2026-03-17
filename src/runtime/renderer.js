@@ -11,7 +11,7 @@ import { parseAttrs as parseAttrsRuntime, parseAHref as parseAHrefRuntime, parse
 import { parseTextNode as parseTextNodeRuntime, parseVfor as parseVforRuntime, parseVif as parseVifRuntime } from './structure.js'
 import { parseSlots as parseSlotsRuntime } from './slots.js'
 import { parseRaw as parseRawRuntime, parseRef as parseRefRuntime, setupRef as setupRefRuntime, mountRef as mountRefRuntime } from './component.js'
-import { clearParsed, disposeRuntimeSubtree, findNearestInstance, getEnv, getScope, getSourceNodes, isParsed, markParsed, setSourceNodes } from './dom.js'
+import { clearParsed, disposeRuntimeSubtree, findNearestInstance, getRuntime, getScope, getSourceNodes, isParsed, markParsed, setSourceNodes } from './dom.js'
 
 let rendererBootstrapped = false
 
@@ -156,7 +156,7 @@ function ensureRendererRuntime() {
   class vhtml {
     /** @type {HTMLElement} */
     app = null
-    scoped = null
+    modulePath = null
     vget = vget
     vproxy = vproxy
     Wrap = vproxy.Wrap
@@ -177,8 +177,8 @@ function ensureRendererRuntime() {
       let init = async () => {
         // vget.SetBaseFile(await vget.FetchFile(window.location.pathname))
         let mainParser = await vget.FetchUI(window.location.pathname, {}, true)
-        this.scoped = mainParser.env?.scoped || ''
-        this.parseRef('root', this.app, {}, mainParser.env || {}, mainParser, true)
+        this.modulePath = mainParser.mod?.scoped || ''
+        this.parseRef('root', this.app, {}, mainParser.mod || {}, mainParser, true)
       }
       init()
     }
@@ -190,39 +190,41 @@ function ensureRendererRuntime() {
     findLastAccess(code, data) {
       return findLastAccess(code, data)
     }
-    contextOf(node, fallbackEnv = null) {
+    runtimeOf(node, fallbackRuntime = null) {
       if (!node) {
         return {
           instance: null,
           scope: null,
-          env: fallbackEnv,
+          runtime: fallbackRuntime,
         }
       }
       const instance = findNearestInstance(node, null)
+      const nodeScope = getScope(node)
+      const nodeRuntime = getRuntime(node)
       return {
         instance,
-        scope: instance?.scope || getScope(node),
-        env: instance?.env || getEnv(node) || fallbackEnv,
+        scope: nodeScope || instance?.scope || null,
+        runtime: nodeRuntime || instance?.runtime || fallbackRuntime,
       }
     }
     scopeOf(node) {
-      return this.contextOf(node).scope
+      return this.runtimeOf(node).scope
     }
     /**
     * @param{HTMLElement} dom
     * @param {Object} scopedData
      * */
-    async parseDom(dom, scopedData = {}, env, scope = this.scopeOf(dom)) {
-      if (env instanceof HTMLElement) {
-        console.log(env)
-        throw new Error('env error')
+    async parseDom(dom, scopedData = {}, runtime, scope = this.scopeOf(dom)) {
+      if (runtime instanceof HTMLElement) {
+        console.log(runtime)
+        throw new Error('runtime error')
       }
-      const runtimeContext = this.contextOf(dom, env)
-      const runtimeScope = scope || runtimeContext.scope
-      const runtimeEnv = runtimeContext.env || env
+      const nodeRuntime = this.runtimeOf(dom, runtime)
+      const runtimeScope = scope || nodeRuntime.scope
+      const activeRuntime = nodeRuntime.runtime || runtime
       let nodeName = dom.nodeName.toLowerCase()
       if (dom.nodeType === 3) {
-        this.parseTextNode(dom, scopedData, runtimeEnv, runtimeScope)
+        this.parseTextNode(dom, scopedData, activeRuntime, runtimeScope)
         return
       } else if (dom.nodeType === 8) {
         // comment node
@@ -241,13 +243,13 @@ function ensureRendererRuntime() {
 
       let vfortxt = dom.getAttribute('v-for')
       if (vfortxt !== null) {
-        this.parseVfor(vfortxt, dom, scopedData, runtimeEnv)
+        this.parseVfor(vfortxt, dom, scopedData, activeRuntime)
         return
       }
       if (nodeName.indexOf('-') !== -1) {
         let url = '/' + nodeName.split('-').join('/')
         let singleMode = dom.hasAttribute('single')
-        this.parseRef(url, dom, scopedData, runtimeEnv, null, singleMode)
+        this.parseRef(url, dom, scopedData, activeRuntime, null, singleMode)
         markParsed(dom)
         return
       }
@@ -262,7 +264,7 @@ function ensureRendererRuntime() {
         this.watch(runtimeScope, () => {
           clearParsed(dom)
           dom.setAttribute('vparsing', '')
-          let vsrc = vproxy.Run(code, scopedData, runtimeEnv)
+          let vsrc = vproxy.Run(code, scopedData, activeRuntime)
           if (!vsrc) {
             return
           }
@@ -270,14 +272,14 @@ function ensureRendererRuntime() {
           dom.innerHTML = ''
           attrs.forEach(a => { dom.setAttribute(a.name, a.value) })
           oldChilds.forEach(c => { dom.appendChild(c.cloneNode(true)) })
-          this.parseRef(vsrc, dom, scopedData, runtimeEnv, null, false)
+          this.parseRef(vsrc, dom, scopedData, activeRuntime, null, false)
           markParsed(dom)
         })
         return
       }
       if (dom.getAttribute('vsrc')) {
         let singleMode = dom.hasAttribute('single')
-        this.parseRef(dom.getAttribute('vsrc'), dom, scopedData, runtimeEnv, null, singleMode)
+        this.parseRef(dom.getAttribute('vsrc'), dom, scopedData, activeRuntime, null, singleMode)
         markParsed(dom)
         return
       }
@@ -285,32 +287,32 @@ function ensureRendererRuntime() {
         let vhtmlCode = dom.getAttribute('v-html')
         dom.removeAttribute('v-html')
         dom.innerHTML = ''
-        this.parseAttrs(dom, scopedData, runtimeEnv)
+        this.parseAttrs(dom, scopedData, activeRuntime)
         markParsed(dom)
         this.watch(runtimeScope, () => {
-          let innerHTML = vproxy.Run(vhtmlCode, scopedData, runtimeEnv)
+          let innerHTML = vproxy.Run(vhtmlCode, scopedData, activeRuntime)
           dom.innerHTML = innerHTML
-          let childs = this.parseVif(Array.from(dom.childNodes), scopedData, runtimeEnv)
+          let childs = this.parseVif(Array.from(dom.childNodes), scopedData, activeRuntime)
           for (let n of childs) {
-            this.parseDom(n, scopedData, runtimeEnv, runtimeScope)
+            this.parseDom(n, scopedData, activeRuntime, runtimeScope)
           }
         })
         return
       }
       if (nodeName === 'vslot') {
-        this.parseSlots(dom, scopedData, runtimeEnv)
+        this.parseSlots(dom, scopedData, activeRuntime)
         markParsed(dom)
         return
       }
       if (nodeName === 'vrouter') {
-        this.parseAttrs(dom, scopedData, runtimeEnv)
-        vrouter.$router.mountView(this, dom, runtimeEnv)
+        this.parseAttrs(dom, scopedData, activeRuntime)
+        vrouter.$router.mountView(this, dom, activeRuntime)
         return
       }
-      this.parseAttrs(dom, scopedData, runtimeEnv)
-      let childs = this.parseVif(Array.from(dom.childNodes), scopedData, runtimeEnv)
+      this.parseAttrs(dom, scopedData, activeRuntime)
+      let childs = this.parseVif(Array.from(dom.childNodes), scopedData, activeRuntime)
       for (let n of childs) {
-        this.parseDom(n, scopedData, runtimeEnv, runtimeScope)
+        this.parseDom(n, scopedData, activeRuntime, runtimeScope)
       }
       markParsed(dom)
     }
@@ -335,16 +337,16 @@ function ensureRendererRuntime() {
       dom.setAttribute('vdelay', did - 1)
     }
 
-    async parseRaw(dom, data, env, code) {
-      return parseRawRuntime(this, dom, data, env, code)
+    async parseRaw(dom, data, runtime, code) {
+      return parseRawRuntime(this, dom, data, runtime, code)
     }
 
     /**
     * @param{string} name
     * @param{HTMLElement} dom
      * */
-    async parseRef(vsrc, dom, data, env, target, singleMode = false) {
-      return parseRefRuntime(this, vsrc, dom, data, env, target, singleMode)
+    async parseRef(vsrc, dom, data, runtime, target, singleMode = false) {
+      return parseRefRuntime(this, vsrc, dom, data, runtime, target, singleMode)
     }
 
     /**
@@ -352,52 +354,52 @@ function ensureRendererRuntime() {
     * @parm {Object} data
     * @param {{heads:HTMLElement[],body:HTMLElement,scripts:HTMLElement[],setup:HTMLElement}} target
      * */
-    async setupRef(dom, data, env, target, singleMode = false) {
-      return setupRefRuntime(this, dom, data, env, target, singleMode)
+    async setupRef(dom, data, runtime, target, singleMode = false) {
+      return setupRefRuntime(this, dom, data, runtime, target, singleMode)
     }
 
-    async mountRef(dom, scopedData, env, target) {
-      return mountRefRuntime(this, dom, scopedData, env, target)
+    async mountRef(dom, scopedData, runtime, target) {
+      return mountRefRuntime(this, dom, scopedData, runtime, target)
     }
 
-    parseAttrs(dom, data, env, attrs) {
-      return parseAttrsRuntime(this, dom, data, env, attrs)
+    parseAttrs(dom, data, runtime, attrs) {
+      return parseAttrsRuntime(this, dom, data, runtime, attrs)
     }
 
-    parseAHref(dom, data, env) {
-      return parseAHrefRuntime(this, dom, data, env)
+    parseAHref(dom, data, runtime) {
+      return parseAHrefRuntime(this, dom, data, runtime)
     }
-
-    /**
-    * @param {HTMLElement} dom
-     * */
-    parseAttr(dom, name, value, data, env) {
-      return parseAttrRuntime(this, dom, name, value, data, env)
-    }
-    handleStyle(dom, attrName, value, data, env) {
-      return handleStyleRuntime(this, dom, attrName, value, data, env)
-    }
-    handleEvent(dom, name, value, data, env) {
-      return handleEventRuntime(this, dom, name, value, data, env)
-    }
-
-    parseTextNode(dom, data, env, scope = this.scopeOf(dom)) {
-      return parseTextNodeRuntime(this, dom, data, env, scope)
-    }
-    parseVfor(vfortxt, dom, data, env) {
-      return parseVforRuntime(this, vfortxt, dom, data, env)
-    }
-
-    parseVif(nodes, data, env) {
-      return parseVifRuntime(this, nodes, data, env)
-    }
-
 
     /**
     * @param {HTMLElement} dom
      * */
-    parseSlots(dom, data, env) {
-      return parseSlotsRuntime(this, dom, data, env)
+    parseAttr(dom, name, value, data, runtime) {
+      return parseAttrRuntime(this, dom, name, value, data, runtime)
+    }
+    handleStyle(dom, attrName, value, data, runtime) {
+      return handleStyleRuntime(this, dom, attrName, value, data, runtime)
+    }
+    handleEvent(dom, name, value, data, runtime) {
+      return handleEventRuntime(this, dom, name, value, data, runtime)
+    }
+
+    parseTextNode(dom, data, runtime, scope = this.scopeOf(dom)) {
+      return parseTextNodeRuntime(this, dom, data, runtime, scope)
+    }
+    parseVfor(vfortxt, dom, data, runtime) {
+      return parseVforRuntime(this, vfortxt, dom, data, runtime)
+    }
+
+    parseVif(nodes, data, runtime) {
+      return parseVifRuntime(this, nodes, data, runtime)
+    }
+
+
+    /**
+    * @param {HTMLElement} dom
+     * */
+    parseSlots(dom, data, runtime) {
+      return parseSlotsRuntime(this, dom, data, runtime)
     }
   }
   window.__VhtmlRuntime__ = vhtml

@@ -5,23 +5,22 @@
  * Distributed under terms of the MIT license.
  */
 import templateLoader from './runtime/loader.js'
-import moduleEnvManager from './runtime/env.js'
 
 const vget = {
-  FetchUI(url, env, ignoreScoped) {
-    return templateLoader.fetchUI(url, env, ignoreScoped)
+  FetchUI(url, runtime, ignoreScoped) {
+    return templateLoader.fetchUI(url, runtime, ignoreScoped)
   },
   FetchFile(url) {
     return templateLoader.fetchFile(url)
   },
-  LoadScript(dom, env) {
-    return templateLoader.resourceLoader.loadScript(dom, env)
+  LoadScript(dom, runtime) {
+    return templateLoader.resourceLoader.loadScript(dom, runtime)
   },
-  LoadLink(dom, env) {
-    return templateLoader.resourceLoader.loadLink(dom, env)
+  LoadLink(dom, runtime) {
+    return templateLoader.resourceLoader.loadLink(dom, runtime)
   },
-  ParseUI(text, env, url, ignoreScoped) {
-    return templateLoader.parseUI(text, env, url, ignoreScoped)
+  ParseUI(text, runtime, url, ignoreScoped) {
+    return templateLoader.parseUI(text, runtime, url, ignoreScoped)
   },
   getInstance() {
     return templateLoader

@@ -1,20 +1,20 @@
 import vproxy from '../vproxy.js'
 import { createInstance, detachInstance } from './instance.js'
 import ComponentScope from './scope.js'
-import { clearNodeState, disposeRuntimeSubtree, findNearestInstance, findNearestRouter, getEnv, getInstance, getScope, getScoped, getSourceNodes, getVforData, isParsed, setEnv, setInstance, setRef, setRouter, setScope, setScoped, setVforData } from './dom.js'
+import { clearNodeState, findNearestInstance, findNearestRouter, getInstance, getRuntime, getScope, getSourceNodes, getVforData, isParsed, setData, setInstance, setRouter, setRuntime, setScope, setVforData } from './dom.js'
 
 const varRegex = /{{|}}/g
 const vforRegex = /^(\s*(\w+)\s+in\s+|\((\w+),\s*(\w+)\)\s+in\s+)([\w\?\$\.\[\]\(\)'"]+)$/
 
-function resolveContext(renderer, dom, fallbackEnv = null) {
-  return renderer.contextOf ? renderer.contextOf(dom, fallbackEnv) : {
+function resolveRuntime(renderer, dom, fallbackRuntime = null) {
+  return renderer.runtimeOf ? renderer.runtimeOf(dom, fallbackRuntime) : {
     instance: getInstance(dom) || findNearestInstance(dom, null),
     scope: renderer.scopeOf(dom) || getScope(dom),
-    env: getEnv(dom) || fallbackEnv,
+    runtime: getRuntime(dom) || fallbackRuntime,
   }
 }
 
-function ensureStructuralBoundary(dom, data, env) {
+function ensureStructuralBoundary(dom, data, runtime) {
   let instance = getInstance(dom)
   if (!instance) {
     instance = createInstance(dom, findNearestInstance(dom.parentNode || null, null), 'boundary')
@@ -24,15 +24,18 @@ function ensureStructuralBoundary(dom, data, env) {
     setScope(dom, new ComponentScope(dom))
   }
   if (data !== undefined) {
-    setRef(dom, data)
+    setData(dom, data)
   }
-  const runtimeEnv = env || getEnv(dom) || null
-  if (runtimeEnv) {
-    setEnv(dom, runtimeEnv)
-    setScoped(dom, runtimeEnv.$scoped || getScoped(dom) || null)
-    setRouter(dom, findNearestRouter(dom, runtimeEnv.$router || null))
+  const nodeRuntime = runtime || getRuntime(dom) || null
+  if (nodeRuntime) {
+    setRuntime(dom, nodeRuntime)
+    setRouter(dom, findNearestRouter(dom, nodeRuntime.$sys?.$router || null))
   }
   return instance
+}
+
+export function ensureRuntimeBoundary(dom, data, runtime) {
+  return ensureStructuralBoundary(dom, data, runtime)
 }
 
 function disposeBoundaryNode(node) {
@@ -45,8 +48,8 @@ function disposeBoundaryNode(node) {
   clearNodeState(node)
 }
 
-export function parseTextNode(renderer, dom, data, env, scope = renderer.scopeOf(dom)) {
-  const runtimeScope = scope || resolveContext(renderer, dom, env).scope
+export function parseTextNode(renderer, dom, data, runtime, scope = renderer.scopeOf(dom)) {
+  const runtimeScope = scope || resolveRuntime(renderer, dom, runtime).scope
   const txt = dom.nodeValue.trim()
   if (!txt) {
     return
@@ -68,7 +71,7 @@ export function parseTextNode(renderer, dom, data, env, scope = renderer.scopeOf
       start = -1
       nextStart = match.index + 2
       renderer.watch(runtimeScope, () => {
-        let value = vproxy.Run(expr, data, env)
+        let value = vproxy.Run(expr, data, runtime)
         if (typeof value === 'function') {
           value = value()
         } else if (typeof value === 'object' && value) {
@@ -83,7 +86,7 @@ export function parseTextNode(renderer, dom, data, env, scope = renderer.scopeOf
   dom.nodeValue = parts.join('')
 }
 
-export function parseVfor(renderer, vfortxt, dom, data, env) {
+export function parseVfor(renderer, vfortxt, dom, data, runtime) {
   dom.removeAttribute('v-for')
   const matches = vforRegex.exec(vfortxt)
   if (matches?.length !== 6) {
@@ -94,7 +97,7 @@ export function parseVfor(renderer, vfortxt, dom, data, env) {
   anchor.style.display = 'none'
   const cacheId = vproxy.GenUniqueID()
   const cache = Object.create(null)
-  const parentScope = resolveContext(renderer, dom.parentNode, env).scope
+  const parentScope = resolveRuntime(renderer, dom.parentNode, runtime).scope
   parentScope?.addCleanup(() => {
     Object.keys(cache).forEach((key) => {
       const cached = cache[key]
@@ -107,10 +110,10 @@ export function parseVfor(renderer, vfortxt, dom, data, env) {
     })
   })
   dom.parentNode.replaceChild(anchor, dom)
-  renderer.watch(parentScope || resolveContext(renderer, anchor.parentNode || dom.parentNode, env).scope, () => {
+  renderer.watch(parentScope || resolveRuntime(renderer, anchor.parentNode || dom.parentNode, runtime).scope, () => {
     const valueName = matches[3] || matches[2]
     const keyName = matches[4]
-    let iterations = vproxy.Run(matches[5], data, env)
+    let iterations = vproxy.Run(matches[5], data, runtime)
     const rendered = new Set()
 
     if (typeof iterations === 'function') {
@@ -183,29 +186,29 @@ export function parseVfor(renderer, vfortxt, dom, data, env) {
       }
       tmpData = vproxy.Wrap(tmpData, data)
       setVforData(newDom, tmpData)
-      ensureStructuralBoundary(newDom, tmpData, env)
+      ensureStructuralBoundary(newDom, tmpData, runtime)
 
       anchor.parentNode.insertBefore(newDom, refNode)
       const vif = dom.getAttribute('v-if')
       if (!vif) {
-        renderer.parseDom(newDom, tmpData, env, resolveContext(renderer, newDom, env).scope)
+        renderer.parseDom(newDom, tmpData, runtime, resolveRuntime(renderer, newDom, runtime).scope)
         refNode = newDom
         continue
       }
 
       newDom.removeAttribute('v-if')
       let watchId = -1
-      watchId = renderer.watch(resolveContext(renderer, newDom, env).scope, () => {
+      watchId = renderer.watch(resolveRuntime(renderer, newDom, runtime).scope, () => {
         const cachedDom = cache[cacheKey]
         if (!cachedDom) {
           vproxy.Cancel(watchId)
           return
         }
-        const res = vproxy.Run(vif, tmpData, env)
+        const res = vproxy.Run(vif, tmpData, runtime)
         if (res) {
           if (!isParsed(cachedDom)) {
-            ensureStructuralBoundary(cachedDom, tmpData, env)
-            renderer.parseDom(cachedDom, tmpData, env, resolveContext(renderer, cachedDom, env).scope)
+            ensureStructuralBoundary(cachedDom, tmpData, runtime)
+            renderer.parseDom(cachedDom, tmpData, runtime, resolveRuntime(renderer, cachedDom, runtime).scope)
           }
           if (!cachedDom.isConnected) {
             let found = false
@@ -239,14 +242,14 @@ export function parseVfor(renderer, vfortxt, dom, data, env) {
   })
 }
 
-export function parseVif(renderer, nodes, data, env) {
+export function parseVif(renderer, nodes, data, runtime) {
   let ifCache = { now: document.createElement('div'), conds: [], doms: [] }
   const handleIf = (cache) => {
     const ifData = { now: cache.now, conds: cache.conds, doms: cache.doms }
     const ifList = ifData.conds.map((cond) => cond === '' ? 'true' : `Boolean(${cond})`)
     const ifExpr = `let res = [${ifList.join(',')}]\n return res.indexOf(true)`
-    renderer.watch(resolveContext(renderer, ifData.now, env).scope, () => {
-      const targetIndex = vproxy.Run(ifExpr, data, env)
+    renderer.watch(resolveRuntime(renderer, ifData.now, runtime).scope, () => {
+      const targetIndex = vproxy.Run(ifExpr, data, runtime)
       let targetDom = ifData.doms[targetIndex]
       if (!targetDom) {
         targetDom = document.createElement('div')
@@ -274,8 +277,8 @@ export function parseVif(renderer, nodes, data, env) {
             targetDom.appendChild(child.cloneNode(true))
           })
         }
-        ensureStructuralBoundary(targetDom, data, env)
-        renderer.parseDom(targetDom, data, env, resolveContext(renderer, targetDom, env).scope)
+        ensureStructuralBoundary(targetDom, data, runtime)
+        renderer.parseDom(targetDom, data, runtime, resolveRuntime(renderer, targetDom, runtime).scope)
       }
     })
   }

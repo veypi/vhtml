@@ -1,5 +1,5 @@
 import vproxy from '../vproxy.js'
-import { applyScopedAliases, createEnvContext, createScopedContext } from './context.js'
+import { createModuleContext, createModuleHttpClient, createRuntimeContext } from './context.js'
 
 function trimTrailingSlash(value) {
   if (!value || value === '/') {
@@ -90,9 +90,9 @@ export function scopedBaseURL(scoped = '') {
   return `${window.location.origin}${normalizedScoped}`
 }
 
-export class ModuleEnvManager {
+export class ModuleContextManager {
   constructor() {
-    this.envMap = new Map()
+    this.modMap = new Map()
     this.wrappers = []
     this.sharedLocale = vproxy.Wrap({
       locale: localStorage.getItem('i18n_locale') || 'zh-CN',
@@ -114,47 +114,49 @@ export class ModuleEnvManager {
       return
     }
     this.wrappers.push(wrapper)
-    for (const [scoped, env] of this.envMap.entries()) {
-      wrapper(scoped, env)
+    for (const [scoped, mod] of this.modMap.entries()) {
+      wrapper(scoped, mod)
     }
   }
 
   clear() {
-    this.envMap.clear()
+    this.modMap.clear()
     this.wrappers = []
   }
 
-  async getEnv(scoped = '', temp = {}) {
+  async getModule(scoped = '', temp = {}) {
     const normalizedScoped = normalizeScoped(scoped || temp.scoped || '')
-    let env = this.envMap.get(normalizedScoped)
-    if (!env) {
-      env = await this.createEnv(normalizedScoped, temp)
-      this.envMap.set(normalizedScoped, env)
-      return env
+    let mod = this.modMap.get(normalizedScoped)
+    if (!mod) {
+      mod = await this.createModule(normalizedScoped, temp)
+      this.modMap.set(normalizedScoped, mod)
+      return mod
     }
-    Object.assign(env, temp)
-    env.scoped = normalizedScoped
-    env.$module.scoped = normalizedScoped
-    env.$module.baseURL = scopedBaseURL(normalizedScoped)
-    return env
+    Object.assign(mod, temp)
+    mod.scoped = normalizedScoped
+    mod.baseURL = scopedBaseURL(normalizedScoped)
+    return mod
   }
 
-  async createEnv(scoped, temp = {}) {
+  async createModule(scoped, temp = {}) {
     const baseURL = scopedBaseURL(scoped)
-    const scopedContext = createScopedContext(scoped, baseURL, this.sharedLocale, temp)
-    await this.loadEnvConfig(scopedContext)
+    const mod = createModuleContext(scoped, baseURL, this.sharedLocale, {
+      ...temp,
+      $axios: createModuleHttpClient(baseURL),
+    })
+    await this.loadEnvConfig(mod)
     for (const wrapper of this.wrappers) {
-      wrapper(scoped, scopedContext)
+      wrapper(scoped, mod)
     }
-    return scopedContext
+    return mod
   }
 
-  async loadEnvConfig(env) {
-    const envUrl = `${scopedBaseURL(env.scoped)}/env.js`
+  async loadEnvConfig(mod) {
+    const envUrl = `${scopedBaseURL(mod.scoped)}/env.js`
     try {
       const envModule = await import(envUrl)
       if (typeof envModule.default === 'function') {
-        await envModule.default(env, this)
+        await envModule.default(mod, this)
       }
     } catch (error) {
       console.warn(`error loading ${envUrl}: ${error}`)
@@ -162,13 +164,10 @@ export class ModuleEnvManager {
   }
 }
 
-export function createRuntimeEnv(parentEnv = null, scopedContext = null, initial = {}) {
-  const env = createEnvContext(parentEnv, initial)
-  applyScopedAliases(env, scopedContext)
-  Object.assign(env, initial)
-  return env
+export function createRuntimeEnv(parentRuntime = null, mod = null, initialSys = {}, initialCtx = {}) {
+  return createRuntimeContext(parentRuntime, mod, initialSys, initialCtx)
 }
 
-const moduleEnvManager = new ModuleEnvManager()
+const moduleContextManager = new ModuleContextManager()
 
-export default moduleEnvManager
+export default moduleContextManager
