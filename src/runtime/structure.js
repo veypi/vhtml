@@ -4,7 +4,7 @@ import ComponentScope from './scope.js'
 import { clearNodeState, findNearestInstance, findNearestRouter, getInstance, getRuntime, getScope, getSourceNodes, getVforData, isParsed, setData, setInstance, setRouter, setRuntime, setScope, setVforData } from './dom.js'
 
 const varRegex = /{{|}}/g
-const vforRegex = /^(\s*(\w+)\s+in\s+|\((\w+),\s*(\w+)\)\s+in\s+)([\w\?\$\.\[\]\(\)'"]+)$/
+const vforRegex = /^\s*(?:\((\w+)\s*,\s*(\w+)\)|(\w+))\s+in\s+(.+?)\s*$/
 
 function resolveRuntime(renderer, dom, fallbackRuntime = null) {
   return renderer.runtimeOf ? renderer.runtimeOf(dom, fallbackRuntime) : {
@@ -89,10 +89,13 @@ export function parseTextNode(renderer, dom, data, runtime, scope = renderer.sco
 export function parseVfor(renderer, vfortxt, dom, data, runtime) {
   dom.removeAttribute('v-for')
   const matches = vforRegex.exec(vfortxt)
-  if (matches?.length !== 6) {
+  if (matches?.length !== 5) {
     console.error('vfor error:', vfortxt)
     return
   }
+  const valueName = matches[1] || matches[3]
+  const keyName = matches[2]
+  const listExpr = matches[4]
   const anchor = document.createElement('div')
   anchor.style.display = 'none'
   const cacheId = vproxy.GenUniqueID()
@@ -111,9 +114,7 @@ export function parseVfor(renderer, vfortxt, dom, data, runtime) {
   })
   dom.parentNode.replaceChild(anchor, dom)
   renderer.watch(parentScope || resolveRuntime(renderer, anchor.parentNode || dom.parentNode, runtime).scope, () => {
-    const valueName = matches[3] || matches[2]
-    const keyName = matches[4]
-    let iterations = vproxy.Run(matches[5], data, runtime)
+    let iterations = vproxy.Run(listExpr, data, runtime)
     const rendered = new Set()
 
     if (typeof iterations === 'function') {
