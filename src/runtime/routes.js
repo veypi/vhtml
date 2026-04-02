@@ -95,13 +95,15 @@ export function prepareLayoutDom(layoutRoot) {
 }
 
 export function normalizeRoutesModule(moduleExports) {
-  if (Array.isArray(moduleExports?.default)) {
+  if (moduleExports?.default) {
+    moduleExports = moduleExports.default
+  }
+  if (Array.isArray(moduleExports)) {
     return {
-      routes: moduleExports.default,
-      beforeEnter: moduleExports.beforeEnter || null,
-      afterEnter: moduleExports.afterEnter || null,
+      routes: moduleExports
     }
   }
+  console.log(moduleExports)
   if (Array.isArray(moduleExports?.routes)) {
     return {
       routes: moduleExports.routes,

@@ -738,6 +738,7 @@ class RouterView {
       this.handleNavigation(event)
     })
     const routeModule = await this.loadRoutes()
+    console.log(routeModule)
     this.beforeEnter = routeModule.beforeEnter || null
     this.afterEnter = routeModule.afterEnter || null
     this.addRoutes(routeModule.routes)
