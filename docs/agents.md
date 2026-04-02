@@ -37,8 +37,8 @@ ui/
 Custom tags map to HTML files by kebab path:
 
 ```html
-<user-card></user-card>   # /user/card.html
-<agent-list></agent-list> # /agent/list.html in the current module
+<user-card></user-card> # /user/card.html <agent-list></agent-list> #
+/agent/list.html in the current module
 ```
 
 ## Component File Shape
@@ -48,24 +48,28 @@ Recommended structure:
 ```html
 <!DOCTYPE html>
 <html>
-<head>
-  <meta name="description" content="Counter" details="Simple counter" />
-  <title>Counter</title>
-</head>
+  <head>
+    <meta name="description" content="Counter" details="Simple counter" />
+    <title>Counter</title>
+  </head>
 
-<style>
-  body { display: flex; gap: 12px; align-items: center; }
-</style>
+  <style>
+    body {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+  </style>
 
-<body>
-  <button @click="count--">-</button>
-  <span>{{ count }}</span>
-  <button @click="count++">+</button>
-</body>
+  <body>
+    <button @click="count--">-</button>
+    <span>{{ count }}</span>
+    <button @click="count++">+</button>
+  </body>
 
-<script setup>
-  count = 0
-</script>
+  <script setup>
+    count = 0;
+  </script>
 </html>
 ```
 
@@ -98,7 +102,10 @@ System variable pool. Default entries are `$router`, `$emit`, and `$message`.
 Parent-to-child context chain, inherited through nesting; use it for local tree context such as `theme`, `mode`, `recordId`, not module-wide services:
 
 ```html
-<script setup> $ctx.recordId = 'abc123' </script> # children can read recordId
+<script setup>
+  $ctx.recordId = "abc123";
+</script>
+# children can read recordId
 ```
 
 ### `$mod`
@@ -168,22 +175,27 @@ v-i18n scan --fix --removeUnused
 Common bindings:
 
 ```html
-<div>{{ title }}</div>                           # text
-<img :src="avatarUrl" :title="name" />          # dynamic attributes
-<button @click="save">Save</button>             # events
+<div>{{ title }}</div>
+# text <img :src="avatarUrl" :title="name" /> # dynamic attributes
+<button @click="save">Save</button> # events
 <button @click.stop="removeItem(id)">Delete</button>
-<input v:model="form.name" />                   # two-way binding
-<div v-show="loading">Loading...</div>          
-<div v-if="loading">Loading...</div>            # conditionals
+<input v:model="form.name" /> # two-way binding
+<div v-show="loading">Loading...</div>
+<div v-if="loading">Loading...</div>
+# conditionals
 <div v-else>No data</div>
-<div v-for="item in items">{{ item.name }}</div> # loops
-<div vsrc="/local/preview.html"></div>          # explicit component/page loading
+<div v-for="item in items">{{ item.name }}</div>
+# loops
+<div vsrc="/local/preview.html"></div>
+# explicit component/page loading
 ```
 
 Always initialize list variables in `<script setup>`, and do not mix `v-if` and `v-for` on the same node:
 
 ```html
-<script setup> items = [] </script>
+<script setup>
+  items = [];
+</script>
 ```
 
 ## Refs and Parent-to-Child Calls
@@ -192,7 +204,7 @@ Always initialize list variables in `<script setup>`, and do not mix `v-if` and 
 
 ```html
 <script setup>
-  reloadChild = () => $refs.panel.$data.reload()
+  reloadChild = () => $refs.panel.$data.reload();
 </script>
 <child-panel ref="panel"></child-panel>
 ```
@@ -203,11 +215,13 @@ Always initialize list variables in `<script setup>`, and do not mix `v-if` and 
 
 ```html
 <card-shell>
-  <div vslot="header">Header</div> # projected content uses parent context
+  <div vslot="header">Header</div>
+  # projected content uses parent context
   <div>Body</div>
 </card-shell>
 <body>
-  <header><vslot name="header"></vslot></header> # child fallback uses child context
+  <header><vslot name="header"></vslot></header>
+  # child fallback uses child context
   <main><vslot></vslot></main>
 </body>
 ```
@@ -221,15 +235,15 @@ Projected content runs in the caller runtime, fallback content runs in the child
 ```js
 export default async ($mod, manager) => {
   $mod.$axios.interceptors.request.use((config) => {
-    config.headers.Authorization = `Bearer ${$mod.token}`
-    return config
-  })
+    config.headers.Authorization = `Bearer ${$mod.token}`;
+    return config;
+  });
 
   $mod.$axios.interceptors.response.use(
     (response) => response.data,
     (error) => Promise.reject(error?.response?.data || error)
-  )
-}
+  );
+};
 ```
 
 Use it for module services, module config, i18n setup, and axios setup; do not use it for route guards, per-page state, component-local data, or local router behavior.
@@ -241,34 +255,39 @@ Use it for module services, module config, i18n setup, and axios setup; do not u
 ```js
 export default [...] # route array
 export default { routes: [...], beforeEnter, afterEnter } # route object
-export default ({ $scoped, router }) => ({ routes: [...], beforeEnter, afterEnter }) # factory
+export default ({ $mod, router }) => ({ routes: [...], beforeEnter, afterEnter }) # factory
 ```
 
 Recommended:
 
 ```js
-export default ({ $scoped, router }) => ({
+export default ({ $mod, router }) => ({
   routes: [
-    { path: '/', component: '/page/index.html', name: 'home', layout: 'default' },
-    { path: '/login', component: '/page/login.html', name: 'login' },
-    { path: '/user/:id', component: '/page/user.html', cacheKey: 'user' },
-    { path: '/edit/:id', component: '/page/edit.html', cacheKey: false },
     {
-      path: '/admin',
-      component: '/page/admin.html',
-      layout: 'admin',
-      meta: { auth: true },
-      children: [{ path: 'settings', component: '/page/admin_settings.html' }],
+      path: "/",
+      component: "/page/index.html",
+      name: "home",
+      layout: "default",
     },
-    { path: '*', component: '/page/404.html' },
+    { path: "/login", component: "/page/login.html", name: "login" },
+    { path: "/user/:id", component: "/page/user.html", cacheKey: "user" },
+    { path: "/edit/:id", component: "/page/edit.html", cacheKey: false },
+    {
+      path: "/admin",
+      component: "/page/admin.html",
+      layout: "admin",
+      meta: { auth: true },
+      children: [{ path: "settings", component: "/page/admin_settings.html" }],
+    },
+    { path: "*", component: "/page/404.html" },
   ],
   beforeEnter: async (to, from, next) => {
-    if (!$scoped.auth?.isLogin() && to.path !== '/login') {
-      next('/login')
-      return false
+    if (!$mod.auth?.isLogin() && to.path !== "/login") {
+      next("/login");
+      return false;
     }
   },
-})
+});
 ```
 
 Route record fields:
@@ -296,8 +315,7 @@ Use it for routes and route-level hooks. Do not put router config in `env.js`.
 Example:
 
 ```html
-<vrouter></vrouter>
-<vrouter routes="./sidebar_routes.js"></vrouter>
+<vrouter></vrouter> <vrouter routes="./sidebar_routes.js"></vrouter>
 ```
 
 Multiple `vrouter` instances are allowed.
@@ -305,11 +323,12 @@ Multiple `vrouter` instances are allowed.
 Navigation inside a router subtree should use anchors or `$router.push()`:
 
 ```html
-<a href="/agents">Agents</a> # router intercepts the click and adds active when the path matches
+<a href="/agents">Agents</a> # router intercepts the click and adds active when
+the path matches
 ```
 
 ```js
-$router.push('/agents')
+$router.push("/agents");
 ```
 
 ## Built-in Runtime APIs
