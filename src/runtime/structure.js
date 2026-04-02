@@ -100,15 +100,42 @@ export function parseVfor(renderer, vfortxt, dom, data, runtime) {
   anchor.style.display = 'none'
   const cacheId = vproxy.GenUniqueID()
   const cache = Object.create(null)
+  const createVforDom = (itemData, beforeNode, stripVif = false) => {
+    const newDom = dom.cloneNode(true)
+    if (stripVif) {
+      newDom.removeAttribute('v-if')
+    }
+    ensureStructuralBoundary(newDom, itemData, runtime)
+    anchor.parentNode.insertBefore(newDom, beforeNode)
+    renderer.parseDom(newDom, itemData, runtime, resolveRuntime(renderer, newDom, runtime).scope)
+    return newDom
+  }
+  const findInsertBefore = (currentKey) => {
+    let found = false
+    for (const key of Object.keys(cache)) {
+      if (key === currentKey) {
+        found = true
+        continue
+      }
+      if (!found) {
+        continue
+      }
+      const nextDom = cache[key]?.dom
+      if (nextDom?.isConnected) {
+        return nextDom
+      }
+    }
+    return anchor
+  }
   const parentScope = resolveRuntime(renderer, dom.parentNode, runtime).scope
   parentScope?.addCleanup(() => {
     Object.keys(cache).forEach((key) => {
       const cached = cache[key]
-      if (cached instanceof Array) {
-        cached.forEach((node) => node.remove())
-      } else {
-        cached?.remove?.()
+      if (cached?.watchId >= 0) {
+        vproxy.Cancel(cached.watchId)
       }
+      disposeBoundaryNode(cached?.dom)
+      cached?.dom?.remove?.()
       delete cache[key]
     })
   })
@@ -147,15 +174,12 @@ export function parseVfor(renderer, vfortxt, dom, data, runtime) {
 
     Object.keys(cache).forEach((key) => {
       if (!rendered.has(key)) {
-        if (cache[key] instanceof Array) {
-          cache[key].forEach((node) => {
-            disposeBoundaryNode(node)
-            node.remove()
-          })
-        } else {
-          disposeBoundaryNode(cache[key])
-          cache[key].remove()
+        const cached = cache[key]
+        if (cached?.watchId >= 0) {
+          vproxy.Cancel(cached.watchId)
         }
+        disposeBoundaryNode(cached?.dom)
+        cached?.dom?.remove?.()
         delete cache[key]
       }
     })
@@ -163,81 +187,74 @@ export function parseVfor(renderer, vfortxt, dom, data, runtime) {
     let refNode = anchor
     for (let index = items.length - 1; index >= 0; index--) {
       const { key, cacheKey, value } = items[index]
-      const currentDom = cache[cacheKey]
-      if (currentDom) {
-        const currentData = getVforData(currentDom)
+      const currentRecord = cache[cacheKey]
+      if (currentRecord) {
+        const currentData = currentRecord.data || getVforData(currentRecord.dom)
         if (currentData) {
           currentData[valueName] = value
+          if (keyName) {
+            currentData[keyName] = key === '0' ? 0 : (Number(key) || key)
+          }
         }
-        if (keyName) {
-          currentData[keyName] = key === '0' ? 0 : (Number(key) || key)
-        }
-        if (currentDom.nextSibling !== refNode || !currentDom.isConnected) {
+        const currentDom = currentRecord.dom
+        if (currentDom && (currentDom.nextSibling !== refNode || !currentDom.isConnected)) {
           anchor.parentNode.insertBefore(currentDom, refNode)
         }
-        refNode = currentDom
+        if (currentDom?.isConnected) {
+          refNode = currentDom
+        }
         continue
       }
 
-      const newDom = dom.cloneNode(true)
-      cache[cacheKey] = newDom
       let tmpData = { [valueName]: value }
       if (keyName) {
         tmpData[keyName] = key === '0' ? 0 : (Number(key) || key)
       }
       tmpData = vproxy.Wrap(tmpData, data)
-      setVforData(newDom, tmpData)
-      ensureStructuralBoundary(newDom, tmpData, runtime)
+      const record = {
+        data: tmpData,
+        dom: null,
+        watchId: -1,
+      }
+      cache[cacheKey] = record
 
-      anchor.parentNode.insertBefore(newDom, refNode)
       const vif = dom.getAttribute('v-if')
       if (!vif) {
-        renderer.parseDom(newDom, tmpData, runtime, resolveRuntime(renderer, newDom, runtime).scope)
+        const newDom = createVforDom(tmpData, refNode)
+        setVforData(newDom, tmpData)
+        record.dom = newDom
         refNode = newDom
         continue
       }
 
-      newDom.removeAttribute('v-if')
-      let watchId = -1
-      watchId = renderer.watch(resolveRuntime(renderer, newDom, runtime).scope, () => {
-        const cachedDom = cache[cacheKey]
-        if (!cachedDom) {
-          vproxy.Cancel(watchId)
+      record.watchId = renderer.watch(parentScope || resolveRuntime(renderer, anchor.parentNode || dom.parentNode, runtime).scope, () => {
+        const cached = cache[cacheKey]
+        if (!cached) {
+          vproxy.Cancel(record.watchId)
           return
         }
-        const res = vproxy.Run(vif, tmpData, runtime)
+        return vproxy.Run(vif, cached.data, runtime)
+      }, (res) => {
+        const cached = cache[cacheKey]
+        if (!cached) {
+          vproxy.Cancel(record.watchId)
+          return
+        }
         if (res) {
-          if (!isParsed(cachedDom)) {
-            ensureStructuralBoundary(cachedDom, tmpData, runtime)
-            renderer.parseDom(cachedDom, tmpData, runtime, resolveRuntime(renderer, cachedDom, runtime).scope)
+          if (!cached.dom) {
+            const newDom = createVforDom(cached.data, findInsertBefore(cacheKey), true)
+            setVforData(newDom, cached.data)
+            cached.dom = newDom
           }
-          if (!cachedDom.isConnected) {
-            let found = false
-            let before = anchor
-            for (const tmpKey in cache) {
-              if (tmpKey === cacheKey) {
-                found = true
-                continue
-              }
-              if (found && cache[tmpKey].isConnected) {
-                before = cache[tmpKey]
-                break
-              }
-            }
-            anchor.parentNode.insertBefore(cachedDom, before)
+          if (!cached.dom.isConnected) {
+            anchor.parentNode.insertBefore(cached.dom, findInsertBefore(cacheKey))
           }
-        } else if (cachedDom.isConnected) {
-          cachedDom.remove()
-        } else {
-          renderer.onMountedRun(cachedDom, () => {
-            cachedDom.remove()
-          })
+        } else if (cached.dom) {
+          disposeBoundaryNode(cached.dom)
+          cached.dom.remove()
+          cached.dom = null
         }
       })
-
-      if (newDom.isConnected) {
-        refNode = newDom
-      }
     }
     return _
   })
