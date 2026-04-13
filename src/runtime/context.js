@@ -2,6 +2,7 @@ import EventBus from '../vbus.js'
 import axios from '../axios.min.js'
 import I18n from '../i18n.js'
 import vmessage from '../vmessage.js'
+import vproxy from '../vproxy.js'
 
 export function getModuleContext(source = null) {
   if (!source || typeof source !== 'object') {
@@ -45,11 +46,8 @@ export function createSystemContext(parent = null, initial = {}) {
 }
 
 export function createCtxContext(parent = null, initial = {}) {
-  const ctx = Object.create(parent || null)
-  if (initial && typeof initial === 'object') {
-    Object.assign(ctx, initial)
-  }
-  return ctx
+  const seed = initial && typeof initial === 'object' ? { ...initial } : {}
+  return vproxy.Wrap(seed, parent || undefined)
 }
 
 export function createRuntimeContext(parent = null, mod = null, initialSys = {}, initialCtx = {}) {

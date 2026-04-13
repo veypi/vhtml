@@ -94,16 +94,14 @@ export function prepareLayoutDom(layoutRoot) {
   return layoutRoot
 }
 
-export function normalizeRoutesModule(moduleExports) {
-  if (moduleExports?.default) {
-    moduleExports = moduleExports.default
-  }
+function toNormalizedRoutes(moduleExports) {
   if (Array.isArray(moduleExports)) {
     return {
-      routes: moduleExports
+      routes: moduleExports,
+      beforeEnter: null,
+      afterEnter: null,
     }
   }
-  console.log(moduleExports)
   if (Array.isArray(moduleExports?.routes)) {
     return {
       routes: moduleExports.routes,
@@ -111,18 +109,30 @@ export function normalizeRoutesModule(moduleExports) {
       afterEnter: moduleExports.afterEnter || null,
     }
   }
-  if (moduleExports?.default && typeof moduleExports.default === 'object') {
-    return {
-      routes: moduleExports.default.routes || [],
-      beforeEnter: moduleExports.default.beforeEnter || moduleExports.beforeEnter || null,
-      afterEnter: moduleExports.default.afterEnter || moduleExports.afterEnter || null,
-    }
-  }
   return {
     routes: [],
     beforeEnter: moduleExports?.beforeEnter || null,
     afterEnter: moduleExports?.afterEnter || null,
   }
+}
+
+export async function normalizeRoutesModule(moduleExports, context = {}) {
+  let resolvedExports = moduleExports
+  if (typeof resolvedExports?.default === 'function') {
+    resolvedExports = await resolvedExports.default(context)
+  } else if (typeof resolvedExports === 'function') {
+    resolvedExports = await resolvedExports(context)
+  } else if (resolvedExports?.default) {
+    const normalized = toNormalizedRoutes(resolvedExports.default)
+    if (normalized.routes.length || normalized.beforeEnter || normalized.afterEnter) {
+      return {
+        routes: normalized.routes,
+        beforeEnter: normalized.beforeEnter || resolvedExports.beforeEnter || null,
+        afterEnter: normalized.afterEnter || resolvedExports.afterEnter || null,
+      }
+    }
+  }
+  return toNormalizedRoutes(resolvedExports)
 }
 
 export default {

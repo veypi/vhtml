@@ -113,17 +113,10 @@ const isProxy = Symbol("isProxy")
 const DataID = Symbol("DataID")
 const DataBind = Symbol("bind")
 const rootObj = Symbol("root")
-const rootArg = Symbol("root arg")
 
 
 function SetDataRoot(data, root) {
   data[rootObj] = root
-  Object.keys(root).forEach(k => {
-    if (k in data) {
-    } else {
-      data[k] = rootArg
-    }
-  })
 }
 
 function isProxyType(v) {
@@ -225,8 +218,9 @@ function Wrap(data, root = undefined) {
       } else if (key === DataBind) {
         return listeners
       }
+      const hasLocalKey = Reflect.has(target, key)
       const value = Reflect.get(target, key, receiver)
-      if (value === rootArg) {
+      if (!hasLocalKey && target[rootObj] && key in target[rootObj]) {
         return target[rootObj][key]
       }
       if (typeof key === 'symbol' && stopChecking) {
@@ -256,10 +250,6 @@ function Wrap(data, root = undefined) {
     },
     set(target, key, newValue, receiver) {
       const oldValue = Reflect.get(target, key, receiver)
-      if (oldValue === rootArg) {
-        target[rootObj][key] = newValue
-        return true
-      }
       if (oldValue === newValue) {
         return true
       } else if (stopChecking) {
@@ -300,6 +290,12 @@ function Wrap(data, root = undefined) {
         }
       }
       return result;
+    },
+    has(target, key) {
+      if (Reflect.has(target, key)) {
+        return true
+      }
+      return Boolean(target[rootObj] && key in target[rootObj])
     },
     deleteProperty(target, key) {
       const result = Reflect.deleteProperty(target, key);

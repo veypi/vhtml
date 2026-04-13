@@ -44,6 +44,7 @@ class I18n {
       count,
       ...vars
     } = options
+    const replaceVars = count === undefined ? vars : { ...vars, count }
 
     let str = this.messages[locale]?.[key]
       || this.messages[fallback]?.[key]
@@ -59,8 +60,8 @@ class I18n {
     if (typeof str !== 'string') return key
 
     // 变量替换 {var} 或 {{var}}
-    Object.keys(vars).forEach(k => {
-      str = str.replace(new RegExp(`{{?${k}}}?`, 'g'), vars[k])
+    Object.keys(replaceVars).forEach(k => {
+      str = str.replace(new RegExp(`{{?${k}}}?`, 'g'), replaceVars[k])
     })
 
     return str

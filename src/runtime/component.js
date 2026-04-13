@@ -7,7 +7,7 @@ import { createRuntimeEnv } from './env.js'
 import { parseImports } from './imports.js'
 import { registerScriptLifecycle } from './lifecycle.js'
 import { createSlotContents } from './slots.js'
-import { findNearestInstance, findNearestRouter, getData, getEvents, getInstance, getRuntime, getScope, getSourceNodes, getVsrc, setData, setInstance, setRouter, setRuntime, setScope, setSlotContents, setSourceNodes, setVsrc } from './dom.js'
+import { findNearestInstance, findNearestRouter, getEvents, getInstance, getRuntime, getScope, getSourceNodes, setData, setInstance, setRouter, setRuntime, setScope, setSlotContents, setSourceNodes, setVsrc } from './dom.js'
 
 function resolveRuntime(renderer, dom, fallbackRuntime = null) {
   return renderer.runtimeOf ? renderer.runtimeOf(dom, fallbackRuntime) : {
@@ -88,7 +88,7 @@ export async function setupRef(renderer, dom, data, parentRuntime, target, singl
   const componentRuntime = resolveRuntime(renderer, dom, parentRuntime)
   if (target.setup) {
     let script = target.setup.innerHTML
-    script = await parseImports(script, originData, componentRuntime.runtime, getVsrc(dom))
+    script = await parseImports(script, originData, componentRuntime.runtime, target.url)
     await vproxy.AsyncRun(script, originData, componentRuntime.runtime, {
       $node: dom,
       $watch: (target, callback, options) => {

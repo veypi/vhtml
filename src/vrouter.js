@@ -219,10 +219,11 @@ class Page {
     this.node.innerHTML = ''
     this.node.append(this.layoutDom)
     await this.vhtml.parseRef(`/layout/${layout}`, this.layoutDom, {}, runtime, null, true)
-    this.layoutInstance.runtime = getRuntime(this.layoutDom) || runtime || null
+    const layoutRuntime = getRuntime(this.layoutDom) || runtime || null
+    this.layoutInstance.runtime = layoutRuntime
     this.outlet().innerHTML = ''
     this.outlet().append(this.dom)
-    await this.vhtml.parseRef(this.htmlPath, this.dom, {}, runtime, null)
+    await this.vhtml.parseRef(this.htmlPath, this.dom, {}, layoutRuntime, null)
     this.instance.host = this.dom
     this.instance.runtime = getRuntime(this.dom) || this.layoutInstance.runtime
     this.activate()
@@ -708,7 +709,10 @@ class RouterView {
 
   async loadRoutes() {
     const routesUrl = this.resolveRoutesUrl(this.routesSource, this.runtime || {})
-    return normalizeRoutesModule(await import(routesUrl))
+    return normalizeRoutesModule(await import(routesUrl), {
+      $mod: this.runtime?.$mod || null,
+      router: this,
+    })
   }
 
   async handleNavigation(event) {
@@ -738,7 +742,6 @@ class RouterView {
       this.handleNavigation(event)
     })
     const routeModule = await this.loadRoutes()
-    console.log(routeModule)
     this.beforeEnter = routeModule.beforeEnter || null
     this.afterEnter = routeModule.afterEnter || null
     this.addRoutes(routeModule.routes)

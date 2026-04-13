@@ -1,6 +1,16 @@
 import vproxy from '../vproxy.js'
 import { createModuleContext, createModuleHttpClient, createRuntimeContext } from './context.js'
 
+const moduleReservedKeys = new Set([
+  'scoped',
+  'baseURL',
+  'origin',
+  '$axios',
+  '$bus',
+  '$i18n',
+  '$t',
+])
+
 function trimTrailingSlash(value) {
   if (!value || value === '/') {
     return value || ''
@@ -90,6 +100,18 @@ export function scopedBaseURL(scoped = '') {
   return `${window.location.origin}${normalizedScoped}`
 }
 
+function mergeModulePatch(mod, patch = {}) {
+  if (!patch || typeof patch !== 'object') {
+    return
+  }
+  Object.entries(patch).forEach(([key, value]) => {
+    if (moduleReservedKeys.has(key)) {
+      return
+    }
+    mod[key] = value
+  })
+}
+
 export class ModuleContextManager {
   constructor() {
     this.modMap = new Map()
@@ -124,26 +146,27 @@ export class ModuleContextManager {
     this.wrappers = []
   }
 
-  async getModule(scoped = '', temp = {}) {
-    const normalizedScoped = normalizeScoped(scoped || temp.scoped || '')
+  async getModule(scoped = '') {
+    const normalizedScoped = normalizeScoped(scoped || '')
     let mod = this.modMap.get(normalizedScoped)
     if (!mod) {
-      mod = await this.createModule(normalizedScoped, temp)
+      mod = await this.createModule(normalizedScoped)
       this.modMap.set(normalizedScoped, mod)
-      return mod
     }
-    Object.assign(mod, temp)
-    mod.scoped = normalizedScoped
-    mod.baseURL = scopedBaseURL(normalizedScoped)
     return mod
   }
 
-  async createModule(scoped, temp = {}) {
+  patchModule(mod, patch = {}) {
+    mergeModulePatch(mod, patch)
+    return mod
+  }
+
+  async createModule(scoped, patch = {}) {
     const baseURL = scopedBaseURL(scoped)
     const mod = createModuleContext(scoped, baseURL, this.sharedLocale, {
-      ...temp,
       $axios: createModuleHttpClient(baseURL),
     })
+    this.patchModule(mod, patch)
     await this.loadEnvConfig(mod)
     for (const wrapper of this.wrappers) {
       wrapper(scoped, mod)
