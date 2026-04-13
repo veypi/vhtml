@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>vhtml</title>
   <link rel="stylesheet" href="/assets/global.css">
-  <script type="module" key='vhtml' src="/vhtml.min.js"></script>
+  <script type="module" key='vhtml' src="./vhtml.min.js"></script>
 </head>
 
 <body>
-  <vrouter routes='routes.js' style="height: 100%; width: 100%;">
-  </vrouter>
+  <!-- <vrouter style="height: 100%; width: 100%;"></vrouter> -->
+  <div v-if='a%2==0' v-for='a in 20'>
+    {{a}}
+  </div>
 </body>
 
 </html>
