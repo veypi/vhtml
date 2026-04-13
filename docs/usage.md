@@ -582,7 +582,7 @@ export default {
 如果路由钩子需要模块能力，推荐直接读取 `$mod`：
 
 ```js
-export default ({ $mod, router }) => ({
+export default ({ $mod }) => ({
   routes: [
     { path: '/', component: '/page/index.html', name: 'home' },
     { path: '/login', component: '/page/login.html', name: 'login' },
