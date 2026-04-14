@@ -155,10 +155,16 @@ export default async ($mod) => {
 
 Use translation keys in templates and scripts instead of hard-coded UI text. Useful APIs: `$t(key, vars)`, `$i18n.setLocale(lang)`, `$i18n.getLocale()`, `$i18n.load(messages)`.
 
-For key scanning、cleanup、sort and add, please must use `v-i18n`:
+For key scanning, cleanup, sorting and adding, you must use `v-i18n`:
 
 ```bash
+# Scan code, auto-cleanup and report missing keys
 v-i18n scan
+# Add missing translations via JSON
+v-i18n add -json '{"zh-CN":{"key":"值"},"en-US":{"key":"value"}}'
+
+# If not exists, install v-i18n
+go install github.com/veypi/vhtml/cmd/v-i18n@latest
 ```
 
 ## Script Types

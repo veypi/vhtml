@@ -1,6 +1,6 @@
 {
   "name": "@veypi/vhtml",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "vhtml is a lightweight JavaScript library for parsing and manipulating HTML content with ease.",
   "type": "module",
   "module": "./dist/vhtml.js",

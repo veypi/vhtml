@@ -18,7 +18,7 @@ import (
 	"github.com/veypi/vigo/logv"
 )
 
-var version = "v0.7.1"
+var version = "v0.7.2"
 
 // 全局配置参数
 var globalOpts = struct {
@@ -43,7 +43,7 @@ var globalOpts = struct {
 	SortKeys:        true,
 }
 
-var cmdMain = flags.New("v-i18n", "vhtml 项目的国际化（i18n）管理工具\nversion: "+version)
+var cmdMain = flags.New("v-i18n", "vhtml 框架的国际化（i18n）管理工具\nversion: "+version)
 
 func init() {
 	cmdMain.AutoRegister(&globalOpts)
