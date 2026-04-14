@@ -192,7 +192,7 @@ func printAddCommand(missingKeys []string, translations map[string]map[string]in
 	if err != nil {
 		return
 	}
-	fmt.Printf("添加请执行: v-i18n add '%s'\n", string(jsonBytes))
+	fmt.Printf("添加请执行: v-i18n add -json '%s'\n", string(jsonBytes))
 }
 
 // scanFiles 扫描文件中的 i18n keys
