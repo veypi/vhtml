@@ -5,41 +5,40 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [0.7.5] - 2026-04-15
-
-### 变更
-- 升级 `vigo` 依赖从 `v0.6.0` 到 `v0.6.5`，修复 `flags` API 兼容性问题以支持远程安装。
-- 重构 `v-i18n` CLI：精简为仅保留 `scan` 和 `add` 两个命令。
-  - `scan`：自动排序、自动清理未使用/空值 key、报告缺失项、输出可直接复制执行的 `add -json` 命令。
-  - `add`：支持通过管道、`-json` 参数或位置参数传入 JSON。
-- 在 `v-i18n` 中实现自定义 JSON 序列化，确保输出顺序固定（`defaultLanguage` 排在最前面）。
-- 更新 `docs/agents.md`，补充新的 `v-i18n` 使用示例和 `go install` 安装说明。
-
-### 修复
-- 修复因 `vigo` 版本解析不兼容导致的 `v-i18n` 远程安装失败问题。
-
 ## [0.7.4] - 2026-04-15
 
 ### 变更
-- 将 `v-i18n` CLI 版本号和 `package.json` 对齐到项目统一版本。
+- 重构 `v-i18n` CLI：精简为仅保留 `scan` 和 `add` 两个命令，支持固定顺序的 JSON 输出。
+- 升级 `vigo` 依赖从 `v0.6.0` 到 `v0.6.5`，修复 `flags` API 兼容性问题。
+
+### 修复
+- 修复 `v-i18n scan` 输出指令，改为可直接复制执行的 `v-i18n add -json` 格式。
 
 ## [0.7.3] - 2026-04-15
 
-### 修复
-- 修复 `v-i18n scan` 输出，改为 `v-i18n add -json` 以便直接复制粘贴执行。
-- 同步 `ui/langs.json` 为最新扫描结果。
+### 变更
+- 将 `v-i18n` CLI 版本号与根目录 `package.json` 统一，移除独立版本管理。
+- 更新 `docs/agents.md` 中 `v-i18n` 的使用示例和安装说明。
 
 ## [0.7.2] - 2026-04-15
 
 ### 变更
-- 更新 `docs/agents.md` 中 `v-i18n` 的使用方式，改为使用 `-json` 参数。
-- 将 `v-i18n` CLI 版本与根目录 `package.json` 保持一致。
+- 重构运行时模块上下文和路由初始化逻辑（`refactor(runtime): Restructure module context and routing initialization`）。
+- 规范化路由模块的默认导出处理（`fix(router): Normalize routes module with default export handling`）。
 
 ## [0.7.1] - 2026-04-15
 
+### 新增
+- 路由系统新增尾部斜杠重定向，并防止重复导航（`feat(router): Add trailing slash redirect and prevent duplicate navigation`）。
+
 ### 变更
-- 移除 `v-i18n` 的独立版本号，统一以根目录 `package.json` 版本为准。
-- 删除旧的 `v-i18n/v0.2.0` 标签，创建全局 `v0.7.1` 标签。
+- 重构运行时变量池架构，采用四层模型（`refactor(runtime): Rebuild variable pool architecture with four-layer model`）。
+- 重构 `v-for` 渲染逻辑，引入基于记录的缓存机制（`refactor(runtime): Restructure v-for rendering with record-based cache`）。
+- 更新运行时变量池模型的相关文档。
+
+### 修复
+- 修复列表在空状态切换后的渲染恢复问题（`fix(runtime): Restore list rendering after empty state switch`）。
+- 改进 `v-for` 正则表达式以兼容更多语法模式（`fix(runtime): Improve v-for regex to handle various syntax patterns`）。
 
 ---
 
