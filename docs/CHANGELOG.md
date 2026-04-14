@@ -23,22 +23,44 @@
 ## [0.7.2] - 2026-04-15
 
 ### 变更
-- 重构运行时模块上下文和路由初始化逻辑（`refactor(runtime): Restructure module context and routing initialization`）。
-- 规范化路由模块的默认导出处理（`fix(router): Normalize routes module with default export handling`）。
+- 重构运行时模块上下文和路由初始化逻辑。
+- 规范化路由模块的默认导出处理。
 
 ## [0.7.1] - 2026-04-15
 
 ### 新增
-- 路由系统新增尾部斜杠重定向，并防止重复导航（`feat(router): Add trailing slash redirect and prevent duplicate navigation`）。
+- 路由系统新增尾部斜杠重定向，并防止重复导航。
 
 ### 变更
-- 重构运行时变量池架构，采用四层模型（`refactor(runtime): Rebuild variable pool architecture with four-layer model`）。
-- 重构 `v-for` 渲染逻辑，引入基于记录的缓存机制（`refactor(runtime): Restructure v-for rendering with record-based cache`）。
+- 重构运行时变量池架构，采用四层模型。
+- 重构 `v-for` 渲染逻辑，引入基于记录的缓存机制。
 - 更新运行时变量池模型的相关文档。
 
 ### 修复
-- 修复列表在空状态切换后的渲染恢复问题（`fix(runtime): Restore list rendering after empty state switch`）。
-- 改进 `v-for` 正则表达式以兼容更多语法模式（`fix(runtime): Improve v-for regex to handle various syntax patterns`）。
+- 修复列表在空状态切换后的渲染恢复问题。
+- 改进 `v-for` 正则表达式以兼容更多语法模式。
+
+## [0.7.0] - 2026-04-15
+
+### 变更
+- 重构核心运行时架构（`refactor(core): Rebuild runtime architecture`）。
+
+## [0.6.1] - 2026-04-15
+
+### 新增
+- 路由系统新增 `cacheKey` 支持，实现页面缓存和实例共享。
+- 路由系统新增重定向支持，并分离字符串匹配与正则匹配逻辑。
+
+### 变更
+- 重写 `vget.js`，采用基于类的架构，并优化 `vproxy` 性能。
+- 优化 `vproxy` 更新调度策略，增加代码缓存机制。
+- 为 `vmessage` 的 CSS 类名添加 `vmsg-` 前缀，避免样式冲突。
+- 更新项目依赖，并在 `vproxy` 中新增 `$watch` 辅助方法。
+
+### 修复
+- 修复 `cacheKey` 未被正确保存的问题。
+- 路由系统新增可选参数支持。
+- 修复 vhtml 文档中双向绑定 prop 的语法示例。
 
 ---
 
