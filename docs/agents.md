@@ -155,10 +155,10 @@ export default async ($mod) => {
 
 Use translation keys in templates and scripts instead of hard-coded UI text. Useful APIs: `$t(key, vars)`, `$i18n.setLocale(lang)`, `$i18n.getLocale()`, `$i18n.load(messages)`.
 
-For key scanning and cleanup, use `v-i18n`:
+For key scanning、cleanup、sort and add, please must use `v-i18n`:
 
 ```bash
-v-i18n scan --fix --removeUnused
+v-i18n scan
 ```
 
 ## Script Types

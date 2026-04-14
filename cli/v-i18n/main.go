@@ -18,7 +18,7 @@ import (
 	"github.com/veypi/vigo/logv"
 )
 
-var version = "v0.1.0"
+var version = "v0.2.0"
 
 // 全局配置参数
 var globalOpts = struct {
@@ -121,20 +121,12 @@ func LoadTranslations(outputPath string) (map[string]map[string]interface{}, err
 }
 
 // SaveTranslations 保存翻译文件
-func SaveTranslations(outputPath string, translations map[string]map[string]interface{}, format FormatConfig) error {
-	var data []byte
-	var err error
-
+func SaveTranslations(outputPath string, translations map[string]map[string]interface{}, format FormatConfig, defaultLanguage string) error {
 	if format.SortKeys {
-		translations = sortTranslationKeysFlat(translations)
+		translations = sortTranslationKeysFlat(translations, defaultLanguage)
 	}
 
-	if format.TrailingComma {
-		data, err = jsonMarshalWithTrailingComma(translations, format.Indent)
-	} else {
-		data, err = json.MarshalIndent(translations, "", strings.Repeat(" ", format.Indent))
-	}
-
+	data, err := marshalTranslationsOrdered(translations, format.Indent, defaultLanguage)
 	if err != nil {
 		return err
 	}
@@ -148,12 +140,110 @@ func SaveTranslations(outputPath string, translations map[string]map[string]inte
 	return os.WriteFile(outputPath, data, 0o644)
 }
 
-// sortTranslationKeysFlat 对扁平化翻译 key 进行排序
-func sortTranslationKeysFlat(translations map[string]map[string]interface{}) map[string]map[string]interface{} {
-	sorted := make(map[string]map[string]interface{})
-	for lang, items := range translations {
-		sorted[lang] = sortKeysFlat(items)
+// marshalTranslationsOrdered 按固定语言顺序序列化 JSON，defaultLanguage 需要传入
+func marshalTranslationsOrdered(translations map[string]map[string]interface{}, indent int, defaultLanguage string) ([]byte, error) {
+	space := strings.Repeat(" ", indent)
+	var b strings.Builder
+	b.WriteString("{\n")
+
+	// 构建有序语言列表：defaultLanguage 排第一，其余按字母序
+	langs := make([]string, 0, len(translations))
+	if _, ok := translations[defaultLanguage]; ok {
+		langs = append(langs, defaultLanguage)
 	}
+	otherLangs := make([]string, 0, len(translations))
+	for lang := range translations {
+		if lang != defaultLanguage {
+			otherLangs = append(otherLangs, lang)
+		}
+	}
+	for i := 0; i < len(otherLangs); i++ {
+		for j := i + 1; j < len(otherLangs); j++ {
+			if otherLangs[i] > otherLangs[j] {
+				otherLangs[i], otherLangs[j] = otherLangs[j], otherLangs[i]
+			}
+		}
+	}
+	langs = append(langs, otherLangs...)
+
+	for i, lang := range langs {
+		b.WriteString(space)
+		b.WriteString(jsonString(lang))
+		b.WriteString(": ")
+
+		items := translations[lang]
+		keys := make([]string, 0, len(items))
+		for k := range items {
+			keys = append(keys, k)
+		}
+		for m := 0; m < len(keys); m++ {
+			for n := m + 1; n < len(keys); n++ {
+				if keys[m] > keys[n] {
+					keys[m], keys[n] = keys[n], keys[m]
+				}
+			}
+		}
+
+		b.WriteString("{\n")
+		for j, key := range keys {
+			valueBytes, err := json.Marshal(items[key])
+			if err != nil {
+				return nil, err
+			}
+			b.WriteString(space)
+			b.WriteString(space)
+			b.WriteString(jsonString(key))
+			b.WriteString(": ")
+			b.Write(valueBytes)
+			if j < len(keys)-1 {
+				b.WriteString(",")
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString(space)
+		b.WriteString("}")
+		if i < len(langs)-1 {
+			b.WriteString(",")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("}")
+	return []byte(b.String()), nil
+}
+
+// jsonString 将字符串转义为 JSON 字符串
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
+// sortTranslationKeysFlat 对扁平化翻译 key 进行排序，defaultLanguage 排在最前面
+func sortTranslationKeysFlat(translations map[string]map[string]interface{}, defaultLanguage string) map[string]map[string]interface{} {
+	sorted := make(map[string]map[string]interface{})
+
+	// 先放 defaultLanguage
+	if items, ok := translations[defaultLanguage]; ok {
+		sorted[defaultLanguage] = sortKeysFlat(items)
+	}
+
+	// 再放其他语言，按字母序
+	langKeys := make([]string, 0, len(translations))
+	for lang := range translations {
+		if lang != defaultLanguage {
+			langKeys = append(langKeys, lang)
+		}
+	}
+	for i := 0; i < len(langKeys); i++ {
+		for j := i + 1; j < len(langKeys); j++ {
+			if langKeys[i] > langKeys[j] {
+				langKeys[i], langKeys[j] = langKeys[j], langKeys[i]
+			}
+		}
+	}
+	for _, lang := range langKeys {
+		sorted[lang] = sortKeysFlat(translations[lang])
+	}
+
 	return sorted
 }
 
