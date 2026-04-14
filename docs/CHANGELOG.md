@@ -66,46 +66,64 @@
 
 ## 发布流程
 
+本项目同时作为 **npm 包**（`@veypi/vhtml`）和 **Go module**（`github.com/veypi/vhtml`）发布。发版核心围绕 `src/` 源码和 `package.json`，`v-i18n` 仅作为辅助 CLI 工具同步更新。
+
 发布新版本时，请按以下步骤操作：
 
 ### 1. 更新版本号
 - 更新 `package.json` 中的 `version` 字段。
-- 同步更新 `cli/v-i18n/main.go` 中的 `version` 变量。
+- 同步更新 `cli/v-i18n/main.go` 中的 `version` 变量（保持与 `package.json` 一致）。
 
 ### 2. 更新文档
-- 如果命令行为或用法有变化，更新 `cli/v-i18n/README.md`。
+- 如果 `v-i18n` 命令行为或用法有变化，更新 `cli/v-i18n/README.md`。
 - 如果 `v-i18n` 使用示例需要更新，同步修改 `docs/agents.md`。
-- 在 `docs/CHANGELOG.md` 顶部新增一个版本章节，描述本次发布内容。
+- 在 `docs/CHANGELOG.md` 顶部新增一个版本章节，描述本次 `src/` 核心变更和发布内容。
 
-### 3. 本地构建并测试
+### 3. 构建并更新 dist
 ```bash
+npm run build
+```
+- 确保 `dist/` 目录下的产物已更新。
+- 将 `dist/` 变更一并提交。
+
+### 4. 本地测试
+```bash
+# 测试 vhtml 构建产物
+npm run build
+
+# 测试 v-i18n
 cd cli/v-i18n
 go build -o v-i18n .
 go install .
 v-i18n -h
 ```
 
-### 4. 在 `dev` 分支提交变更
+### 5. 在 `dev` 分支提交变更
 ```bash
 git checkout dev
-git add package.json cli/v-i18n/main.go docs/CHANGELOG.md [其他变更文件]
+git add package.json dist/ docs/CHANGELOG.md [其他变更文件]
 git commit -m "chore(release): bump version to vX.Y.Z"
 ```
 
-### 5. 将 `dev` 合并到 `main`
+### 6. 将 `dev` 合并到 `main`
 ```bash
 git checkout main
 git merge dev
 git push origin main dev
 ```
 
-### 6. 创建并推送标签
+### 7. 创建并推送标签
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-### 7. 验证远程安装
+### 8. 发布到 npm
+```bash
+npm publish --access public
+```
+
+### 9. 验证远程安装（Go）
 ```bash
 go clean -modcache
 GOPROXY=https://goproxy.cn,direct GOSUMDB=off \
@@ -113,7 +131,7 @@ GOPROXY=https://goproxy.cn,direct GOSUMDB=off \
 v-i18n -h
 ```
 
-### 8. 切回 `dev` 分支
+### 10. 切回 `dev` 分支
 ```bash
 git checkout dev
 ```
@@ -121,3 +139,4 @@ git checkout dev
 ### 注意事项
 - Go module proxy 会永久缓存版本。如果某个标签有问题，**不要 force-push 同一个标签**。必须递增版本号重新打标签（例如 `v0.7.3` → `v0.7.4`）。
 - `v-i18n` CLI 的版本号必须始终与 `package.json` 保持同步。
+- 每次发版必须确保 `dist/` 是最新构建的，因为 npm 发布以 `dist/` 为主要内容。
