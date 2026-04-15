@@ -33,6 +33,11 @@ function ensureRendererRuntime() {
     vslot, vrouter {
       display: block;
     }
+    vrouter {
+      height: 100%;
+      width: 100%;
+      overflow: auto;
+    }
 `
   if (document.head.firstChild) {
     document.head.insertBefore(globalStyle, document.head.firstChild)

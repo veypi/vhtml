@@ -83,7 +83,8 @@
 
 body {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  overflow: auto;
   font-family: var(--font-family, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
   font-size: var(--font-size-md);
   line-height: 1.5;
