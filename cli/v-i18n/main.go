@@ -84,9 +84,17 @@ type FormatConfig struct {
 
 // GetConfig 从全局参数获取配置
 func GetConfig() *Config {
+	entry := globalOpts.Entry
+	output := globalOpts.Output
+
+	// 如果 entry 不是默认值且 output 是默认值，自动调整 output 基于 entry 目录
+	if entry != "./ui" && output == "./ui/langs.json" {
+		output = filepath.Join(entry, "langs.json")
+	}
+
 	return &Config{
-		Entry:           globalOpts.Entry,
-		Output:          globalOpts.Output,
+		Entry:           entry,
+		Output:          output,
 		Languages:       globalOpts.Languages,
 		DefaultLanguage: globalOpts.DefaultLanguage,
 		Scan: ScanConfig{

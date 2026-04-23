@@ -44,17 +44,17 @@ func runScan() error {
 		return err
 	}
 
-	// 获取所有已存在的 keys
+	// 获取所有已存在的 keys（基于默认语言）
 	existingKeys := getAllKeys(translations, config.DefaultLanguage)
 
-	// 分析差异
+	// 分析差异：代码中有但 translations 中没有的 key
 	missingKeys := findMissingKeys(foundKeys, existingKeys)
 	unusedKeys := findUnusedKeys(foundKeys, existingKeys)
 
-	// 获取值为空的 keys
+	// 获取值为空的 keys（在 foundKeys 范围内）
 	emptyKeys := make(map[string]map[string]bool)
 	for _, lang := range config.Languages {
-		emptyKeys[lang] = getEmptyKeys(translations, lang)
+		emptyKeys[lang] = getEmptyKeysInFoundKeys(translations, lang, foundKeys)
 	}
 
 	// 自动清理：删除未使用的 key
@@ -84,20 +84,22 @@ func runScan() error {
 		}
 	}
 
-	// 确保所有语言都存在
+	// 清理后重新计算已存在的 keys 和缺失的 keys
+	existingKeys = getAllKeys(translations, config.DefaultLanguage)
+	missingKeys = findMissingKeys(foundKeys, existingKeys)
+
+	// 输出统计信息（基于清理后的 translations）
+	printStatsTable(foundKeys, translations, config)
+
+	// 收集各语言缺失的 key（包括默认语言）
+	langMissing := make(map[string][]string)
 	for _, lang := range config.Languages {
-		if _, ok := translations[lang]; !ok {
-			translations[lang] = make(map[string]interface{})
+		for key := range foundKeys {
+			if _, exists := translations[lang][key]; !exists {
+				langMissing[lang] = append(langMissing[lang], key)
+			}
 		}
 	}
-
-	// 保存文件（自动排序）
-	if err := SaveTranslations(config.Output, translations, config.Format, config.DefaultLanguage); err != nil {
-		return fmt.Errorf("保存翻译文件失败: %w", err)
-	}
-
-	// 输出统计信息
-	printStatsTable(translations, config)
 
 	// 输出缺失的 key 或 add 指令
 	if len(missingKeys) > 0 {
@@ -115,17 +117,71 @@ func runScan() error {
 		}
 		fmt.Println()
 		printAddCommand(missingKeys, translations, config)
-	} else {
-		fmt.Println("\n没有缺失的 key")
+	}
+
+	// 报告各语言单独缺失的情况（默认语言已包含在 missingKeys 中）
+	hasLangMissing := false
+	for _, lang := range config.Languages {
+		if lang == config.DefaultLanguage {
+			continue
+		}
+		if len(langMissing[lang]) > 0 {
+			hasLangMissing = true
+			fmt.Printf("\n⚠️  [%s] 缺失 %d 个 key\n", lang, len(langMissing[lang]))
+			limit := 10
+			if scanOpts.Verbose {
+				limit = len(langMissing[lang])
+			}
+			for i, key := range langMissing[lang] {
+				if i >= limit {
+					fmt.Printf("  ... 还有 %d 个\n", len(langMissing[lang])-limit)
+					break
+				}
+				fmt.Printf("  - %s\n", key)
+			}
+		}
+	}
+
+	// 如果有语言缺失，输出 add 命令
+	if len(missingKeys) == 0 && hasLangMissing {
+		fmt.Println()
+		// 合并所有语言缺失的 key
+		allMissing := make(map[string]bool)
+		for _, lang := range config.Languages {
+			for _, key := range langMissing[lang] {
+				allMissing[key] = true
+			}
+		}
+		var mergedMissing []string
+		for key := range allMissing {
+			mergedMissing = append(mergedMissing, key)
+		}
+		printAddCommand(mergedMissing, translations, config)
+	}
+
+	if len(missingKeys) == 0 && !hasLangMissing {
+		fmt.Println("\n✅ 所有语言翻译完整")
+	}
+
+	// 确保所有语言都存在
+	for _, lang := range config.Languages {
+		if _, ok := translations[lang]; !ok {
+			translations[lang] = make(map[string]interface{})
+		}
+	}
+
+	// 保存文件（自动排序）
+	if err := SaveTranslations(config.Output, translations, config.Format, config.DefaultLanguage); err != nil {
+		return fmt.Errorf("保存翻译文件失败: %w", err)
 	}
 
 	return nil
 }
 
 // printStatsTable 输出统计表格
-func printStatsTable(translations map[string]map[string]interface{}, config *Config) {
-	baseKeys := getAllKeys(translations, config.DefaultLanguage)
-	totalKeys := len(baseKeys)
+// totalKeys: 代码中扫描到的所有 key（作为总数基准）
+func printStatsTable(totalKeys map[string]bool, translations map[string]map[string]interface{}, config *Config) {
+	total := len(totalKeys)
 
 	fmt.Println("┌──────────┬────────┬────────┬──────────┐")
 	fmt.Println("│ Language │ Total  │ Done   │ Coverage │")
@@ -133,8 +189,8 @@ func printStatsTable(translations map[string]map[string]interface{}, config *Con
 	for _, lang := range config.Languages {
 		items, ok := translations[lang]
 		done := 0
-		if ok && totalKeys > 0 {
-			for key := range baseKeys {
+		if ok && total > 0 {
+			for key := range totalKeys {
 				if value, exists := items[key]; exists {
 					if v, ok := value.(string); ok && v != "" {
 						done++
@@ -143,11 +199,11 @@ func printStatsTable(translations map[string]map[string]interface{}, config *Con
 			}
 		}
 		coverage := float64(0)
-		if totalKeys > 0 {
-			coverage = float64(done) / float64(totalKeys) * 100
+		if total > 0 {
+			coverage = float64(done) / float64(total) * 100
 		}
 		fmt.Printf("│ %-8s │ %-6d │ %-6d │ %6.1f%%  │\n",
-			lang, totalKeys, done, coverage)
+			lang, total, done, coverage)
 	}
 	fmt.Println("└──────────┴────────┴────────┴──────────┘")
 }
@@ -193,6 +249,7 @@ func printAddCommand(missingKeys []string, translations map[string]map[string]in
 		return
 	}
 	fmt.Printf("添加请执行: v-i18n add -json '%s'\n", string(jsonBytes))
+	fmt.Println("\n⚠️  注意：上述命令中的 \"\" 为占位符，请替换为实际翻译内容后再执行。")
 }
 
 // scanFiles 扫描文件中的 i18n keys
@@ -273,12 +330,12 @@ func getAllKeys(translations map[string]map[string]interface{}, lang string) map
 	return keys
 }
 
-// getEmptyKeys 获取所有值为空的 keys
-func getEmptyKeys(translations map[string]map[string]interface{}, lang string) map[string]bool {
+// getEmptyKeysInFoundKeys 获取在 foundKeys 范围内值为空的 keys
+func getEmptyKeysInFoundKeys(translations map[string]map[string]interface{}, lang string, foundKeys map[string]bool) map[string]bool {
 	emptyKeys := make(map[string]bool)
 	if items, ok := translations[lang]; ok {
 		for key, value := range items {
-			if isEmptyValue(value) {
+			if foundKeys[key] && isEmptyValue(value) {
 				emptyKeys[key] = true
 			}
 		}
