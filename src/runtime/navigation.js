@@ -1,3 +1,5 @@
+import { isRouterNavigableHref } from './url.js'
+
 export class NavigationRuntime {
   #listeners = new Set()
   #loaded = false
@@ -28,7 +30,7 @@ export class NavigationRuntime {
         return
       }
       const href = linkElement.getAttribute('href')
-      if (!href || href.startsWith('http') || href.startsWith('#')) {
+      if (!isRouterNavigableHref(href)) {
         return
       }
       event.preventDefault()

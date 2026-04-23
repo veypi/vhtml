@@ -412,16 +412,25 @@ function compileSandboxCode(originCode, cache, compiler, options = {}) {
   let code = originCode.trim()
   const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
   const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
-  const isSingleLineExpression = code.indexOf('\n') === -1
-  if (options.returnExpression !== false && !isStatement && isSingleLineExpression) {
-    code = `return ${code}`
-  }
-  const wrappedCode = `
+  const wrapCode = (body) => `
 with (sandbox) {
-${code}
+${body}
 }`
+  const tryCompile = (body) => compiler(wrapCode(body))
+
+  if (options.returnExpression !== false && !isStatement) {
+    try {
+      fn = tryCompile(`return (\n${code}\n)`)
+      cache.set(originCode, fn)
+      return fn
+    } catch (error) {
+      // Fall through: event handlers and other statement-style snippets may still
+      // use Run(), so keep the raw compilation path as a compatibility fallback.
+    }
+  }
+
   try {
-    fn = compiler(wrappedCode)
+    fn = tryCompile(code)
     cache.set(originCode, fn)
     return fn
   } catch (error) {

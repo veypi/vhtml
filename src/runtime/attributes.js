@@ -2,6 +2,7 @@ import vproxy from '../vproxy.js'
 import utils from '../utils.js'
 import { runMountedHandler } from './lifecycle.js'
 import { ensureEvents, getData, getRouter, getScope } from './dom.js'
+import { isRelativeHref } from './url.js'
 
 function ensureRefPool(data) {
   if (!data || typeof data !== 'object') {
@@ -59,36 +60,32 @@ export function parseAHref(renderer, dom, data, runtime) {
   if (!dom.hasAttribute('href') && !dom.hasAttribute(':href')) {
     return
   }
+  const setResolvedHref = (rawHref) => {
+    if (!rawHref || rawHref.startsWith('#')) {
+      if (rawHref !== undefined) {
+        dom.setAttribute('href', rawHref)
+      }
+      return
+    }
+    if (rawHref.startsWith('@')) {
+      dom.setAttribute('href', rawHref.slice(1))
+      return
+    }
+    let href = rawHref
+    if (runtime?.$mod?.scoped && isRelativeHref(href)) {
+      href = runtime.$mod.scoped + href
+    }
+    dom.setAttribute('href', href)
+  }
   if (dom.hasAttribute(':href')) {
     const code = dom.getAttribute(':href')
     dom.removeAttribute(':href')
     renderer.watch(scope, () => {
-      let href = vproxy.Run(code, data, runtime)
-      if (!href || href.startsWith('#') || href.startsWith('http')) {
-        return
-      }
-      if (href.startsWith('@')) {
-        dom.setAttribute('href', href.slice(1))
-        return
-      }
-      if (runtime?.$mod?.scoped) {
-        href = runtime.$mod.scoped + href
-      }
-      dom.setAttribute('href', href)
+      const href = vproxy.Run(code, data, runtime)
+      setResolvedHref(href)
     })
   } else {
-    let href = dom.getAttribute('href')
-    if (!href || href.startsWith('#') || href.startsWith('http')) {
-      return
-    }
-    if (href.startsWith('@')) {
-      dom.setAttribute('href', href.slice(1))
-    } else {
-      if (runtime?.$mod?.scoped) {
-        href = runtime.$mod.scoped + href
-      }
-      dom.setAttribute('href', href)
-    }
+    setResolvedHref(dom.getAttribute('href'))
   }
   const syncActive = (to) => {
     const url = to?.fullPath
