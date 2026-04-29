@@ -30,10 +30,25 @@ function resolveRouter(dom, runtime) {
   return runtime?.$sys?.$router || null
 }
 
+function resolveScopedUrl(rawUrl, runtime) {
+  if (!rawUrl || rawUrl.startsWith('#')) {
+    return rawUrl
+  }
+  if (rawUrl.startsWith('@')) {
+    return rawUrl.slice(1)
+  }
+  if (runtime?.$mod?.scoped && isRelativeHref(rawUrl)) {
+    return runtime.$mod.scoped + rawUrl
+  }
+  return rawUrl
+}
+
 export function parseAttrs(renderer, dom, data, runtime, attrs) {
   const scope = resolveScope(renderer, dom)
   if (dom.nodeName === 'A') {
     parseAHref(renderer, dom, data, runtime)
+  } else if (dom.nodeName === 'IMG') {
+    parseImgSrc(renderer, dom, data, runtime)
   }
   Array.from(dom.attributes).forEach((attr) => {
     if (parseAttr(renderer, dom, attr.name, attr.value, data, runtime)) {
@@ -61,21 +76,10 @@ export function parseAHref(renderer, dom, data, runtime) {
     return
   }
   const setResolvedHref = (rawHref) => {
-    if (!rawHref || rawHref.startsWith('#')) {
-      if (rawHref !== undefined) {
-        dom.setAttribute('href', rawHref)
-      }
-      return
+    const href = resolveScopedUrl(rawHref, runtime)
+    if (href !== undefined) {
+      dom.setAttribute('href', href)
     }
-    if (rawHref.startsWith('@')) {
-      dom.setAttribute('href', rawHref.slice(1))
-      return
-    }
-    let href = rawHref
-    if (runtime?.$mod?.scoped && isRelativeHref(href)) {
-      href = runtime.$mod.scoped + href
-    }
-    dom.setAttribute('href', href)
   }
   if (dom.hasAttribute(':href')) {
     const code = dom.getAttribute(':href')
@@ -102,6 +106,29 @@ export function parseAHref(renderer, dom, data, runtime) {
   syncActive(router?.current)
   const off = router?.onChange?.(syncActive)
   scope?.addCleanup(off)
+}
+
+export function parseImgSrc(renderer, dom, data, runtime) {
+  const scope = resolveScope(renderer, dom)
+  if (!dom.hasAttribute('src') && !dom.hasAttribute(':src')) {
+    return
+  }
+  const setResolvedSrc = (rawSrc) => {
+    const src = resolveScopedUrl(rawSrc, runtime)
+    if (src !== undefined) {
+      dom.setAttribute('src', src)
+    }
+  }
+  if (dom.hasAttribute(':src')) {
+    const code = dom.getAttribute(':src')
+    dom.removeAttribute(':src')
+    renderer.watch(scope, () => {
+      const src = vproxy.Run(code, data, runtime)
+      setResolvedSrc(src)
+    })
+  } else {
+    setResolvedSrc(dom.getAttribute('src'))
+  }
 }
 
 export function parseAttr(renderer, dom, name, value, data, runtime) {
