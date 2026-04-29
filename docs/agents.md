@@ -277,6 +277,7 @@ export default ({ $mod, router }) => ({
     },
     { path: "/login", component: "/page/login.html", name: "login" },
     { path: "/user/:id", component: "/page/user.html", cacheKey: "user" },
+    { path: "/files/:id", component: (path, params) => `/page/files/${params.id}.html`, error_redirect: "/404" },
     { path: "/edit/:id", component: "/page/edit.html", cacheKey: false },
     {
       path: "/admin",
@@ -300,6 +301,7 @@ Route record fields:
 
 - `path`: required. Supports static paths, `:param`, optional param like `:id?`, named wildcard like `*rest`, and catch-all `*`.
 - `component`: required. HTML file path relative to `/ui`, usually under `/page`.
+- `error_redirect`: optional fallback navigation target when the resolved `component` HTML fails to load. It may be a string, route target object, or function `(matchedRoute, error) => target`.
 - `name`: optional route name for named navigation such as `$router.push({ name: 'home', params: {...} })`.
 - `layout`: optional layout name, resolved to `/layout/{name}.html`.
 - `meta`: optional route metadata; read it from the current route rather than duplicating auth flags elsewhere.

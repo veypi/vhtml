@@ -104,7 +104,7 @@ class Page {
   resolveHtmlPath(matchedRoute) {
     let path = matchedRoute.route.component || matchedRoute.route.path
     if (typeof path === 'function') {
-      path = path(matchedRoute.path)
+      path = path(matchedRoute.path, matchedRoute.params)
     }
     Object.entries(matchedRoute.params).forEach(([key, value]) => {
       path = path.replace(`:${key}`, value)
@@ -119,6 +119,17 @@ class Page {
       path = `${path}.html`
     }
     return path
+  }
+
+  resolveErrorRedirect(error) {
+    const config = this.matchedRoute.route?.error_redirect
+    if (!config) {
+      return null
+    }
+    if (typeof config === 'function') {
+      return config(this.matchedRoute, error)
+    }
+    return config
   }
 
   updateRouter(matchedRoute) {
@@ -185,6 +196,10 @@ class Page {
   async mount(runtime, layout) {
     const parser = await vget.FetchUI(this.htmlPath, runtime)
     if (parser.err) {
+      const redirectTarget = this.resolveErrorRedirect(parser.err)
+      if (redirectTarget) {
+        return { redirect: redirectTarget }
+      }
       throw new Error(`load page failed: ${this.htmlPath} ${parser.err}`)
     }
     this.meta.title = parser.title || ''
@@ -198,7 +213,7 @@ class Page {
       this.instance.host = this.dom
       this.instance.runtime = getRuntime(this.dom) || runtime || null
       this.activate()
-      return
+      return { mounted: true }
     }
     let layoutUrl = layout
     if (!layoutUrl.startsWith('/')) {
@@ -227,6 +242,7 @@ class Page {
     this.instance.host = this.dom
     this.instance.runtime = getRuntime(this.dom) || this.layoutInstance.runtime
     this.activate()
+    return { mounted: true }
   }
 
   updateTitle() {
@@ -431,6 +447,7 @@ class RouterView {
       path: route.path,
       component: route.component,
       redirect: route.redirect,
+      error_redirect: route.error_redirect,
       name: route.name,
       meta: route.meta || {},
       children: route.children || [],
@@ -669,7 +686,24 @@ class RouterView {
     if (cacheKey) {
       this.pageCache.set(cacheKey, page)
     }
-    await page.mount(this.runtime, to.layout)
+    let mountResult
+    try {
+      mountResult = await page.mount(this.runtime, to.layout)
+    } catch (error) {
+      if (cacheKey) {
+        this.pageCache.delete(cacheKey)
+      }
+      page.destroy()
+      throw error
+    }
+    if (mountResult?.redirect) {
+      if (cacheKey) {
+        this.pageCache.delete(cacheKey)
+      }
+      page.destroy()
+      this.replace(mountResult.redirect)
+      return
+    }
     this.activePage = page
     if (typeof this.afterEnter === 'function') {
       this.afterEnter(to, this.current)

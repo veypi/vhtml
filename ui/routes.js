@@ -1,5 +1,6 @@
 /* { path: 'XXXX', name: 'XXXX', component: 'XXXX',
 * layout: 'XXXX', // layout 会自动解析layout/目录下同名组件到body内，视图外层,为空则不加载外层布局
+* error_redirect: 'XXXX', // component 对应 HTML 加载失败时跳转到该路由，可为字符串、路由对象或函数
 * meta: {auth: true, title: 'XXXX', ...},
 * description: 'XXXX'}
 * */
