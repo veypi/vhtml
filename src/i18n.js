@@ -5,11 +5,15 @@
  * Distributed under terms of the MIT license.
  */
 
+let messageBucketId = 0
+
 class I18n {
   shared = { locale: 'zh-CN', fallback: 'en-US' }
   constructor(options = {}) {
     this.shared = options || this.shared
-    this.messages = {}
+    this.messageKey = `__i18n_messages_${messageBucketId++}`
+    this.shared[this.messageKey] = {}
+    this.messages = this.shared[this.messageKey]
     this._formatters = new Map() // 缓存 Intl 实例
   }
 
@@ -26,12 +30,23 @@ class I18n {
   }
 
   load(messages, merge = true) {
+    messages = messages || {}
     if (merge) {
       Object.keys(messages).forEach(lang => {
-        this.messages[lang] = { ...this.messages[lang], ...messages[lang] }
+        if (!this.messages[lang]) {
+          this.messages[lang] = {}
+        }
+        Object.keys(messages[lang] || {}).forEach(key => {
+          this.messages[lang][key] = messages[lang][key]
+        })
       })
     } else {
-      this.messages = messages
+      Object.keys(this.messages).forEach(lang => {
+        delete this.messages[lang]
+      })
+      Object.keys(messages).forEach(lang => {
+        this.messages[lang] = messages[lang] || {}
+      })
     }
     return this
   }
