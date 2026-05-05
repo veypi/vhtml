@@ -67,6 +67,7 @@ export async function parseRef(renderer, vsrc, dom, data, runtime, target, singl
   setRouter(dom, runtimeRouter)
   setVsrc(dom, vsrc)
   const originData = await setupRef(renderer, dom, data, parentRuntime, target, singleMode)
+  renderer.suspendMO?.()
   if (singleMode) {
     renderer.parseAttrs(dom, originData, componentRuntime, target?.customAttrs)
   } else {
@@ -77,6 +78,7 @@ export async function parseRef(renderer, vsrc, dom, data, runtime, target, singl
     renderer.parseDom(child, originData, componentRuntime)
   }
   dom.removeAttribute('vparsing')
+  renderer.resumeMO?.()
   mountRef(renderer, dom, originData, componentRuntime, target)
   resolveRuntime(renderer, dom, componentRuntime).scope?.activate(dom)
 }

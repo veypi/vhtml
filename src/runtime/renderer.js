@@ -102,10 +102,36 @@ function ensureRendererRuntime() {
     })
     pendingDisposals.set(node, timer)
   }
+  let moSuspended = false
+  const moPendingAdded = []
+  const moPendingRemoved = []
+
+  function flushMOPending() {
+    const added = moPendingAdded.splice(0)
+    const removed = moPendingRemoved.splice(0)
+    for (let node of added) {
+      if (node.nodeType === 1) {
+        cancelPendingDisposal(node)
+        runVdelay(node)
+        node.querySelectorAll('*[vdelay]').forEach(runVdelay)
+      }
+    }
+    for (let node of removed) {
+      scheduleDisposeNodeScope(node)
+    }
+  }
+
   const callback = function(mutationsList, observer) {
+    if (moSuspended) {
+      for (const mutation of mutationsList) {
+        moPendingAdded.push(...mutation.addedNodes)
+        moPendingRemoved.push(...mutation.removedNodes)
+      }
+      return
+    }
     mutationsList.forEach(function(mutation) {
       for (let node of mutation.addedNodes) {
-        if (node.nodeType === 1) { // 元素节点
+        if (node.nodeType === 1) {
           cancelPendingDisposal(node)
           runVdelay(node)
           node.querySelectorAll('*[vdelay]').forEach(runVdelay)
@@ -118,6 +144,18 @@ function ensureRendererRuntime() {
   }
   const observer = new MutationObserver(callback);
   observer.observe(document.body, config);
+
+  const suspendMO = () => {
+    if (moSuspended) return
+    moSuspended = true
+  }
+  const resumeMO = () => {
+    if (!moSuspended) return
+    moSuspended = false
+    if (moPendingAdded.length > 0 || moPendingRemoved.length > 0) {
+      flushMOPending()
+    }
+  }
 
   function findLastAccess(code, data) {
     code = `with (sandbox) { ${code} }`
@@ -186,6 +224,12 @@ function ensureRendererRuntime() {
         this.parseRef('root', this.app, {}, mainParser.mod || {}, mainParser, true)
       }
       init()
+    }
+    suspendMO() {
+      suspendMO()
+    }
+    resumeMO() {
+      resumeMO()
     }
     watch(scope, target, callback, options) {
       const id = vproxy.Watch(target, callback, options)

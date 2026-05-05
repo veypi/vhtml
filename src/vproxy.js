@@ -341,7 +341,6 @@ const expose = {
   'JSON': JSON,
   'Symbol': Symbol,
   'Number': Number,
-  'eval': eval,
   'isNaN': isNaN,
   'parseInt': parseInt,
   'parseFloat': parseFloat,
