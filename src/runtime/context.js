@@ -31,6 +31,15 @@ export function createModuleContext(scoped, baseURL, sharedLocale, initial = {})
     $i18n: new I18n(sharedLocale),
   }
   mod.$t = (key, params = {}) => mod.$i18n.t(key, params)
+  mod.fetch = (url, options) => {
+    let resolvedUrl = url
+    if (url.startsWith('@')) {
+      resolvedUrl = url.slice(1)
+    } else if (!/^https?:\/\//.test(url) && !url.startsWith('//')) {
+      resolvedUrl = url.startsWith('/') ? `${scoped}${url}` : `${scoped}/${url}`
+    }
+    return fetch(resolvedUrl, options)
+  }
   return mod
 }
 
