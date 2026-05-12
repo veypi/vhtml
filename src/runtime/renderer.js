@@ -218,7 +218,6 @@ function ensureRendererRuntime() {
         return
       }
       let init = async () => {
-        // vget.SetBaseFile(await vget.FetchFile(window.location.pathname))
         let mainParser = await vget.FetchUI(window.location.pathname, {}, true)
         this.modulePath = mainParser.mod?.scoped || ''
         this.parseRef('root', this.app, {}, mainParser.mod || {}, mainParser, true)

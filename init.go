@@ -9,6 +9,7 @@ package vhtml
 
 import (
 	"embed"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -48,7 +49,7 @@ func init() {
 		x.Header().Set("vhtml-scoped", Router.String())
 		x.Header().Set("vhtml-vdev", vdev)
 	}
-	var lfs ufs.ReadOnlyFS
+	var lfs fs.FS
 	if vdev != "" && current != "" {
 		Router.Get("vhtml.min.js", func(x *vigo.X) { _ = x.File(path.Join(utils.CurrentDir(0), "src", "index.js")) })
 		srcfs, _ := ufs.NewLocalFS(path.Join(current, "src"))
@@ -63,7 +64,7 @@ func init() {
 		uifs, _ := ufs.NewEmbedFS(uifs, "ui")
 		lfs = ufs.NewMultiFS(srcfs, uifs)
 	}
-	Router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(lfs, "root.html"))
+	Router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(&lfs, "root.html"))
 }
 
 func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
@@ -86,7 +87,7 @@ func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 			x.Header().Set("Cache-Control", "no-cache")
 		}
 	}
-	var lfs ufs.ReadOnlyFS
+	var lfs fs.FS
 	var err error
 	if vdev != "" && current != "" {
 		lfs, err = ufs.NewLocalFS(path.Join(current, "ui"))
@@ -96,6 +97,6 @@ func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 	if err != nil {
 		panic(err)
 	}
-	router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(lfs, "root.html"))
+	router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(&lfs, "root.html"))
 	return router
 }

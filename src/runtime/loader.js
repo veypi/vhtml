@@ -251,7 +251,7 @@ class TemplateLoader {
   }
 
   async fetchFile(url) {
-    const response = await fetch(url)
+    const response = await fetch(url, { headers: { 'X-No-Fallback': '1' } })
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
@@ -282,7 +282,11 @@ class TemplateLoader {
   async doFetchUI(fetchUrl, tempEnv = {}, ignoreScoped = false) {
     tempEnv = tempEnv || {}
     try {
-      const response = await fetch(fetchUrl)
+      let params = {}
+      if (!ignoreScoped) {
+        params = { headers: { 'X-No-Fallback': 1 } }
+      }
+      const response = await fetch(fetchUrl, params)
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
