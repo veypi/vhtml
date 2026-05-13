@@ -33,10 +33,13 @@ export class NavigationRuntime {
       if (!isRouterNavigableHref(href)) {
         return
       }
-      event.preventDefault()
-      if (linkElement.hasAttribute('reload')) {
+      if (linkElement.getAttribute('target') == '_blank') {
+        window.open(linkElement.getAttribute('href'), '_blank')
+      } else if (linkElement.hasAttribute('reload')) {
+        event.preventDefault()
         window.location.href = href
       } else {
+        event.preventDefault()
         this.push(href)
       }
     }
