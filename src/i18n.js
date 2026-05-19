@@ -1,49 +1,45 @@
 /*
- * i18n.js
+ * i18n.js — 国际化
  * Copyright (C) 2026 veypi <i@veypi.com>
- *
- * Distributed under terms of the MIT license.
  */
 
-let messageBucketId = 0
-
 class I18n {
-  shared = { locale: 'zh-CN', fallback: 'en-US' }
-  constructor(options = {}) {
-    this.shared = options || this.shared
-    this.messageKey = `__i18n_messages_${messageBucketId++}`
-    this.shared[this.messageKey] = {}
-    this.messages = this.shared[this.messageKey]
-    this._formatters = new Map() // 缓存 Intl 实例
+  constructor(sharedState) {
+    // 共享状态模式：ModuleContextManager 传入 sharedLocale 对象
+    // 多个 I18n 实例共享同一个 locale，一处修改处处生效
+    this._shared = sharedState || { locale: 'zh-CN', fallback: 'en-US' }
+    this.messages = {}
+    this._formatters = new Map()
   }
 
+  get locale() { return this._shared.locale }
+  set locale(lang) { this._shared.locale = lang }
+
+  get fallback() { return this._shared.fallback }
+
   setLocale(lang) {
-    if (this.shared.locale === lang) return this
-    this.shared.locale = lang
+    if (this._shared.locale === lang) return this
+    this._shared.locale = lang
     document.documentElement.lang = lang
-    this._formatters.clear() // 清空缓存
+    this._formatters.clear()
     return this
   }
 
   getLocale() {
-    return this.shared.locale
+    return this._shared.locale
   }
 
   load(messages, merge = true) {
     messages = messages || {}
     if (merge) {
       Object.keys(messages).forEach(lang => {
-        if (!this.messages[lang]) {
-          this.messages[lang] = {}
-        }
+        if (!this.messages[lang]) this.messages[lang] = {}
         Object.keys(messages[lang] || {}).forEach(key => {
           this.messages[lang][key] = messages[lang][key]
         })
       })
     } else {
-      Object.keys(this.messages).forEach(lang => {
-        delete this.messages[lang]
-      })
+      Object.keys(this.messages).forEach(lang => delete this.messages[lang])
       Object.keys(messages).forEach(lang => {
         this.messages[lang] = messages[lang] || {}
       })
@@ -51,11 +47,10 @@ class I18n {
     return this
   }
 
-  // 核心翻译：支持插值、复数
   t(key, options = {}) {
     const {
-      locale = this.shared.locale,
-      fallback = this.shared.fallback,
+      locale = this.locale,
+      fallback = this.fallback,
       count,
       ...vars
     } = options
@@ -65,7 +60,6 @@ class I18n {
       || this.messages[fallback]?.[key]
       || key
 
-    // 复数处理
     if (count !== undefined && typeof str === 'object') {
       if (count === 0 && str.zero) str = str.zero
       else if (count === 1 && str.one) str = str.one
@@ -74,7 +68,6 @@ class I18n {
 
     if (typeof str !== 'string') return key
 
-    // 变量替换 {var} 或 {{var}}
     Object.keys(replaceVars).forEach(k => {
       str = str.replace(new RegExp(`{{?${k}}}?`, 'g'), replaceVars[k])
     })
@@ -82,76 +75,49 @@ class I18n {
     return str
   }
 
-  // 日期格式化
   d(date, options = {}) {
-    const { locale = this.shared.locale, ...fmtOptions } = options
+    const { locale = this.locale, ...fmtOptions } = options
     const cacheKey = `d:${locale}:${JSON.stringify(fmtOptions)}`
-
     if (!this._formatters.has(cacheKey)) {
       this._formatters.set(cacheKey, new Intl.DateTimeFormat(locale, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        ...fmtOptions
+        year: 'numeric', month: 'short', day: 'numeric', ...fmtOptions
       }))
     }
-
     const d = typeof date === 'string' ? new Date(date) : date
     return this._formatters.get(cacheKey).format(d)
   }
 
-  // 数字格式化
   n(num, options = {}) {
-    const { locale = this.shared.locale, ...fmtOptions } = options
+    const { locale = this.locale, ...fmtOptions } = options
     const cacheKey = `n:${locale}:${JSON.stringify(fmtOptions)}`
-
     if (!this._formatters.has(cacheKey)) {
       this._formatters.set(cacheKey, new Intl.NumberFormat(locale, {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-        ...fmtOptions
+        minimumFractionDigits: 0, maximumFractionDigits: 2, ...fmtOptions
       }))
     }
-
     return this._formatters.get(cacheKey).format(num)
   }
 
-  // 货币格式化（快捷方法）
   c(num, currency = 'CNY', options = {}) {
-    return this.n(num, {
-      style: 'currency',
-      currency,
-      ...options
-    })
+    return this.n(num, { style: 'currency', currency, ...options })
   }
 
-  // 相对时间（几天前/后）
   rtf(value, unit = 'day', options = {}) {
-    const { locale = this.shared.locale, ...fmtOptions } = options
+    const { locale = this.locale, ...fmtOptions } = options
     const cacheKey = `rtf:${locale}:${JSON.stringify(fmtOptions)}`
-
     if (!this._formatters.has(cacheKey)) {
       this._formatters.set(cacheKey, new Intl.RelativeTimeFormat(locale, {
-        numeric: 'auto',
-        ...fmtOptions
+        numeric: 'auto', ...fmtOptions
       }))
     }
-
     return this._formatters.get(cacheKey).format(value, unit)
   }
 
-  // 检查是否为复数对象（包含 zero/one/other 的对象）
-  _isPluralObject(value) {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      return false
-    }
-    const pluralKeys = ['zero', 'one', 'other']
-    return pluralKeys.some(k => k in value)
-  }
-
-  has(key, locale = this.shared.locale) {
+  has(key, locale = this.locale) {
     const value = this.messages[locale]?.[key]
-    return value !== undefined && (!this._isPluralObject(value) || value.one !== undefined || value.other !== undefined)
+    if (value === undefined) return false
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return true
+    return value.one !== undefined || value.other !== undefined
   }
 
   getLocales() {

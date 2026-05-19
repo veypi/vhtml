@@ -1,20 +1,19 @@
-import vcss from '../vcss.js'
-import moduleContextManager, { normalizeScoped, resolveScopedUrl, scopedBaseURL } from './env.js'
-import { getModulePath } from './context.js'
+/*
+ * loader.js — 模板加载器
+ * Copyright (C) 2024 veypi <i@veypi.com>
+ *
+ * HTML 模板获取、缓存、DOMParser 解析、资源加载。
+ * 合并原 vget.js，调用者直接 import templateLoader 使用。
+ */
+
+import vcss from './vcss.js'
+import moduleContextManager, { normalizeScoped, resolveScopedUrl, scopedBaseURL, getModulePath } from './env.js'
 
 function normalizeFetchUrl(url, scoped = '') {
-  if (!url || url === '/') {
-    return resolveScopedUrl('/', scoped)
-  }
-  if (url.startsWith('@')) {
-    return url.slice(1)
-  }
-  if (/^https?:\/\//.test(url)) {
-    return url
-  }
-  if (!url.startsWith('/')) {
-    return resolveScopedUrl(`/${url}`, scoped)
-  }
+  if (!url || url === '/') return resolveScopedUrl('/', scoped)
+  if (url.startsWith('@')) return url.slice(1)
+  if (/^https?:\/\//.test(url)) return url
+  if (!url.startsWith('/')) return resolveScopedUrl(`/${url}`, scoped)
   return resolveScopedUrl(url, scoped)
 }
 
@@ -23,7 +22,6 @@ class CacheStore {
     this.templates = new Map()
     this.pending = new Map()
   }
-
   clear() {
     this.templates.clear()
     this.pending.clear()
@@ -45,9 +43,7 @@ class ResourceLoader {
     const href = this.resolveUrl(dom.getAttribute('href'), getModulePath(runtime))
     const key = dom.getAttribute('key')
     const cacheKey = key || href
-    if (!cacheKey || this.loadedLinks.has(cacheKey)) {
-      return
-    }
+    if (!cacheKey || this.loadedLinks.has(cacheKey)) return
     this.loadedLinks.add(cacheKey)
     const link = dom.cloneNode(true)
     link.setAttribute('href', href)
@@ -58,17 +54,11 @@ class ResourceLoader {
     const src = this.resolveUrl(dom.getAttribute('src'), getModulePath(runtime))
     const key = dom.getAttribute('key')
     const cacheKey = key || src
-    if (!cacheKey || this.loadedScripts.has(cacheKey)) {
-      return
-    }
+    if (!cacheKey || this.loadedScripts.has(cacheKey)) return
     this.loadedScripts.add(cacheKey)
     const script = document.createElement('script')
-    if (src) {
-      script.src = src
-    }
-    if (key) {
-      script.setAttribute('key', key)
-    }
+    if (src) script.src = src
+    if (key) script.setAttribute('key', key)
     script.type = dom.getAttribute('type') || 'text/javascript'
     await new Promise((resolve, reject) => {
       script.onload = () => resolve(script)
@@ -78,13 +68,9 @@ class ResourceLoader {
   }
 
   loadStyle(styleText, scopeUrl) {
-    if (!styleText) {
-      return
-    }
+    if (!styleText) return
     const cacheKey = `${scopeUrl}::${styleText}`
-    if (this.loadedStyles.has(cacheKey)) {
-      return
-    }
+    if (this.loadedStyles.has(cacheKey)) return
     this.loadedStyles.add(cacheKey)
     const style = document.createElement('style')
     style.innerHTML = styleText
@@ -95,13 +81,9 @@ class ResourceLoader {
   async loadHeads(heads, runtime, descriptor) {
     for (const node of heads) {
       const nodeName = node.nodeName.toLowerCase()
-      if (nodeName === 'link') {
-        this.loadLink(node, runtime)
-      } else if (nodeName === 'script') {
-        await this.loadScript(node, runtime)
-      } else if (nodeName === 'title') {
-        descriptor.title = node.innerText
-      }
+      if (nodeName === 'link') this.loadLink(node, runtime)
+      else if (nodeName === 'script') await this.loadScript(node, runtime)
+      else if (nodeName === 'title') descriptor.title = node.innerText
     }
   }
 }
@@ -113,9 +95,7 @@ class TemplateParser {
 
   createDescriptor(text, mod, url, scoped, doc) {
     return {
-      url,
-      scoped,
-      mod,
+      url, scoped, mod,
       heads: Array.from(doc.querySelector('head')?.children || []),
       body: document.createElement('div'),
       setup: undefined,
@@ -130,7 +110,7 @@ class TemplateParser {
   }
 
   processStyles(descriptor) {
-    descriptor.tmp.querySelectorAll('style').forEach((styleNode) => {
+    descriptor.tmp.querySelectorAll('style').forEach(styleNode => {
       if (styleNode.getAttribute('unscoped') === null) {
         descriptor.styles += vcss.parse(styleNode.innerHTML, descriptor.url)
       } else {
@@ -142,11 +122,9 @@ class TemplateParser {
 
   processBody(descriptor) {
     const bodyNode = descriptor.tmp.querySelector('body')
-    if (!bodyNode) {
-      return
-    }
+    if (!bodyNode) return
     descriptor.body.append(...bodyNode.childNodes)
-    Array.from(bodyNode.attributes).forEach((attr) => {
+    Array.from(bodyNode.attributes).forEach(attr => {
       if (/^[a-zA-Z]/.test(attr.name)) {
         descriptor.body.setAttribute(attr.name, attr.value)
       } else {
@@ -157,23 +135,17 @@ class TemplateParser {
   }
 
   processScripts(descriptor) {
-    descriptor.body.querySelectorAll('script').forEach((scriptNode) => {
+    descriptor.body.querySelectorAll('script').forEach(scriptNode => {
       const content = scriptNode.innerHTML.trim()
-      if (!content) {
-        scriptNode.remove()
-        return
-      }
-      if (scriptNode.hasAttribute('setup')) {
-        descriptor.setup = scriptNode
-      } else if (!scriptNode.hasAttribute('no-vhtml')) {
-        descriptor.scripts.push(scriptNode)
-      }
+      if (!content) { scriptNode.remove(); return }
+      if (scriptNode.hasAttribute('setup')) descriptor.setup = scriptNode
+      else if (!scriptNode.hasAttribute('no-vhtml')) descriptor.scripts.push(scriptNode)
       scriptNode.remove()
     })
   }
 
   syncRefOwnerId(dom, refId) {
-    Array.from(dom.childNodes).forEach((node) => {
+    Array.from(dom.childNodes).forEach(node => {
       if (node.nodeType === 1) {
         node.setAttribute('vrefof', refId)
         this.syncRefOwnerId(node, refId)
@@ -202,19 +174,9 @@ class TemplateParser {
     body.style.cssText = 'background:#aaa;height:100%;width:100%;display:grid;place-items:center;'
     body.innerHTML = `<div style="width:20rem;height:15rem;border-radius:1rem;padding:1rem;background:#cfc0aa;display:grid;place-items:center;"><div style="font-size:2rem">404</div><p>${url}</p></div>`
     return {
-      url,
-      scoped: getModulePath(mod),
-      mod,
-      heads: [],
-      body,
-      setup: undefined,
-      scripts: [],
-      styles: '',
-      title: '',
-      txt: '',
-      tmp: null,
-      customAttrs: {},
-      err: error,
+      url, scoped: getModulePath(mod), mod,
+      heads: [], body, setup: undefined, scripts: [], styles: '', title: '',
+      txt: '', tmp: null, customAttrs: {}, err: error,
     }
   }
 }
@@ -243,53 +205,39 @@ class TemplateLoader {
   readScopedHeaders(response) {
     const headers = {}
     for (const [key, value] of response.headers.entries()) {
-      if (key.startsWith('vhtml-')) {
-        headers[key.slice(6)] = value
-      }
+      if (key.startsWith('vhtml-')) headers[key.slice(6)] = value
     }
     return headers
   }
 
   async fetchFile(url) {
     const response = await fetch(url, { headers: { 'X-No-Fallback': '1' } })
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     return response.text()
   }
 
   async parseUI(text, runtime, url, ignoreScoped = false) {
     const descriptorUrl = url?.endsWith('.html') ? url.slice(0, -5) : (url || '#inline')
-    const descriptorModule = await this.moduleManager.getModule('')
+    const descriptorModule = await this.moduleManager.getModule(getModulePath(runtime))
     return this.parser.parse(text, descriptorModule, descriptorUrl, ignoreScoped)
   }
 
   async fetchUI(url, runtime = {}, ignoreScoped = false) {
     const fetchUrl = normalizeFetchUrl(url, getModulePath(runtime))
-    if (this.cache.templates.has(fetchUrl)) {
-      return this.cache.templates.get(fetchUrl)
-    }
-    if (this.cache.pending.has(fetchUrl)) {
-      return this.cache.pending.get(fetchUrl)
-    }
+    if (this.cache.templates.has(fetchUrl)) return this.cache.templates.get(fetchUrl)
+    if (this.cache.pending.has(fetchUrl)) return this.cache.pending.get(fetchUrl)
     const pending = this.doFetchUI(fetchUrl, runtime, ignoreScoped)
     this.cache.pending.set(fetchUrl, pending)
-    return pending.finally(() => {
-      this.cache.pending.delete(fetchUrl)
-    })
+    return pending.finally(() => this.cache.pending.delete(fetchUrl))
   }
 
   async doFetchUI(fetchUrl, tempEnv = {}, ignoreScoped = false) {
     tempEnv = tempEnv || {}
     try {
       let params = {}
-      if (!ignoreScoped) {
-        params = { headers: { 'X-No-Fallback': 1 } }
-      }
+      if (!ignoreScoped) params = { headers: { 'X-No-Fallback': 1 } }
       const response = await fetch(fetchUrl, params)
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const scopedHeaders = this.readScopedHeaders(response)
       const responseScoped = normalizeScoped(scopedHeaders.scoped || '')
       const descriptorModule = await this.moduleManager.getModule(responseScoped)
@@ -308,7 +256,7 @@ class TemplateLoader {
   }
 }
 
-const templateLoader = new TemplateLoader()
+export const templateLoader = new TemplateLoader()
 
 export {
   normalizeFetchUrl,
@@ -316,7 +264,6 @@ export {
   resolveScopedUrl,
   scopedBaseURL,
   TemplateLoader,
-  templateLoader,
 }
 
 export default templateLoader
