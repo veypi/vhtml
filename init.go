@@ -37,7 +37,7 @@ var vhtmljs string
 // 2. 前端引用: <script type="module" key='vhtml' src="/vhtml/vhtml.min.js"></script>
 func init() {
 	current := utils.CurrentDir(0)
-	vdev := os.Getenv("vdev")
+	debug := os.Getenv("debug")
 	renderEnv := func(x *vigo.X) {
 		pathParam := x.PathParams.Get("path")
 		requestPath := x.Request.URL.Path
@@ -47,10 +47,10 @@ func init() {
 			return
 		}
 		x.Header().Set("vhtml-scoped", Router.String())
-		x.Header().Set("vhtml-vdev", vdev)
+		x.Header().Set("vhtml-debug", debug)
 	}
 	var lfs fs.FS
-	if vdev != "" && current != "" {
+	if debug != "" && current != "" {
 		Router.Get("vhtml.min.js", func(x *vigo.X) { _ = x.File(path.Join(utils.CurrentDir(0), "src", "index.js")) })
 		srcfs, _ := ufs.NewLocalFS(path.Join(current, "src"))
 		uifs, _ := ufs.NewLocalFS(path.Join(current, "ui"))
@@ -69,7 +69,7 @@ func init() {
 
 func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 	current := utils.CurrentDir(1)
-	vdev := os.Getenv("vdev")
+	debug := os.Getenv("debug")
 	renderEnv := func(x *vigo.X) {
 		pathParam := x.PathParams.Get("path")
 		requestPath := x.Request.URL.Path
@@ -79,17 +79,17 @@ func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 			return
 		}
 		x.Header().Set("vhtml-scoped", router.String())
-		x.Header().Set("vhtml-vdev", vdev)
+		x.Header().Set("vhtml-debug", debug)
 		for i := 0; i < len(args); i += 2 {
 			x.Header().Set("vhtml-"+args[i], args[i+1])
 		}
-		if vdev != "" {
+		if debug != "" {
 			x.Header().Set("Cache-Control", "no-cache")
 		}
 	}
 	var lfs fs.FS
 	var err error
-	if vdev != "" && current != "" {
+	if debug != "" && current != "" {
 		lfs, err = ufs.NewLocalFS(path.Join(current, "ui"))
 	} else {
 		lfs, err = ufs.NewEmbedFS(uiFS, "ui")
