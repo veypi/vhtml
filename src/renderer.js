@@ -68,7 +68,7 @@ function ensureRendererRuntime() {
 
   const scheduleDisposeNodeScope = (node) => {
     if (!node || node.nodeType !== 1) return
-    if (node.hasAttribute?.('data-vrouter-cache') || node.hasAttribute?.('data-vrouter-layout')) return
+    if (node.hasAttribute?.('data-keep')) return
     cancelPendingDisposal(node)
     const timer = requestAnimationFrame(() => {
       pendingDisposals.delete(node)

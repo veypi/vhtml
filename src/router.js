@@ -308,7 +308,7 @@ class Page {
     this._meta.title = parser.title || ''
     this.dom = document.createElement('div')
     this.dom.setAttribute('vsrc', this.htmlPath)
-    this.dom.setAttribute('data-vrouter-cache', '')
+    this.dom.setAttribute('data-keep', '')
     if (!layout) {
       this.node.innerHTML = ''
       this.node.append(this.dom)
@@ -324,7 +324,7 @@ class Page {
     const layoutParser = await templateLoader.fetchUI(layoutUrl, runtime)
     if (layoutParser.err) throw new Error(`load layout failed: ${layoutUrl} ${layoutParser.err}`)
     this.layoutDom = prepareLayoutDom(layoutParser.body.cloneNode(true))
-    this.layoutDom?.setAttribute('data-vrouter-layout', '')
+    this.layoutDom?.setAttribute('data-keep', '')
     this.node.innerHTML = ''
     this.node.append(this.layoutDom)
     await this.renderer.parseRef(`/layout/${layout}`, this.layoutDom, {}, runtime, null, true)

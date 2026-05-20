@@ -269,6 +269,11 @@ export function compileVif(nodes, data, runtime, ctx) {
           targetDom.innerHTML = ''
           sourceNodes.forEach(child => targetDom.appendChild(child.cloneNode(true)))
         }
+        const sourceAttrs = metaOf(targetDom).sourceAttrs
+        if (sourceAttrs?.length) {
+          Array.from(targetDom.attributes).forEach(a => targetDom.removeAttribute(a.name))
+          sourceAttrs.forEach(a => targetDom.setAttribute(a.name, a.value))
+        }
         ensureStructuralBoundary(targetDom, data, runtime)
         compileNode(targetDom, data, runtime, ctx, instanceOf(targetDom)?.scope)
       }
@@ -285,12 +290,14 @@ export function compileVif(nodes, data, runtime, ctx) {
       node.replaceWith(ifCache.now)
       ifCache.conds.push(node.getAttribute('v-if'))
       node.removeAttribute('v-if')
+      node.setAttribute('data-keep', '')
       ifCache.doms.push(node)
       return false
     }
     if (node.getAttribute('v-else-if') !== null) {
       ifCache.conds.push(node.getAttribute('v-else-if'))
       node.removeAttribute('v-else-if')
+      node.setAttribute('data-keep', '')
       ifCache.doms.push(node)
       node.remove()
       return false
@@ -298,6 +305,7 @@ export function compileVif(nodes, data, runtime, ctx) {
     if (node.getAttribute('v-else') !== null) {
       ifCache.conds.push('')
       node.removeAttribute('v-else')
+      node.setAttribute('data-keep', '')
       ifCache.doms.push(node)
       node.remove()
       return false
@@ -607,6 +615,9 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
 
   if (!metaOf(dom).sourceNodes) {
     metaOf(dom).sourceNodes = Array.from(dom.childNodes).map(node => node.cloneNode(true))
+    metaOf(dom).sourceAttrs = Array.from(dom.attributes)
+      .filter(a => !['v-if', 'v-else-if', 'v-else'].includes(a.name))
+      .map(a => ({ name: a.name, value: a.value }))
   }
 
   let vfortxt = dom.getAttribute('v-for')
