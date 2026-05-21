@@ -6,15 +6,15 @@
  * 所有属性从 ComponentInstance 直接访问，不设 wrapper 函数。
  */
 
-import { Wrap, Watch, Cancel, GenUniqueID, DataID } from './reactive.js'
+import { Wrap, Watch, Cancel, DataID } from './reactive.js'
 import { Run } from './sandbox.js'
 import utils from './utils.js'
 import { runMountedHandler } from './lifecycle.js'
 import { isRelativeHref } from './url.js'
 import {
   instanceOf, setInstance, metaOf,
-  createInstance, detachInstance,
-  disposeRuntimeSubtree, clearNodeState,
+  createInstance,
+  disposeRuntimeSubtree,
   ComponentScope, getNodeScope,
 } from './component.js'
 
@@ -48,6 +48,22 @@ function resolveScopedUrl(rawUrl, runtime) {
 const varRegex = /{{|}}/g
 const vforRegex = /^\s*(?:\((\w+)\s*,\s*(\w+)\)|(\w+))\s+in\s+(.+?)\s*$/
 
+/** 从普通元素或 <template> 中提取内容子节点 */
+function getSourceNodes(dom) {
+  if (dom.nodeName === 'TEMPLATE') {
+    const source = dom.content || dom
+    return Array.from(source.childNodes).map(n => n.cloneNode(true))
+  }
+  return [dom.cloneNode(true)]
+}
+
+/** 将一组节点按顺序插入到 refNode 之前（用 fragment 保持顺序） */
+function insertBefore(nodes, refNode) {
+  const frag = document.createDocumentFragment()
+  nodes.forEach(n => frag.appendChild(n))
+  refNode.parentNode.insertBefore(frag, refNode)
+}
+
 export function ensureStructuralBoundary(dom, data, runtime) {
   let instance = instanceOf(dom, false)
   if (!instance) {
@@ -64,13 +80,6 @@ export function ensureStructuralBoundary(dom, data, runtime) {
     instance.runtime = runtime || null
   }
   return instance
-}
-
-function disposeBoundaryNode(node) {
-  const inst = instanceOf(node, false)
-  inst?.scope?.dispose(node)
-  if (inst) detachInstance(inst)
-  clearNodeState(node)
 }
 
 export function compileTextNode(dom, data, runtime, scope) {
@@ -102,6 +111,41 @@ export function compileTextNode(dom, data, runtime, scope) {
   dom.nodeValue = parts.join('')
 }
 
+function clearVforRange(startMark, endMark) {
+  let n = startMark.nextSibling
+  while (n && n !== endMark) {
+    const next = n.nextSibling
+    if (n.nodeType === 1) disposeRuntimeSubtree(n)
+    n.remove()
+    n = next
+  }
+}
+
+function removeVforItem(entry) {
+  if (!entry) return
+  let n = entry.startMark.nextSibling
+  while (n && n !== entry.endMark) {
+    const next = n.nextSibling
+    if (n.nodeType === 1) disposeRuntimeSubtree(n)
+    n.remove()
+    n = next
+  }
+  entry.startMark.remove()
+  entry.endMark.remove()
+}
+
+function moveItemBefore(itemStart, itemEnd, refNode) {
+  if (itemEnd.nextSibling === refNode) return
+  const nodes = [itemStart]
+  let n = itemStart.nextSibling
+  while (n && n !== itemEnd) {
+    nodes.push(n)
+    n = n.nextSibling
+  }
+  nodes.push(itemEnd)
+  insertBefore(nodes, refNode)
+}
+
 export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   dom.removeAttribute('v-for')
   const matches = vforRegex.exec(vfortxt)
@@ -112,208 +156,194 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const valueName = matches[1] || matches[3]
   const keyName = matches[2]
   const listExpr = matches[4]
-  const anchor = document.createElement('div')
-  anchor.style.display = 'none'
-  const cacheId = GenUniqueID()
+
+  const sourceNodes = getSourceNodes(dom)
+
+  const vforStart = document.createComment('~vfor')
+  const vforEnd = document.createComment('~/vfor')
+  dom.replaceWith(vforStart, vforEnd)
+
   const cache = Object.create(null)
+  const parentScope = instanceOf(vforStart.parentNode)?.scope
 
-  const createVforDom = (itemData, beforeNode, stripVif = false) => {
-    const newDom = dom.cloneNode(true)
-    if (stripVif) newDom.removeAttribute('v-if')
-    ensureStructuralBoundary(newDom, itemData, runtime)
-    anchor.parentNode.insertBefore(newDom, beforeNode)
-    compileNode(newDom, itemData, runtime, ctx, instanceOf(newDom)?.scope)
-    return newDom
-  }
-
-  const findInsertBefore = (currentKey) => {
-    let found = false
-    for (const key of Object.keys(cache)) {
-      if (key === currentKey) { found = true; continue }
-      if (!found) continue
-      const nextDom = cache[key]?.dom
-      if (nextDom?.isConnected) return nextDom
-    }
-    return anchor
-  }
-
-  const parentScope = instanceOf(dom.parentNode)?.scope
   parentScope?.addCleanup(() => {
     Object.keys(cache).forEach(key => {
-      const cached = cache[key]
-      if (cached?.watchId >= 0) Cancel(cached.watchId)
-      disposeBoundaryNode(cached?.dom)
-      cached?.dom?.remove?.()
+      removeVforItem(cache[key])
       delete cache[key]
     })
+    clearVforRange(vforStart, vforEnd)
   })
 
-  dom.parentNode.replaceChild(anchor, dom)
-  watch(parentScope || instanceOf(anchor.parentNode || dom.parentNode)?.scope, () => {
-    let iterations = Run(listExpr, data, runtime)
-    const rendered = new Set()
-    if (typeof iterations === 'function') iterations = iterations()
-    if (typeof iterations === 'number') iterations = Array.from({ length: iterations }, (_, i) => i)
-    if (iterations === undefined || iterations === null) iterations = []
+  watch(parentScope, () => {
+    let items = Run(listExpr, data, runtime)
+    if (typeof items === 'function') items = items()
+    if (typeof items === 'number') items = Array.from({ length: items }, (_, i) => i)
+    if (!items) items = []
 
-    const items = []
-    Object.keys(iterations).forEach(key => {
-      let cacheKey = ''
-      if (iterations[key] && iterations[key][DataID]) {
-        cacheKey = iterations[key][DataID]
-      } else {
-        cacheKey = `${key}.${iterations[key]}`
-      }
-      cacheKey = `${cacheId}.${cacheKey}`
-      rendered.add(cacheKey)
-      items.push({ key, cacheKey, value: iterations[key] })
+    const keep = new Set()
+    const order = []
+
+    Object.keys(items).forEach(key => {
+      const value = items[key]
+      const ck = value?.[DataID] || `${key}.${value}`
+      keep.add(ck)
+      order.push({ key, value, ck })
     })
 
+    // 移除过期条目
     Object.keys(cache).forEach(key => {
-      if (!rendered.has(key)) {
-        const cached = cache[key]
-        if (cached?.watchId >= 0) Cancel(cached.watchId)
-        disposeBoundaryNode(cached?.dom)
-        cached?.dom?.remove?.()
+      if (!keep.has(key)) {
+        removeVforItem(cache[key])
         delete cache[key]
       }
     })
 
-    let refNode = anchor
-    for (let index = items.length - 1; index >= 0; index--) {
-      const { key, cacheKey, value } = items[index]
-      const currentRecord = cache[cacheKey]
-      if (currentRecord) {
-        const currentData = currentRecord.data || metaOf(currentRecord.dom).vforData
-        if (currentData) {
-          currentData[valueName] = value
-          if (keyName) currentData[keyName] = key === '0' ? 0 : (Number(key) || key)
-        }
-        const currentDom = currentRecord.dom
-        if (currentDom && (currentDom.nextSibling !== refNode || !currentDom.isConnected)) {
-          anchor.parentNode.insertBefore(currentDom, refNode)
-        }
-        if (currentDom?.isConnected) refNode = currentDom
-        continue
-      }
-      let tmpData = { [valueName]: value }
-      if (keyName) tmpData[keyName] = key === '0' ? 0 : (Number(key) || key)
-      tmpData = Wrap(tmpData, data)
-      const record = { data: tmpData, dom: null, watchId: -1 }
-      cache[cacheKey] = record
+    // 创建新条目 & 更新已有条目
+    order.forEach(({ key, value, ck }) => {
+      let entry = cache[ck]
+      if (!entry) {
+        const itemStart = document.createComment('~vitem')
+        const itemEnd = document.createComment('~/vitem')
+        insertBefore([itemStart, itemEnd], vforEnd)
 
-      const vif = dom.getAttribute('v-if')
-      if (!vif) {
-        const newDom = createVforDom(tmpData, refNode)
-        metaOf(newDom).vforData = tmpData
-        record.dom = newDom
-        refNode = newDom
-        continue
+        const clones = sourceNodes.map(n => n.cloneNode(true))
+        const itemData = Wrap({ [valueName]: value }, data)
+        if (keyName) itemData[keyName] = key === '0' ? 0 : (Number(key) || key)
+
+        // 将 clone 插入 item 范围，再处理 v-if/v-else 链
+        insertBefore(clones, itemEnd)
+        const remaining = compileVif(clones, itemData, runtime, ctx)
+        remaining.forEach(n => {
+          if (n.nodeType === 1) {
+            metaOf(n).vforData = itemData
+            ensureStructuralBoundary(n, itemData, runtime)
+            compileNode(n, itemData, runtime, ctx)
+          } else if (n.nodeType === 3) {
+            compileTextNode(n, itemData, runtime, parentScope)
+          }
+        })
+
+        entry = { startMark: itemStart, endMark: itemEnd, data: itemData }
+        cache[ck] = entry
+        return
       }
 
-      record.watchId = watch(parentScope || instanceOf(anchor.parentNode || dom.parentNode)?.scope, () => {
-        const cached = cache[cacheKey]
-        if (!cached) { Cancel(record.watchId); return }
-        return Run(vif, cached.data, runtime)
-      }, (res) => {
-        const cached = cache[cacheKey]
-        if (!cached) { Cancel(record.watchId); return }
-        if (res) {
-          if (!cached.dom) {
-            const newDom = createVforDom(cached.data, findInsertBefore(cacheKey), true)
-            metaOf(newDom).vforData = cached.data
-            cached.dom = newDom
-          }
-          if (!cached.dom.isConnected) {
-            anchor.parentNode.insertBefore(cached.dom, findInsertBefore(cacheKey))
-          }
-        } else if (cached.dom) {
-          disposeBoundaryNode(cached.dom)
-          cached.dom.remove()
-          cached.dom = null
-        }
-      })
-    }
+      // 更新已有条目的数据
+      if (entry.data) {
+        entry.data[valueName] = value
+        if (keyName) entry.data[keyName] = key === '0' ? 0 : (Number(key) || key)
+      }
+
+      // 将整个 item 范围移到 vforEnd 之前
+      moveItemBefore(entry.startMark, entry.endMark, vforEnd)
+    })
   })
 }
 
 export function compileVif(nodes, data, runtime, ctx) {
-  let ifCache = { now: document.createElement('div'), conds: [], doms: [] }
-  const handleIf = (cache) => {
-    const ifData = { now: cache.now, conds: cache.conds, doms: cache.doms }
-    const ifList = ifData.conds.map(cond => cond === '' ? 'true' : `Boolean(${cond})`)
-    const ifExpr = `let res = [${ifList.join(',')}]\n return res.indexOf(true)`
-    watch(instanceOf(ifData.now)?.scope, () => {
-      const targetIndex = Run(ifExpr, data, runtime)
-      let targetDom = ifData.doms[targetIndex]
-      if (!targetDom) {
-        targetDom = document.createElement('div')
-        targetDom.style.display = 'none'
+  const result = []
+  let chain = null // { conds, sourceBranches, startMark, endMark }
+
+  function flushChain() {
+    if (!chain || chain.conds.length === 0) return
+    const { conds, sourceBranches, startMark, endMark } = chain
+
+    const ifExpr = `[${conds.map(c => c === '' ? 'true' : `Boolean(${c})`).join(',')}].indexOf(true)`
+    let activeIndex = -1
+
+    function clearContent() {
+      let n = startMark.nextSibling
+      while (n && n !== endMark) {
+        const next = n.nextSibling
+        if (n.nodeType === 1) disposeRuntimeSubtree(n)
+        n.remove()
+        n = next
       }
-      return targetDom
-    }, (targetDom) => {
-      if (!targetDom) return
-      ctx?.onMountedRun?.(ifData.now, (node) => {
-        node.replaceWith(targetDom)
-        ifData.now = targetDom
+    }
+
+    function showBranch(index) {
+      if (index < 0 || index >= sourceBranches.length) {
+        const empty = document.createElement('div')
+        empty.style.display = 'none'
+        endMark.before(empty)
+        return
+      }
+      const clones = sourceBranches[index].map(n => n.cloneNode(true))
+      insertBefore(clones, endMark)
+      clones.forEach(n => {
+        if (n.nodeType === 1) {
+          ensureStructuralBoundary(n, data, runtime)
+          compileNode(n, data, runtime, ctx)
+        } else if (n.nodeType === 3) {
+          compileTextNode(n, data, runtime, instanceOf(startMark.parentNode)?.scope)
+        }
       })
-      const targetInst = instanceOf(targetDom, false)
-      const targetScope = targetInst?.scope
-      const needReparse = !metaOf(targetDom).parsed || targetScope?.state === 'disposed'
-      if (needReparse) {
-        if (targetScope?.state === 'disposed') {
-          disposeRuntimeSubtree(targetDom)
-        }
-        const sourceNodes = metaOf(targetDom).sourceNodes
-        if (sourceNodes?.length) {
-          targetDom.innerHTML = ''
-          sourceNodes.forEach(child => targetDom.appendChild(child.cloneNode(true)))
-        }
-        const sourceAttrs = metaOf(targetDom).sourceAttrs
-        if (sourceAttrs?.length) {
-          Array.from(targetDom.attributes).forEach(a => targetDom.removeAttribute(a.name))
-          sourceAttrs.forEach(a => targetDom.setAttribute(a.name, a.value))
-        }
-        ensureStructuralBoundary(targetDom, data, runtime)
-        compileNode(targetDom, data, runtime, ctx, instanceOf(targetDom)?.scope)
-      }
+    }
+
+    const parentScope = instanceOf(startMark.parentNode)?.scope
+    watch(parentScope, () => Run(ifExpr, data, runtime), (targetIndex) => {
+      if (targetIndex === activeIndex) return
+      clearContent()
+      showBranch(targetIndex)
+      activeIndex = targetIndex
     })
+
+    chain = null
   }
 
-  const children = nodes.filter(node => {
-    if (!node.getAttribute || node.getAttribute('v-for')) return true
-    if (node.getAttribute('v-if') !== null) {
-      if (ifCache.conds.length > 0) {
-        handleIf(ifCache)
-        ifCache = { now: document.createElement('div'), conds: [], doms: [] }
-      }
-      node.replaceWith(ifCache.now)
-      ifCache.conds.push(node.getAttribute('v-if'))
+  for (const node of nodes) {
+    // 注释节点放行（包括我们的标记注释 ~vif, ~/vif）
+    if (node.nodeType !== 1) { result.push(node); continue }
+
+    // v-for 节点不参与 v-if 链
+    if (node.getAttribute('v-for')) { flushChain(); result.push(node); continue }
+
+    const vif = node.getAttribute('v-if')
+    if (vif !== null) {
+      flushChain()
+
+      const startMark = document.createComment('~vif')
+      const endMark = document.createComment('~/vif')
+      node.replaceWith(startMark, endMark)
+
       node.removeAttribute('v-if')
-      node.setAttribute('data-keep', '')
-      ifCache.doms.push(node)
-      return false
-    }
-    if (node.getAttribute('v-else-if') !== null) {
-      ifCache.conds.push(node.getAttribute('v-else-if'))
-      node.removeAttribute('v-else-if')
-      node.setAttribute('data-keep', '')
-      ifCache.doms.push(node)
+      const source = getSourceNodes(node)
+
+      chain = {
+        conds: [vif],
+        sourceBranches: [source],
+        startMark,
+        endMark,
+      }
       node.remove()
-      return false
+      continue
     }
-    if (node.getAttribute('v-else') !== null) {
-      ifCache.conds.push('')
-      node.removeAttribute('v-else')
-      node.setAttribute('data-keep', '')
-      ifCache.doms.push(node)
-      node.remove()
-      return false
+
+    if (chain) {
+      const velseif = node.getAttribute('v-else-if')
+      if (velseif !== null) {
+        chain.conds.push(velseif)
+        node.removeAttribute('v-else-if')
+        chain.sourceBranches.push(getSourceNodes(node))
+        node.remove()
+        continue
+      }
+
+      if (node.getAttribute('v-else') !== null) {
+        chain.conds.push('')
+        node.removeAttribute('v-else')
+        chain.sourceBranches.push(getSourceNodes(node))
+        node.remove()
+        continue
+      }
     }
-    return true
-  })
-  if (ifCache.conds.length > 0) handleIf(ifCache)
-  return children
+
+    flushChain()
+    result.push(node)
+  }
+
+  flushChain()
+  return result
 }
 
 // ---- 属性编译 ----
@@ -612,6 +642,22 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
   }
 
   if (dom.hasAttribute('no-vhtml') || metaOf(dom).parsed) return
+
+  // <template> 元素：v-for 走多根编译，否则解包暴露子节点
+  if (nodeName === 'template') {
+    const vfortxt = dom.getAttribute('v-for')
+    if (vfortxt !== null) {
+      dom.removeAttribute('v-for')
+      compileVfor(vfortxt, dom, scopedData, activeRuntime, ctx)
+      metaOf(dom).parsed = true
+      return
+    }
+    const src = dom.content || dom
+    const childs = compileVif(Array.from(src.childNodes), scopedData, activeRuntime, ctx)
+    dom.replaceWith(...childs)
+    childs.forEach(c => compileNode(c, scopedData, activeRuntime, ctx, runtimeScope))
+    return
+  }
 
   if (!metaOf(dom).sourceNodes) {
     metaOf(dom).sourceNodes = Array.from(dom.childNodes).map(node => node.cloneNode(true))

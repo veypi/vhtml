@@ -5,6 +5,20 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.8.1] - 2026-05-21
+
+### 新增
+- **`<template>` 元素支持**：`<template>` 支持 `v-if`/`v-else-if`/`v-else` 和 `v-for` 指令，实现多根节点的条件渲染和列表渲染，DOM 中不留任何包装元素痕迹。
+- **v-for 内 v-if 链支持**：`<template v-for>` 内的兄弟 `v-if`/`v-else` 节点正确编组为条件链。
+
+### 变更
+- **v-if/v-for 编译器重构**：条件链和列表渲染改用 `<!--~vif-->`/`<!--~vfor-->`/`<!--~vitem-->` 注释标记锚点替代 `<div>` 占位符，重排序和清理逻辑基于标记范围操作。
+- **slot 空白节点过滤**：组件插槽解析时跳过纯空白文本节点，`<x></x>` 和 `<x>\n</x>` 行为一致。
+
+### 修复
+- **template 内容 vrefof 缺失**：`syncRefOwnerId` 遍历 DOM 时深入 `<template>.content` 片段，确保 scoped 样式和 slot 解析正确作用于 template 内部元素。
+- **v-else/v-else-if 属性残留**：条件链编译时清除所有指令属性。
+
 ## [0.8.0] - 2026-05-21
 
 ### 新增

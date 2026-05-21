@@ -145,7 +145,10 @@ class TemplateParser {
   }
 
   syncRefOwnerId(dom, refId) {
-    Array.from(dom.childNodes).forEach(node => {
+    const children = dom.nodeName === 'TEMPLATE' && dom.content
+      ? Array.from(dom.content.childNodes)
+      : Array.from(dom.childNodes)
+    children.forEach(node => {
       if (node.nodeType === 1) {
         node.setAttribute('vrefof', refId)
         this.syncRefOwnerId(node, refId)
