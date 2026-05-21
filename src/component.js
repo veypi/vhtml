@@ -348,6 +348,8 @@ function evaluateSlotName(dom, data, runtime) {
 export function createSlotContents(sourceNodes, data, runtime) {
   const slots = Object.create(null)
   sourceNodes.forEach(node => {
+    // 跳过纯空白文本节点，避免换行/缩进被当作默认 slot 内容
+    if (node.nodeType === 3 && !node.textContent.trim()) return
     const template = node.cloneNode(true)
     const slotName = normalizeSlotName(template.getAttribute?.('vslot'))
     template.removeAttribute?.('vslot')
@@ -504,10 +506,21 @@ export async function setupRef(dom, data, parentRuntime, target, singleMode = fa
   if (singleMode) return originData
 
   if (!instance.sourceNodes) {
-    instance.sourceNodes = Array.from(dom.childNodes).map(node => node.cloneNode(true))
+    instance.sourceNodes = Array.from(dom.childNodes)
+      .filter(n => !(n.nodeType === 3 && !n.textContent.trim()))
+      .map(node => node.cloneNode(true))
   }
-  const slotContents = createSlotContents(instance.sourceNodes || [], data, parentRuntime)
-  instance.slotContents = slotContents
+  if (dom.hasAttribute('vslot-inherit')) {
+    dom.removeAttribute('vslot-inherit')
+    let owner = instanceOf(dom.parentNode)
+    while (owner && !owner.slotContents) {
+      owner = instanceOf(owner.host?.parentNode)
+    }
+    instance.slotContents = owner?.slotContents || {}
+  } else {
+    const slotContents = createSlotContents(instance.sourceNodes || [], data, parentRuntime)
+    instance.slotContents = slotContents
+  }
   dom.innerHTML = ''
 
   const bodyClone = target.body.cloneNode(true)
