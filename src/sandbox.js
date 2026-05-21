@@ -38,32 +38,39 @@ const expose = {
 
 /**
  * 创建沙盒作用域 Proxy。
- * 属性查找链: data -> sys -> ctx -> mod -> execArgs -> expose -> window
+ * 属性查找优先级：$data/$sys/$ctx/$mod → sys → data → ctx → mod → execArgs → expose → window
+ * 其中 ctx → mod → execArgs → expose → window 通过原型链实现，利用 JS 引擎的原型查找优化。
  */
 export function createScopeProxy(data, runtime = {}, execArgs = {}) {
-  const runtimeState = runtime || {}
-  const runtimeExecArgs = execArgs || {}
-  const runtimeSys = runtimeState?.$sys || null
-  const runtimeCtx = runtimeState?.$ctx || null
-  const runtimeMod = runtimeState?.$mod || null
+  const runtimeSys = runtime?.$sys || null
+  const runtimeCtx = runtime?.$ctx || null
+  const runtimeMod = runtime?.$mod || null
+
+  // 原型链（自底向上）：null → expose → execArgs → mod → ctx
+  // 不以 window 为基座，避免 Object.assign 触碰 window 的只读属性
+  let fallback = Object.create(null)
+  fallback = Object.assign(fallback, expose)
+  if (execArgs && typeof execArgs === 'object') {
+    fallback = Object.assign(Object.create(fallback), execArgs)
+  }
+  if (runtimeMod) {
+    fallback = Object.assign(Object.create(fallback), runtimeMod)
+  }
+  if (runtimeCtx) {
+    fallback = Object.assign(Object.create(fallback), runtimeCtx)
+  }
+
   return new Proxy(data, {
-    has(target, key) {
-      return true
-    },
+    has(target, key) { return true },
     get(target, key, receiver) {
-      let v
-      if (key === '$data') v = data
-      else if (key === '$sys') v = runtimeSys
-      else if (key === '$ctx') v = runtimeCtx
-      else if (key === '$mod') v = runtimeMod
-      else if (runtimeSys && key in runtimeSys) v = runtimeSys[key]
-      else if (key in target) v = Reflect.get(target, key, receiver)
-      else if (runtimeCtx && key in runtimeCtx) v = runtimeCtx[key]
-      else if (runtimeMod && key in runtimeMod) v = runtimeMod[key]
-      else if (runtimeExecArgs && key in runtimeExecArgs) v = runtimeExecArgs[key]
-      else if (key in expose) v = expose[key]
-      else if (key in window) v = window[key]
-      return v
+      if (key === '$data') return data
+      if (key === '$sys')  return runtimeSys
+      if (key === '$ctx')  return runtimeCtx
+      if (key === '$mod')  return runtimeMod
+      if (runtimeSys && key in runtimeSys) return runtimeSys[key]
+      if (key in target) return Reflect.get(target, key, receiver)
+      if (key in fallback) return fallback[key]
+      return window[key]
     },
     set(target, key, newValue, receiver) {
       return Reflect.set(target, key, newValue, receiver)
