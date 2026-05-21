@@ -5,6 +5,40 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.8.0] - 2026-05-21
+
+### 新增
+- **Vhtml 类框架入口**：`index.js` 新增 `Vhtml` 类管理框架生命周期，暴露 `mount()`、`destroy()`、`parseDom()`、`parseRef()` 公开方法，`window.$vhtml` 为全局单例实例。
+- **路由 error_redirect**：路由配置新增 `error_redirect`，页面加载失败时自动跳转备用路由。
+- **路由 component 函数参数**：`component` 函数第二个参数传入 `matchedRoute.params`。
+- **scoped 模块 fetch 方法**：`$mod.fetch()` 自动处理 scoped URL 解析。
+- **IMG scoped URL**：`<img>` 标签的 `src` 属性自动解析 scoped 路径。
+- **链接 target="_blank"**：导航处理器支持 `target="_blank"`，自动 `window.open`。
+
+### 变更
+- **核心模块扁平化**：移除旧 `runtime/` 目录，核心模块（compiler、component、reactive、sandbox、router、loader）扁平化到 `src/`。
+- **渲染器重构**：`renderer.js` 从全局副作用的 bootstrap 重构为纯 `createRenderContext` 工厂，MO/vdelay/样式交由 Vhtml 实例管理。
+- **合并 component 模块**：组件系统（component.js + slots.js + scope.js + instance.js + store.js）合并为单一文件。
+- **合并 compiler 模块**：编译器（attributes.js + structure.js）合并为单一文件。
+- **统一 data-keep**：`data-vrouter-cache` 和 `data-vrouter-layout` 合并为 `data-keep` 属性。
+- **i18n 消息隔离**：使用 bucket key 防止不同模块间消息键名冲突。
+- **v-i18n 输出路径**：非默认入口时自动调整输出路径，修复扫描统计计数。
+
+### 优化
+- **沙盒代理原型链**：属性查找从 11 步链式 `if/in` 改为原型链查找，利用 V8 内联缓存加速表达式执行。
+
+### 修复
+- **MO 挂起机制**：组件解析时挂起 MutationObserver，防止重入突变导致渲染异常。
+- **X-No-Fallback 请求头**：fetch 请求新增 `X-No-Fallback` 头，阻止服务端降级转发。
+- **布局样式**：`vrouter` 新增 `height: 100%`、`overflow: auto`，修复布局滚动问题。
+- **多行表达式**：`vproxy` 支持多行表达式编译，带 `return` 语句兜底。
+- **移除 eval**：沙盒暴露全局中移除 `eval`，提升安全性。
+
+### 移除
+- 移除 `window.__VhtmlCtx__` 全局泄漏。
+- 移除 `renderer.js` 中的 `bootstrapVhtml` 和 `createVhtmlApp`。
+- 移除 `docs/usage.md` 过期文档。
+
 ## [0.7.4] - 2026-04-15
 
 ### 变更
