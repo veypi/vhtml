@@ -34,13 +34,47 @@ function ensureRefPool(data) {
   return data.$refs
 }
 
-function resolveScopedUrl(rawUrl, runtime) {
+const URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'data', 'action', 'formaction'])
+
+function normalizePath(path, minDepth = 0) {
+  const segments = path.split('/').filter(s => s !== '')
+  const result = []
+  for (const seg of segments) {
+    if (seg === '.') continue
+    if (seg === '..') {
+      if (result.length > minDepth) result.pop()
+    } else {
+      result.push(seg)
+    }
+  }
+  return '/' + result.join('/')
+}
+
+function anchorPrefix(runtime) {
+  return runtime?.$mod?.url_prefix || runtime?.$mod?.scoped
+}
+
+function resolveScopedUrl(rawUrl, runtime, scoped) {
   if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
   if (rawUrl.startsWith('@')) return rawUrl.slice(1)
-  if (runtime?.$mod?.scoped && isRelativeHref(rawUrl)) {
-    return runtime.$mod.scoped + rawUrl
+  scoped = scoped || runtime?.$mod?.scoped
+  if (scoped && isRelativeHref(rawUrl)) {
+    const minDepth = scoped.split('/').filter(s => s).length
+    return normalizePath(scoped + rawUrl, minDepth)
   }
   return rawUrl
+}
+
+function resolveSrcset(srcset, runtime) {
+  if (!srcset || typeof srcset !== 'string') return srcset
+  return srcset.split(',').map(entry => {
+    const trimmed = entry.trim()
+    const parts = trimmed.split(/\s+/)
+    if (parts.length > 0 && isRelativeHref(parts[0])) {
+      parts[0] = resolveScopedUrl(parts[0], runtime)
+    }
+    return parts.join(' ')
+  }).join(', ')
 }
 
 // ---- 结构型编译 ----
@@ -348,68 +382,40 @@ export function compileVif(nodes, data, runtime, ctx) {
 
 // ---- 属性编译 ----
 
-export function compileAHref(dom, data, runtime, ctx) {
+function syncAnchorActive(dom) {
   const scope = instanceOf(dom)?.scope
-  if (!dom.hasAttribute('href') && !dom.hasAttribute(':href')) return
-
-  const setResolvedHref = (rawHref) => {
-    const href = resolveScopedUrl(rawHref, runtime)
-    if (href !== undefined) dom.setAttribute('href', href)
-  }
-
-  if (dom.hasAttribute(':href')) {
-    const code = dom.getAttribute(':href')
-    dom.removeAttribute(':href')
-    watch(scope, () => {
-      const href = Run(code, data, runtime)
-      setResolvedHref(href)
-    })
-  } else {
-    setResolvedHref(dom.getAttribute('href'))
-  }
-
+  const router = instanceOf(dom)?.runtime?.$sys?.$router
+  if (!router) return
   const syncActive = (to) => {
     const url = to?.fullPath
     if (dom.getAttribute('href') === url) dom.setAttribute('active', '')
     else dom.removeAttribute('active')
   }
-  const router = instanceOf(dom)?.runtime?.$sys?.$router
-  if (!router) return
-  syncActive(router?.current)
-  const off = router?.onChange?.(syncActive)
+  syncActive(router.current)
+  const off = router.onChange?.(syncActive)
   scope?.addCleanup(off)
 }
 
-export function compileImgSrc(dom, data, runtime, ctx) {
-  const scope = instanceOf(dom)?.scope
-  if (!dom.hasAttribute('src') && !dom.hasAttribute(':src')) return
-
-  const setResolvedSrc = (rawSrc) => {
-    const src = resolveScopedUrl(rawSrc, runtime)
-    if (src !== undefined) dom.setAttribute('src', src)
-  }
-
-  if (dom.hasAttribute(':src')) {
-    const code = dom.getAttribute(':src')
-    dom.removeAttribute(':src')
-    watch(scope, () => {
-      const src = Run(code, data, runtime)
-      setResolvedSrc(src)
-    })
-  } else {
-    setResolvedSrc(dom.getAttribute('src'))
-  }
-}
-
-export function compileAttr(dom, name, value, data, runtime, ctx) {
+export function compileAttr(dom, name, value, data, runtime, ctx, dynamicUrlAttrs) {
   const scope = instanceOf(dom)?.scope
   if (name.startsWith(':')) {
     const attrName = name.slice(1)
     if (attrName === 'class' || attrName === 'style') {
       handleStyle(dom, attrName, value, data, runtime)
     } else {
+      if (URL_ATTRS.has(attrName)) {
+        dynamicUrlAttrs?.add(attrName)
+      }
       watch(scope, () => {
-        const res = value ? Run(value, data, runtime) : data[attrName]
+        let res = value ? Run(value, data, runtime) : data[attrName]
+        if (URL_ATTRS.has(attrName) && res) {
+          if (attrName === 'srcset') {
+            res = resolveSrcset(res, runtime)
+          } else {
+            const prefix = attrName === 'href' && dom.nodeName === 'A' ? anchorPrefix(runtime) : undefined
+            res = resolveScopedUrl(res, runtime, prefix)
+          }
+        }
         utils.SetAttr(dom, attrName, res)
       })
     }
@@ -589,14 +595,28 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
 }
 
 export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
-  if (dom.nodeName === 'A') compileAHref(dom, data, runtime, ctx)
-  else if (dom.nodeName === 'IMG') compileImgSrc(dom, data, runtime, ctx)
+  const dynamicUrlAttrs = new Set()
 
   Array.from(dom.attributes).forEach(attr => {
-    if (compileAttr(dom, attr.name, attr.value, data, runtime, ctx)) {
+    if (compileAttr(dom, attr.name, attr.value, data, runtime, ctx, dynamicUrlAttrs)) {
       dom.removeAttribute(attr.name)
     }
   })
+
+  Array.from(dom.attributes).forEach(attr => {
+    if (URL_ATTRS.has(attr.name) && !dynamicUrlAttrs.has(attr.name)) {
+      let resolved
+      if (attr.name === 'srcset') {
+        resolved = resolveSrcset(attr.value, runtime)
+      } else {
+        const prefix = attr.name === 'href' && dom.nodeName === 'A' ? anchorPrefix(runtime) : undefined
+        resolved = resolveScopedUrl(attr.value, runtime, prefix)
+      }
+      dom.setAttribute(attr.name, resolved)
+    }
+  })
+
+  if (dom.nodeName === 'A') syncAnchorActive(dom)
 
   if (customAttrs) {
     const inst = instanceOf(dom, false)

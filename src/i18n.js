@@ -3,12 +3,14 @@
  * Copyright (C) 2026 veypi <i@veypi.com>
  */
 
+import { Wrap } from './reactive.js'
+
 class I18n {
   constructor(sharedState) {
     // 共享状态模式：ModuleContextManager 传入 sharedLocale 对象
     // 多个 I18n 实例共享同一个 locale，一处修改处处生效
     this._shared = sharedState || { locale: 'zh-CN', fallback: 'en-US' }
-    this.messages = {}
+    this.messages = Wrap({})
     this._formatters = new Map()
   }
 

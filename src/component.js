@@ -442,6 +442,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
   if (!target && vsrc) {
     if (!vsrc.endsWith('.html')) vsrc = `${vsrc}.html`
     target = await templateLoader.fetchUI(vsrc, runtime, dom.hasAttribute('scoped'))
+    if (!nodeInst.get(dom)) return
   }
 
   const mod = target?.mod || runtime?.$mod || null
@@ -458,6 +459,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
   instance.vsrc = vsrc
 
   const originData = await setupRef(dom, data, parentRuntime, target, singleMode, ctx)
+  if (!nodeInst.get(dom)) return
   ctx.suspendMO?.()
 
   if (singleMode) {
@@ -479,7 +481,8 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
 
 export async function setupRef(dom, data, parentRuntime, target, singleMode = false, ctx) {
   const originData = Wrap({ $refs: Wrap({}) })
-  const instance = nodeInst.get(dom)
+  let instance = nodeInst.get(dom)
+  if (!instance) return originData
   const componentRuntime = instance?.runtime
 
   if (target.setup) {
@@ -496,6 +499,8 @@ export async function setupRef(dom, data, parentRuntime, target, singleMode = fa
         else setTimeout(register, 50)
       },
     })
+    instance = nodeInst.get(dom)
+    if (!instance) return originData
   }
 
   if (!originData.$refs || typeof originData.$refs !== 'object') {

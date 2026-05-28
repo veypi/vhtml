@@ -427,7 +427,10 @@ class RouterView {
   get current() { return this.instance.data }
   get query() { return this.instance.data?.query || {} }
   get params() { return this.instance.data?.params || {} }
-  get modulePath() { return getModulePath(instanceOf(this.#hostNode)?.runtime) }
+  get modulePath() {
+    const mod = instanceOf(this.#hostNode)?.runtime?.$mod
+    return mod?.url_prefix || mod?.scoped || ''
+  }
   get routesSource() { return this.#routesSource }
   get runtime() { return this.#hostNode ? instanceOf(this.#hostNode)?.runtime : null }
   get activePage() { return this.#currentPage }
