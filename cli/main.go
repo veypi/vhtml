@@ -14,6 +14,6 @@ import (
 )
 
 func main() {
-	app := vigo.New("vhtml", vhtml.Router, struct{}{}, func() error { return nil })
+	app := vigo.New("vhtml", vhtml.Router, struct{}{})
 	panic(app.Run())
 }

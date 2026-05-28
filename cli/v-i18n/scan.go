@@ -17,9 +17,11 @@ import (
 )
 
 var scanOpts = struct {
-	Verbose bool `json:"verbose" desc:"显示所有结果，不省略"`
+	Verbose    bool `json:"verbose" desc:"显示所有结果，不省略"`
+	AutoRemove bool `json:"autoremove" desc:"自动删除未引用和值为空的 key"`
 }{
-	Verbose: false,
+	Verbose:    false,
+	AutoRemove: false,
 }
 
 func init() {
@@ -57,39 +59,85 @@ func runScan() error {
 		emptyKeys[lang] = getEmptyKeysInFoundKeys(translations, lang, foundKeys)
 	}
 
-	// 自动清理：删除未使用的 key
-	if len(unusedKeys) > 0 {
-		for _, key := range unusedKeys {
-			for _, lang := range config.Languages {
+	if scanOpts.AutoRemove {
+		// 自动清理：删除未使用的 key
+		if len(unusedKeys) > 0 {
+			for _, key := range unusedKeys {
+				for _, lang := range config.Languages {
+					delete(translations[lang], key)
+				}
+			}
+		}
+
+		// 自动清理：删除值为空的 key
+		for _, lang := range config.Languages {
+			for key := range emptyKeys[lang] {
 				delete(translations[lang], key)
+			}
+		}
+
+		// 自动清理：删除代码中不存在的 key（即不在 foundKeys 中）
+		for _, lang := range config.Languages {
+			if items, ok := translations[lang]; ok {
+				for key := range items {
+					if !foundKeys[key] && !isParentKeyUsed(key, foundKeys) {
+						delete(items, key)
+					}
+				}
+			}
+		}
+
+		// 清理后重新计算已存在的 keys 和缺失的 keys
+		existingKeys = getAllKeys(translations, config.DefaultLanguage)
+		missingKeys = findMissingKeys(foundKeys, existingKeys)
+	}
+
+	// 输出统计信息
+	printStatsTable(foundKeys, translations, config)
+
+	// 输出未引用的 key 列表
+	if len(unusedKeys) > 0 {
+		if scanOpts.AutoRemove {
+			fmt.Printf("\n🗑️  已自动删除 %d 个未引用的 key\n", len(unusedKeys))
+		} else {
+			fmt.Printf("\n⚠️  发现 %d 个未引用的 key（使用 --autoremove 自动删除）\n", len(unusedKeys))
+			limit := 10
+			if scanOpts.Verbose {
+				limit = len(unusedKeys)
+			}
+			for i, key := range unusedKeys {
+				if i >= limit {
+					fmt.Printf("  ... 还有 %d 个\n", len(unusedKeys)-limit)
+					break
+				}
+				fmt.Printf("  - %s\n", key)
 			}
 		}
 	}
 
-	// 自动清理：删除值为空的 key
+	// 输出值为空的 key 列表
+	hasEmpty := false
 	for _, lang := range config.Languages {
-		for key := range emptyKeys[lang] {
-			delete(translations[lang], key)
+		if len(emptyKeys[lang]) > 0 {
+			hasEmpty = true
+			break
 		}
 	}
-
-	// 自动清理：删除代码中不存在的 key（即不在 foundKeys 中）
-	for _, lang := range config.Languages {
-		if items, ok := translations[lang]; ok {
-			for key := range items {
-				if !foundKeys[key] && !isParentKeyUsed(key, foundKeys) {
-					delete(items, key)
+	if hasEmpty {
+		if scanOpts.AutoRemove {
+			fmt.Println("\n🗑️  已自动删除值为空的 key")
+		} else {
+			fmt.Printf("\n⚠️  发现值为空的 key（使用 --autoremove 自动删除）\n")
+			for _, lang := range config.Languages {
+				if len(emptyKeys[lang]) > 0 {
+					fmt.Printf("  [%s]:\n", lang)
+					for key := range emptyKeys[lang] {
+						fmt.Printf("    - %s\n", key)
+					}
 				}
 			}
 		}
 	}
-
-	// 清理后重新计算已存在的 keys 和缺失的 keys
-	existingKeys = getAllKeys(translations, config.DefaultLanguage)
-	missingKeys = findMissingKeys(foundKeys, existingKeys)
-
-	// 输出统计信息（基于清理后的 translations）
-	printStatsTable(foundKeys, translations, config)
 
 	// 收集各语言缺失的 key（包括默认语言）
 	langMissing := make(map[string][]string)
