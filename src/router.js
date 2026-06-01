@@ -109,7 +109,7 @@ export class RouteMatcher {
   }
 }
 
-export function parseUrlString(urlString, scoped) {
+export function parseUrlString(urlString) {
   let url
   let path = ''
   if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
@@ -119,9 +119,6 @@ export function parseUrlString(urlString, scoped) {
   } else {
     url = new URL(urlString, window.location.href)
     path = url.pathname
-  }
-  if (scoped && path.startsWith(scoped)) {
-    path = path.slice(scoped.length) || '/'
   }
   const query = {}
   url.searchParams.forEach((value, key) => { query[key] = value })
@@ -427,12 +424,9 @@ class RouterView {
   get current() { return this.instance.data }
   get query() { return this.instance.data?.query || {} }
   get params() { return this.instance.data?.params || {} }
-  get modulePath() {
-    const mod = instanceOf(this.#hostNode)?.runtime?.$mod
-    return mod?.url_prefix || mod?.scoped || ''
-  }
+  get modulePath() { return '' }
   get routesSource() { return this.#routesSource }
-  get runtime() { return this.#hostNode ? instanceOf(this.#hostNode)?.runtime : null }
+  get runtime() { return this.instance.runtime }
   get activePage() { return this.#currentPage }
   set activePage(value) { this.#currentPage = value || null }
   get beforeEnter() { return this.#beforeEnter }
@@ -492,11 +486,8 @@ class RouterView {
     } else {
       this.#history.push(nextSnapshot)
     }
-    const targetUrl = this.modulePath && !matchedRoute.fullPath.startsWith('http')
-      ? `${this.modulePath}${matchedRoute.fullPath}`
-      : matchedRoute.fullPath
-    if (mode === 'replace') history.replaceState({}, '', targetUrl)
-    else history.pushState({}, '', targetUrl)
+    if (mode === 'replace') history.replaceState({}, '', matchedRoute.fullPath)
+    else history.pushState({}, '', matchedRoute.fullPath)
     this.#notifyListeners(this.current, previousSnapshot)
   }
 
@@ -549,12 +540,12 @@ class RouterView {
   normalizeRouteTarget(to) {
     let path, query = {}, params = {}, hash = '', name
     if (typeof to === 'string') {
-      const parsed = parseUrlString(to, this.modulePath)
+      const parsed = parseUrlString(to)
       if (!parsed) return null
       path = parsed.path; query = { ...parsed.query }; hash = parsed.hash
     } else if (to && typeof to === 'object') {
       if (to.path) {
-        const parsed = parseUrlString(to.path, this.modulePath)
+        const parsed = parseUrlString(to.path)
         if (!parsed) return null
         path = parsed.path; query = { ...parsed.query, ...(to.query || {}) }
         hash = to.hash || parsed.hash; params = to.params || {}
@@ -563,8 +554,6 @@ class RouterView {
       } else return null
     } else return null
     if (path && !path.startsWith('/')) path = `/${path}`
-    if (this.modulePath && path?.startsWith(this.modulePath)) path = path.slice(this.modulePath.length) || '/'
-    if (path && !path.startsWith('/')) path = `/${path}`
     if (path !== '/' && path?.endsWith('/')) path = path.slice(0, -1)
     return { path, query, params, hash, name }
   }
@@ -572,7 +561,7 @@ class RouterView {
   matchRoute(to) {
     const routeInfo = this.normalizeRouteTarget(to)
     if (!routeInfo) return null
-    const { path, query, params, name } = routeInfo
+    const { path, query, params, name, hash } = routeInfo
     if (name) {
       const route = this.#routesByName.get(name)
       if (!route) return null
@@ -582,17 +571,17 @@ class RouterView {
       })
       const match = route.matcher.match(resolvedPath)
       if (!match) return null
-      return { route, params: { ...match.params, ...params }, matched: match.matched, path: resolvedPath, query, name }
+      return { route, params: { ...match.params, ...params }, matched: match.matched, path: resolvedPath, query, name, hash }
     }
     for (const route of this.#stringRoutes) {
       if (route.path === path && (route.component || route.redirect)) {
-        return { route, params: { ...params }, matched: path, path, query, name: route.name }
+        return { route, params: { ...params }, matched: path, path, query, name: route.name, hash }
       }
     }
     for (const route of this.#regexRoutes) {
       const match = route.matcher.match(path)
       if (match && (route.component || route.redirect)) {
-        return { route, params: { ...match.params, ...params }, matched: match.matched, path, query, name: route.name }
+        return { route, params: { ...match.params, ...params }, matched: match.matched, path, query, name: route.name, hash }
       }
     }
     return null
@@ -601,12 +590,12 @@ class RouterView {
   matchTo(to) {
     const matchResult = this.matchRoute(to)
     if (!matchResult) return null
-    const { route, params, query, path, name } = matchResult
+    const { route, params, query, path, name, hash } = matchResult
     let search = ''
     if (query && Object.keys(query).length > 0) {
       search = `?${Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}`
     }
-    const fullPath = `${path || matchResult.path}${search}`
+    const fullPath = `${path || matchResult.path}${search}${hash || ''}`
     return { route, params, query, name: name || route.name, path: path || matchResult.path, fullPath, matched: [route] }
   }
 
@@ -674,8 +663,16 @@ class RouterView {
     if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)
   }
 
-  async push(to) { this.#nav.push(to) }
-  replace(to) { this.#nav.replace(to) }
+  async push(to) {
+    const matchedRoute = this.matchTo(to)
+    if (!matchedRoute) return
+    await this.#navigateTo(matchedRoute, 'push')
+  }
+  async replace(to) {
+    const matchedRoute = this.matchTo(to)
+    if (!matchedRoute) return
+    await this.#navigateTo(matchedRoute, 'replace')
+  }
   go(n) { this.#nav.go(n) }
   back() { this.#nav.back() }
   forward() { this.#nav.forward() }
@@ -744,8 +741,8 @@ class RouterRuntime {
     if (!view) {
       view = new RouterView(this.#nav)
       this.#views.set(node, view)
+      view.mount(renderer, node, runtime)
     }
-    view.mount(renderer, node, runtime)
     return view
   }
 }

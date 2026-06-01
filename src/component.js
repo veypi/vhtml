@@ -414,6 +414,35 @@ export function parseSlots(dom, data, runtime, ctx) {
 // 组件解析/挂载 (原 component.js)
 // ===================================================================
 
+function createLocalRouter(rootRouter, scoped) {
+  if (!scoped || !rootRouter) return rootRouter
+
+  const isExternal = (p) => /^https?:\/\//.test(p)
+
+  const resolve = (to) => {
+    if (typeof to === 'string' && !isExternal(to) && !to.startsWith(scoped)) {
+      return scoped + (to.startsWith('/') ? to : '/' + to)
+    }
+    if (to?.path && !isExternal(to.path) && !to.path.startsWith(scoped)) {
+      return { ...to, path: scoped + (to.path.startsWith('/') ? to.path : '/' + to.path) }
+    }
+    return to
+  }
+
+  return {
+    push(to) { return rootRouter.push(resolve(to)) },
+    replace(to) { return rootRouter.replace(resolve(to)) },
+    go(n) { return rootRouter.go(n) },
+    back() { return rootRouter.back() },
+    forward() { return rootRouter.forward() },
+    onChange(listener) { return rootRouter.onChange(listener) },
+    get current() { return rootRouter.current },
+    get params() { return rootRouter.params },
+    get query() { return rootRouter.query },
+    get history() { return rootRouter.history },
+  }
+}
+
 export async function parseRaw(dom, data, runtime, code, ctx) {
   const tmpId = `_${Math.random().toString(36).slice(2)}`
   const target = await templateLoader.parseUI(code, runtime || {}, tmpId)
@@ -446,7 +475,9 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
   }
 
   const mod = target?.mod || runtime?.$mod || null
-  const runtimeRouter = runtime?.$sys?.$router || null
+  const rootRouter = runtime?.$sys?.$router || null
+  const scoped = mod?.url_prefix || mod?.scoped || ''
+  const runtimeRouter = createLocalRouter(rootRouter, scoped)
   const componentRuntime = createRuntimeContext(runtime || null, mod, { $router: runtimeRouter })
   componentRuntime.$sys.$emit = (evt, ...args) => {
     evt = evt.toLowerCase()
