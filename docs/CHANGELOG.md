@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.8.2] - 2026-06-02
+
+### 新增
+- **i18n scan --autoremove**：`v-i18n scan` 新增 `--autoremove` 标志，默认关闭；开启后自动清理无用、空值和缺失的翻译键，未开启时显示警告及截断的键名列表。
+
+### 变更
+- **统一 URL 属性解析**：`compileAHref()` 和 `compileImgSrc()` 合并为统一的 `URL_ATTRS` 处理逻辑，新增 `normalizePath()` 解析 scoped URL 中的 `..` 和 `.` 段。
+- **srcset 属性支持**：新增 `resolveSrcset()` 处理 `<img srcset>` 属性的 URL 解析。
+- **router scope 集中化**：将 scope 前缀操作从 `parseUrlString` 和 `RouterView normalizeRouteTarget` 中移除，通过 `createLocalRouter` 代理统一处理 scoped 路由路径，修复 hash 在导航中的传播。
+
+### 修复
+- **router push/replace 同步匹配**：`push()` 和 `replace()` 方法在导航前同步匹配路由，确保路径在导航前已正确解析。
+- **RouterView 重复挂载**：`getOrCreateView` 仅挂载新创建的视图，不再每次访问都重新挂载。
+- **router modulePath 回退**：当 `url_prefix` 不存在时回退到 `scoped` 路径。
+- **i18n 响应式代理**：i18n 消息使用 reactive proxy 包装，支持变更检测。
+- **异步操作空值安全**：`parseRef()` 和 `setupRef()` 在异步操作后增加空值检查，防止已销毁组件崩溃。
+- **CLI app 初始化简化**：移除 `vigo.New()` 中未使用的 init 函数参数。
+
 ## [0.8.1] - 2026-05-21
 
 ### 新增
