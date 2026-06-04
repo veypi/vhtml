@@ -10,10 +10,8 @@ package vhtml
 import (
 	"embed"
 	"io/fs"
-	"net/http"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/veypi/vigo"
 	"github.com/veypi/vigo/contrib/ufs"
@@ -39,13 +37,6 @@ func init() {
 	current := utils.CurrentDir(0)
 	debug := os.Getenv("debug")
 	renderEnv := func(x *vigo.X) {
-		pathParam := x.PathParams.Get("path")
-		requestPath := x.Request.URL.Path
-		if pathParam == "" && !strings.HasSuffix(requestPath, "/") {
-			http.Redirect(x.ResponseWriter(), x.Request, requestPath+"/", http.StatusMovedPermanently)
-			x.Stop()
-			return
-		}
 		x.Header().Set("vhtml-scoped", Router.String())
 		x.Header().Set("vhtml-debug", debug)
 	}
@@ -64,20 +55,13 @@ func init() {
 		uifs, _ := ufs.NewEmbedFS(uifs, "ui")
 		lfs = ufs.NewMultiFS(srcfs, uifs)
 	}
-	Router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(&lfs, "root.html"))
+	Router.Get("/{path:*}", renderEnv, ufs.NewHandler(&lfs, ufs.WithSpa("root.html", nil, func() map[string]any { return map[string]any{"scoped": Router.String()} })))
 }
 
 func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 	current := utils.CurrentDir(1)
 	debug := os.Getenv("debug")
 	renderEnv := func(x *vigo.X) {
-		pathParam := x.PathParams.Get("path")
-		requestPath := x.Request.URL.Path
-		if pathParam == "" && !strings.HasSuffix(requestPath, "/") {
-			http.Redirect(x.ResponseWriter(), x.Request, requestPath+"/", http.StatusMovedPermanently)
-			x.Stop()
-			return
-		}
 		x.Header().Set("vhtml-scoped", router.String())
 		x.Header().Set("vhtml-debug", debug)
 		for i := 0; i < len(args); i += 2 {
@@ -97,6 +81,8 @@ func WrapUI(router vigo.Router, uiFS embed.FS, args ...string) vigo.Router {
 	if err != nil {
 		panic(err)
 	}
-	router.Get("/{path:*}", renderEnv, ufs.NewHandlerWithDefault(&lfs, "root.html"))
+	router.Get("/{path:*}", renderEnv, ufs.NewHandler(&lfs, ufs.WithSpa("root.html", nil, func() map[string]any {
+		return map[string]any{"scoped": router.String()}
+	})))
 	return router
 }

@@ -139,6 +139,15 @@ export function prepareLayoutDom(layoutRoot) {
   return layoutRoot
 }
 
+function normalizeLayoutUrl(layout) {
+  if (!layout) return ''
+  let url = layout
+  if (!url.startsWith('/')) url = `/${url}`
+  if (!url.endsWith('.html')) url += '.html'
+  if (!url.startsWith('/layout')) url = `/layout${url}`
+  return url
+}
+
 function toNormalizedRoutes(moduleExports) {
   if (Array.isArray(moduleExports)) {
     return { routes: moduleExports, beforeEnter: null, afterEnter: null }
@@ -300,7 +309,7 @@ class Page {
     this.instance.host = this.dom
   }
 
-  async mount(runtime, layout) {
+  async mount(runtime, layout, existingLayout = null) {
     const parser = await templateLoader.fetchUI(this.htmlPath, runtime)
     if (parser.err) {
       const redirectTarget = this.resolveErrorRedirect(parser.err)
@@ -315,6 +324,17 @@ class Page {
       this.node.innerHTML = ''
       this.node.append(this.dom)
       await this.renderer.parseRef(this.htmlPath, this.dom, {}, runtime, null)
+      this.instance.host = this.dom
+      this.activate()
+      return { mounted: true }
+    }
+    if (existingLayout?.dom) {
+      this.attachLayout(existingLayout.dom, existingLayout.instance)
+      const layoutRuntime = instanceOf(this.layoutDom)?.runtime || runtime || null
+      const outlet = this.outlet()
+      outlet.innerHTML = ''
+      outlet.append(this.dom)
+      await this.renderer.parseRef(this.htmlPath, this.dom, {}, layoutRuntime, null)
       this.instance.host = this.dom
       this.activate()
       return { mounted: true }
@@ -384,10 +404,28 @@ class Page {
     this.roots().forEach(root => runRuntimeTreeLifecycle(root, 'activate'))
   }
 
-  deactive() {
+  deactive(opts = {}) {
     this.clearTitleWatchers()
     if (!this._meta.didInitialActivation) return
+    const skipLayout = opts?.skipLayout ?? false
+    if (skipLayout && this.layoutDom && this.dom) {
+      runRuntimeTreeLifecycle(this.dom, 'deactive')
+      return
+    }
     this.roots().forEach(root => runRuntimeTreeLifecycle(root, 'deactive'))
+  }
+
+  detachLayout() {
+    const result = { dom: this.layoutDom, instance: this.layoutInstance }
+    this.layoutInstance = null
+    this._meta.layoutOutlet = null
+    return result
+  }
+
+  attachLayout(layoutDom, layoutInstance) {
+    this.layoutInstance = layoutInstance
+    // layoutDom 已经在 DOM 树中，无需重新 append
+    if (layoutInstance) layoutInstance.host = layoutDom
   }
 
   destroy() {
@@ -407,6 +445,7 @@ class RouterView {
   #nav = null
   #history = []
   #pageCache = new Map()
+  #layoutCache = new Map()
   #routesSource = '/routes.js'
   #beforeEnter = null
   #afterEnter = null
@@ -540,6 +579,7 @@ class RouterView {
     this.#routesByName = new Map()
     this.#history = []
     this.#pageCache = new Map()
+    this.#layoutCache = new Map()
     this.activePage = null
   }
 
@@ -640,12 +680,34 @@ class RouterView {
       if (result === false || !shouldContinue) return
     }
     const cacheKey = this.resolveCacheKey(route, matchedRoute)
-    this.activePage?.deactive()
+    const currentPage = this.activePage
+    const newLayout = to.layout || ''
+    const oldLayout = currentPage?.matchedRoute?.route?.layout || ''
+    const reuseLayout = !!(oldLayout && newLayout && oldLayout === newLayout)
+
+    if (reuseLayout && currentPage?.dom && currentPage?.layoutDom) {
+      const outlet = currentPage.outlet()
+      if (outlet && currentPage.dom.parentNode === outlet) {
+        outlet.removeChild(currentPage.dom)
+      }
+    }
+
+    currentPage?.deactive({ skipLayout: reuseLayout })
+
+    if (reuseLayout && currentPage?.layoutInstance) {
+      currentPage.detachLayout()
+    }
+
     this.#setRouterPath(matchedRoute, mode)
+
     if (cacheKey && this.#pageCache.has(cacheKey)) {
       const page = this.#pageCache.get(cacheKey)
       const isSharedPage = page.matchedRoute.fullPath !== matchedRoute.fullPath
       if (isSharedPage) page.updateRouter(matchedRoute)
+      if (reuseLayout && !page.layoutDom) {
+        const cachedLayout = this.#layoutCache.get(normalizeLayoutUrl(newLayout))
+        if (cachedLayout) page.attachLayout(cachedLayout.dom, cachedLayout.instance)
+      }
       page.activate()
       this.activePage = page
       if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)
@@ -653,14 +715,23 @@ class RouterView {
     }
     const page = new Page(this, this.#renderer, this.#hostNode, matchedRoute, cacheKey)
     if (cacheKey) this.#pageCache.set(cacheKey, page)
+
+    const normalizedLayoutUrl = normalizeLayoutUrl(to.layout)
+    const existingLayout = normalizedLayoutUrl ? this.#layoutCache.get(normalizedLayoutUrl) : null
+
     let mountResult
     try {
-      mountResult = await page.mount(this.runtime, to.layout)
+      mountResult = await page.mount(this.runtime, to.layout, existingLayout || null)
     } catch (error) {
       if (cacheKey) this.#pageCache.delete(cacheKey)
       page.destroy()
       throw error
     }
+
+    if (to.layout && page.layoutDom && !existingLayout) {
+      this.#layoutCache.set(normalizedLayoutUrl, { dom: page.layoutDom, instance: page.layoutInstance })
+    }
+
     if (mountResult?.redirect) {
       if (cacheKey) this.#pageCache.delete(cacheKey)
       page.destroy()

@@ -4,7 +4,7 @@
  *
  * 合并原 component.js + slots.js + scope.js + instance.js + store.js。
  * ComponentInstance 直接持有全部属性，不设 getter/setter 包装函数。
- * DOM 仅暴露 $data/$sys/$ctx/$mod 四个公开 getter。
+ * DOM 仅暴露 $data/$sys/$mod 三个公开 getter。
  */
 
 import { Wrap, Watch, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
@@ -110,7 +110,7 @@ export class ComponentInstance {
     this.parent = null        // 父 ComponentInstance
     this.children = new Set() // 子 ComponentInstance 集合
     this.scope = null         // ComponentScope
-    this.runtime = null       // { $sys, $ctx, $mod }
+    this.runtime = null       // { $sys, $mod }
     this.data = null          // 响应式数据 (Wrap 对象)
     this.vsrc = ''            // 组件源 URL
     this.events = null        // 自定义事件回调表
@@ -118,11 +118,12 @@ export class ComponentInstance {
     this.sourceNodes = null   // 原始子节点快照 (v-if 恢复用)
     this.vforData = null      // v-for 当前迭代数据
     this.slotOutletState = null // 插槽出口状态
+    this.unsafe = false
   }
 }
 
 // ===================================================================
-// 实例查找 —— 单一 WeakMap，4 个 DOM getter
+// 实例查找 —— 单一 WeakMap，3 个 DOM getter
 // ===================================================================
 
 const nodeInst = new WeakMap()
@@ -141,7 +142,7 @@ export function instanceOf(node, walk = true) {
   return null
 }
 
-/** 绑定 DOM 节点与实例，同时挂 $data/$sys/$ctx/$mod getter */
+/** 绑定 DOM 节点与实例，同时挂 $data/$sys/$mod getter */
 export function setInstance(node, instance) {
   nodeInst.set(node, instance)
   if (apiBound.has(node)) return
@@ -149,7 +150,6 @@ export function setInstance(node, instance) {
   Object.defineProperties(node, {
     $data: { configurable: true, enumerable: false, get() { return nodeInst.get(node)?.data ?? null } },
     $sys: { configurable: true, enumerable: false, get() { return nodeInst.get(node)?.runtime?.$sys ?? null } },
-    $ctx: { configurable: true, enumerable: false, get() { return nodeInst.get(node)?.runtime?.$ctx ?? null } },
     $mod: { configurable: true, enumerable: false, get() { return nodeInst.get(node)?.runtime?.$mod ?? null } },
   })
 }
@@ -244,9 +244,6 @@ export function disposeRuntimeSubtree(node) {
   })
 }
 
-export function clearNodeState(node) {
-  purgeNodeState(node)
-}
 
 // ===================================================================
 // 辅助
@@ -449,7 +446,11 @@ export async function parseRaw(dom, data, runtime, code, ctx) {
   ctx.parseRef(tmpId, dom, data || {}, { ...runtime }, target)
 }
 
-export async function parseRef(vsrc, dom, data, runtime, target, singleMode = false, ctx) {
+export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx) {
+  ctx = (optsOrCtx && typeof optsOrCtx === 'object' && optsOrCtx.compileNode) ? optsOrCtx : (ctx)
+  const options = (optsOrCtx && typeof optsOrCtx === 'object' && !optsOrCtx.compileNode) ? optsOrCtx : {}
+  const singleMode = options.single || (typeof optsOrCtx === 'boolean' ? optsOrCtx : false)
+
   const previousInstance = nodeInst.get(dom)
   const parentInstance = instanceOf(dom.parentNode)
   if (previousInstance) {
@@ -458,8 +459,12 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
     nodeInst.delete(dom)
   }
 
+  const isUnsafe = dom.hasAttribute('unsafe') || (parentInstance?.unsafe ?? false)
+  if (dom.hasAttribute('unsafe')) dom.removeAttribute('unsafe')
+
   const instance = createInstance(dom, parentInstance, 'component')
   setInstance(dom, instance)
+  instance.unsafe = isUnsafe
   instance.scope = new ComponentScope(dom)
   dom.setAttribute('vparsing', '')
 
@@ -470,7 +475,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
 
   if (!target && vsrc) {
     if (!vsrc.endsWith('.html')) vsrc = `${vsrc}.html`
-    target = await templateLoader.fetchUI(vsrc, runtime, dom.hasAttribute('scoped'))
+    target = await templateLoader.fetchUI(vsrc, runtime, dom.hasAttribute('scoped'), isUnsafe)
     if (!nodeInst.get(dom)) return
   }
 
@@ -478,6 +483,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
   const rootRouter = runtime?.$sys?.$router || null
   const runtimeRouter = createLocalRouter(rootRouter, mod?.url_prefix || resolveScope(mod))
   const componentRuntime = createRuntimeContext(runtime || null, mod, { $router: runtimeRouter })
+  if (isUnsafe) componentRuntime.__unsafe = true
   componentRuntime.$sys.$emit = (evt, ...args) => {
     evt = evt.toLowerCase()
     const events = instanceOf(dom, false)?.events
@@ -488,7 +494,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
   instance.runtime = componentRuntime
   instance.vsrc = vsrc
 
-  const originData = await setupRef(dom, data, parentRuntime, target, singleMode, ctx)
+  const originData = await setupRef(dom, data, parentRuntime, target, instance, singleMode, ctx)
   if (!nodeInst.get(dom)) return
   ctx.suspendMO?.()
 
@@ -509,28 +515,32 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
   instance.scope?.activate(dom)
 }
 
-export async function setupRef(dom, data, parentRuntime, target, singleMode = false, ctx) {
+export async function setupRef(dom, data, parentRuntime, target, instance, singleMode = false, ctx) {
   const originData = Wrap({ $refs: Wrap({}) })
-  let instance = nodeInst.get(dom)
-  if (!instance) return originData
-  const componentRuntime = instance?.runtime
+  let inst = instance || nodeInst.get(dom)
+  if (!inst) return originData
+  const componentRuntime = inst?.runtime
+  const sandboxOptions = inst?.unsafe ? { unsafe: true } : {}
 
   if (target.setup) {
     let script = target.setup.innerHTML
-    script = await parseImports(script, originData, componentRuntime, target.url)
+    if (inst?.unsafe) {
+      console.warn(`unsafe component "${target.url}" contains <script setup>, imports and external modules are blocked`)
+    }
+    script = await parseImports(script, originData, componentRuntime, target.url, inst?.unsafe)
     await AsyncRun(script, originData, componentRuntime, {
       $node: dom,
       $watch: (targetFn, callback, options) => {
-        const scope = instance?.scope
+        const scope = inst?.scope
         const register = () => {
           watch(scope, targetFn, callback, options)
         }
         if (scope) scope.setTimeout(register, 50)
         else setTimeout(register, 50)
       },
-    })
-    instance = nodeInst.get(dom)
-    if (!instance) return originData
+    }, sandboxOptions)
+    inst = nodeInst.get(dom)
+    if (!inst) return originData
   }
 
   if (!originData.$refs || typeof originData.$refs !== 'object') {
@@ -646,7 +656,8 @@ export function mountRef(dom, componentData, runtime, target, ctx) {
   if (!instance?.scope) {
     if (instance) instance.scope = new ComponentScope(dom)
   }
+  const sandboxOptions = instance?.unsafe ? { unsafe: true } : {}
   for (const script of target.scripts) {
-    registerScriptLifecycle(script, dom, instance, componentData, runtime)
+    registerScriptLifecycle(script, dom, instance, componentData, runtime, sandboxOptions)
   }
 }

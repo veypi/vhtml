@@ -1,10 +1,10 @@
 const protocolPattern = /^[a-zA-Z][a-zA-Z\d+.-]*:/
 
-export function hasProtocol(href) {
+function hasProtocol(href) {
   return protocolPattern.test(href)
 }
 
-export function isHttpProtocol(href) {
+function isHttpProtocol(href) {
   return href.startsWith('http://') || href.startsWith('https://')
 }
 

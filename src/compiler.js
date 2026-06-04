@@ -427,9 +427,7 @@ export function compileAttr(dom, name, value, data, runtime, ctx, dynamicUrlAttr
     handleEvent(dom, name, value, data, runtime, ctx)
     return true
   }
-  if (name.indexOf('!') > -1) {
-    console.warn('! prefix is deprecated, use : instead:', name, value, dom)
-  } else if (name.startsWith('v:')) {
+  if (name.startsWith('v:')) {
     const args = ctx?.findLastAccess?.(value, data)
     if (args && args.data && args.key) {
       return utils.BindInputDomValue(

@@ -2,87 +2,111 @@
  * sandbox.js — 沙盒执行引擎
  * Copyright (C) 2024 veypi <i@veypi.com>
  *
- * 基于 with + Proxy 的沙盒作用域，用于执行用户脚本和表达式。
+ * 基于 with + Proxy 的沙盒作用域。
+ * unsafe 模式下拒绝 DOM、网络、全局对象访问。
+ * 变量查找优先级：$data → data → $mod → $sys → expose → execArgs → window(仅非 unsafe)
  */
 
-const expose = {
-  'console': console,
-  'window': window,
-  'prompt': prompt.bind(window),
-  'alert': alert.bind(window),
-  'confirm': confirm.bind(window),
-  'RegExp': RegExp,
-  'document': document,
-  'Array': Array,
-  'Object': Object,
-  'Math': Math,
-  'Date': Date,
-  'JSON': JSON,
-  'Symbol': Symbol,
-  'Number': Number,
-  'isNaN': isNaN,
-  'parseInt': parseInt,
-  'parseFloat': parseFloat,
-  'setTimeout': setTimeout.bind(window),
-  'setInterval': setInterval.bind(window),
-  'clearTimeout': clearTimeout.bind(window),
-  'clearInterval': clearInterval.bind(window),
-  'encodeURIComponent': encodeURIComponent,
-  'btoa': btoa.bind(window),
-  'fetch': fetch.bind(window),
-  'TextDecoder': TextDecoder,
-  'history': history,
-  'requestAnimationFrame': requestAnimationFrame.bind(window),
-  'getComputedStyle': getComputedStyle.bind(window),
-}
+// ============================================================
+// API 分层
+// ============================================================
+
+// Tier 1: 纯原生 API（始终可用）
+const nativeExpose = Object.create(null)
+Object.assign(nativeExpose, {
+  console, Array, Object, Math, Date, JSON, Symbol, Number,
+  isNaN, parseInt, parseFloat, encodeURIComponent,
+  RegExp, TextDecoder, Map, Set, WeakMap, WeakSet,
+  Promise, Error, TypeError, RangeError, SyntaxError,
+  Infinity, NaN, undefined,
+})
+
+// Tier 2: 框架管理的浏览器 API（始终可用，window 绑定）
+const frameworkExpose = Object.create(null)
+Object.assign(frameworkExpose, {
+  alert: alert.bind(window),
+  prompt: prompt.bind(window),
+  confirm: confirm.bind(window),
+  setTimeout: setTimeout.bind(window),
+  setInterval: setInterval.bind(window),
+  clearTimeout: clearTimeout.bind(window),
+  clearInterval: clearInterval.bind(window),
+  requestAnimationFrame: requestAnimationFrame.bind(window),
+})
+
+// Tier 3: 全局 DOM / 网络 API（unsafe 模式下不可用）
+const globalExpose = Object.create(null)
+Object.assign(globalExpose, {
+  window,
+  document,
+  history,
+  fetch: fetch.bind(window),
+  btoa: btoa.bind(window),
+  getComputedStyle: getComputedStyle.bind(window),
+})
+
+// ============================================================
+// 沙盒 Proxy 创建
+// ============================================================
 
 /**
  * 创建沙盒作用域 Proxy。
- * 属性查找优先级：$data/$sys/$ctx/$mod → sys → data → ctx → mod → execArgs → expose → window
- * 其中 ctx → mod → execArgs → expose → window 通过原型链实现，利用 JS 引擎的原型查找优化。
  */
-export function createScopeProxy(data, runtime = {}, execArgs = {}) {
+export function createScopeProxy(data, runtime = {}, execArgs = {}, options = {}) {
+  const unsafe = options.unsafe ?? runtime?.__unsafe ?? false
   const runtimeSys = runtime?.$sys || null
-  const runtimeCtx = runtime?.$ctx || null
   const runtimeMod = runtime?.$mod || null
 
-  // 原型链（自底向上）：null → expose → execArgs → mod → ctx
-  // 不以 window 为基座，避免 Object.assign 触碰 window 的只读属性
-  let fallback = Object.create(null)
-  fallback = Object.assign(fallback, expose)
+  let expose = Object.assign(Object.create(null), nativeExpose, frameworkExpose)
+  if (!unsafe) {
+    expose = Object.assign(Object.create(expose), globalExpose)
+  }
+
+  let fallback = expose
   if (execArgs && typeof execArgs === 'object') {
     fallback = Object.assign(Object.create(fallback), execArgs)
   }
-  if (runtimeMod) {
-    fallback = Object.assign(Object.create(fallback), runtimeMod)
-  }
-  if (runtimeCtx) {
-    fallback = Object.assign(Object.create(fallback), runtimeCtx)
-  }
 
   return new Proxy(data, {
-    has(target, key) { return true },
+    has(_target, _key) { return true },
     get(target, key, receiver) {
       if (key === '$data') return data
       if (key === '$sys')  return runtimeSys
-      if (key === '$ctx')  return runtimeCtx
       if (key === '$mod')  return runtimeMod
-      if (runtimeSys && key in runtimeSys) return runtimeSys[key]
+
       if (key in target) return Reflect.get(target, key, receiver)
+
+      if (runtimeMod && key in runtimeMod) {
+        if (key === 'fetch' && unsafe) return runtimeMod.restrictedFetch
+        return runtimeMod[key]
+      }
+
+      if (runtimeSys && key in runtimeSys) return runtimeSys[key]
+
       if (key in fallback) return fallback[key]
-      return window[key]
+
+      if (!unsafe) return window[key]
+
+      return undefined
     },
     set(target, key, newValue, receiver) {
       return Reflect.set(target, key, newValue, receiver)
-    }
+    },
   })
 }
+
+// ============================================================
+// 编译 & 执行
+// ============================================================
+
+const syncCache = new Map()
+const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor
+const asyncCache = new Map()
 
 function toPreview(value, maxLength = 400) {
   if (typeof value !== 'string') return ''
   const text = value.trim()
-  if (text.length <= maxLength) return text
-  return `${text.slice(0, maxLength)}...`
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...`
 }
 
 function buildErrorContext(originCode, data, runtime, execArgs, label, error) {
@@ -97,28 +121,29 @@ function buildErrorContext(originCode, data, runtime, execArgs, label, error) {
   }
 }
 
-function logSandboxError(originCode, data, runtime, execArgs, label, error) {
+function logError(originCode, data, runtime, execArgs, label, error) {
   console.error(`${label} error`, buildErrorContext(originCode, data, runtime, execArgs, label, error))
 }
 
-function compileSandboxCode(originCode, cache, compiler, options = {}) {
+function compileCode(originCode, { async: isAsync, label } = {}) {
+  const cache = isAsync ? asyncCache : syncCache
   let fn = cache.get(originCode)
   if (fn) return fn
 
-  let code = originCode.trim()
+  const code = originCode.trim()
   const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
   const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
-  const wrapCode = (body) => `\nwith (sandbox) {\n${body}\n}`
-  const tryCompile = (body) => compiler(wrapCode(body))
+  const wrap = (body) => `\nwith (sandbox) {\n${body}\n}`
+  const Compiler = isAsync ? AsyncFunction : Function
 
-  if (options.returnExpression !== false && !isStatement) {
+  const tryCompile = (body) => new Compiler('sandbox', wrap(body))
+
+  if (!isStatement) {
     try {
       fn = tryCompile(`return (\n${code}\n)`)
       cache.set(originCode, fn)
       return fn
-    } catch (error) {
-      // Fall through to statement compilation
-    }
+    } catch (_) {}
   }
 
   try {
@@ -126,51 +151,47 @@ function compileSandboxCode(originCode, cache, compiler, options = {}) {
     cache.set(originCode, fn)
     return fn
   } catch (error) {
-    console.warn(`${options.label || 'Run'} compile error:`, originCode, '\n', error)
+    console.warn(`${label || 'compile'} error:`, originCode, '\n', error)
     return null
   }
 }
 
-function executeSandboxCode(fn, originCode, data, runtime, execArgs, label) {
+function executeFn(fn, originCode, data, runtime, execArgs, options, label) {
   if (!fn) return undefined
   try {
-    return fn(createScopeProxy(data, runtime, execArgs))
+    return fn(createScopeProxy(data, runtime, execArgs, options))
   } catch (error) {
-    logSandboxError(originCode, data, runtime, execArgs, label, error)
+    logError(originCode, data, runtime, execArgs, label, error)
   }
   return undefined
 }
 
-async function executeSandboxCodeAsync(fn, originCode, data, runtime, execArgs, label) {
+async function executeAsyncFn(fn, originCode, data, runtime, execArgs, options, label) {
   if (!fn) return undefined
   try {
-    return await fn(createScopeProxy(data, runtime, execArgs))
+    return await fn(createScopeProxy(data, runtime, execArgs, options))
   } catch (error) {
-    logSandboxError(originCode, data, runtime, execArgs, label, error)
+    logError(originCode, data, runtime, execArgs, label, error)
     throw error
   }
 }
 
-const runCache = new Map()
+// ============================================================
+// 公开 API
+// ============================================================
 
 /**
- * 同步执行表达式（用于 DOM 属性绑定等小代码片段）。
+ * 同步执行表达式（DOM 属性绑定等小代码片段）。
  */
-export function Run(originCode, data, runtime, execArgs) {
-  const fn = compileSandboxCode(originCode, runCache, (code) => new Function('sandbox', code), { label: 'Run' })
-  return executeSandboxCode(fn, originCode, data, runtime, execArgs, 'Run')
+export function Run(originCode, data, runtime, execArgs, options = {}) {
+  const fn = compileCode(originCode, { async: false, label: 'Run' })
+  return executeFn(fn, originCode, data, runtime, execArgs, options, 'Run')
 }
 
-const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor
-const asyncRunCache = new Map()
-
 /**
- * 异步执行大段代码（用于 setup 脚本等）。
+ * 异步执行大段代码（setup 脚本等）。
  */
-export async function AsyncRun(originCode, data, runtime, execArgs) {
-  const fn = compileSandboxCode(originCode, asyncRunCache, (code) => new AsyncFunction('sandbox', code), {
-    label: 'AsyncRun',
-    returnExpression: true,
-  })
-  return await executeSandboxCodeAsync(fn, originCode, data, runtime, execArgs, 'AsyncRun')
+export async function AsyncRun(originCode, data, runtime, execArgs, options = {}) {
+  const fn = compileCode(originCode, { async: true, label: 'AsyncRun' })
+  return await executeAsyncFn(fn, originCode, data, runtime, execArgs, options, 'AsyncRun')
 }

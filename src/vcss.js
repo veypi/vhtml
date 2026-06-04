@@ -451,7 +451,7 @@ class CSSParser {
           let tag = parts[i].trim()
           if (/^body(?:$|[:\[ ])/.test(tag)) {
             parts[i] = this.scopeBody + tag.slice(4)
-          } else if (/^:root(?:$:[$:\[ ])/.test(tag)) {
+          } else if (/^:root(?:$|[:\[ ])/.test(tag)) {
             parts[i] = this.scopeBody + tag.slice(5)
           } else {
             parts[i] = parts[i].trim() + this.scopeAttribute;

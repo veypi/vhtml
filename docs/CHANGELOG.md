@@ -5,6 +5,27 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### 新增
+- **unsafe 沙盒模式**：组件标记 `unsafe` 属性进入受限沙盒，传染所有子孙组件。restricted 下 `fetch` 仅限 scoped 内请求，禁止 `document`/`window`/`history`，不加载外部脚本，禁止 `import`。
+- **`$mod.restrictedFetch`**：模块初始化时定义受限 fetch，unsafe 模式下自动使用。
+
+### 变更
+- **变量池优先级重构**：`$data → $mod → $sys → expose → execArgs → window`。
+- **sandbox 双模式重构**：三级 expose（native/framework/global），unsafe bool 控制，统一编译缓存，去除模式字符串。
+- **`$mod` 精简**：删除 `$axios`、`baseURL`、`origin`，保留 `scoped`、`$bus`、`$i18n`、`$t`、`fetch`、`restrictedFetch`。
+- **删除 `$ctx`**：移除 `createCtxContext`、DOM `$ctx` getter、sandbox 中 `$ctx` 链。`createRuntimeContext` 仅返回 `{ $sys, $mod }`。
+- **Object.defineProperty 写保护**：`$mod` 框架 key 通过 `writable: false` 锁定，替代 Proxy 封装层。
+- **删除 `!` 前缀**：属性编译中移除已废弃的 `!` 前缀判断。
+
+### 移除
+- `getModuleContext`、`getBaseURL`、`scopedBaseURL` — 未使用的导出函数。
+- `ForceUpdate`、`clearNodeState`、`inferScopedFromUrl`、`scopedMarkerSegments` — 死代码。
+- `hasProtocol`、`isHttpProtocol`、`isProxy` — 降为非导出内部函数。
+- `patchModule` 方法 — 一行转发，调用方直接使用 `mergeModulePatch`。
+- `moduleReservedKeys` — `lockProperty` 已覆盖保护需求。
+
 ## [0.8.2] - 2026-06-02
 
 ### 新增

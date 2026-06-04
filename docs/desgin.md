@@ -14,531 +14,252 @@
 - 默认只有 HTML 组件渲染能力
 - `vrouter` 是可选特殊组件，不是基础前提
 
-例如：
+## 运行时变量池
 
-```html
-<a-b-c-d></a-b-c-d>
-```
-
-会被解析为：
+表达式解析优先级固定为：
 
 ```text
-/a/b/c/d.html
+$data → $mod → $sys → expose → execArgs → window
 ```
-
-运行时加载该 HTML，处理 `head/style/body/script setup/script`，并把结果挂到当前宿主节点。
-
-## 当前运行时分层
-
-### 1. vhtml core
-
-基础运行时不依赖 router，负责：
-
-- 组件路径解析与 HTML 加载
-- 组件实例创建与销毁
-- `script setup`、普通 `script`、生命周期脚本执行
-- 指令解析：`v-if`、`v-for`、`vslot`、`:attr`、`@event`、`v:prop`
-- slot 渲染
-- 真实 DOM 更新
-
-### 2. runtime 变量池
-
-当前运行时围绕四层变量池工作：
-
-- `$sys`
-- `$data`
-- `$ctx`
-- `$mod`
-
-其中 `$sys/$ctx/$mod` 会被打包成 `runtime` 传递，`$data` 保持组件实例私有。
-
-表达式解析顺序固定为：
-
-```text
-$sys > $data > $ctx > $mod
-```
-
-这是组件运行、模块隔离、router 局部化的核心边界。
-
-### 3. NavigationRuntime
-
-全局地址事件源，负责：
-
-- 监听浏览器地址变化
-- 拦截站内链接点击
-- `push / replace / go / back / forward`
-- 广播导航事件
-
-它不负责页面渲染。
-
-### 4. RouterView
-
-每个 `<vrouter>` 对应一个局部 `RouterView`。
-
-负责：
-
-- 加载自己的 routes 模块
-- 解析当前地址
-- 渲染自己的 page/layout
-- 管理自己的 page cache
-- 维护自己的当前路由状态
-
-同一页面可以存在多个 `<vrouter>`，它们共享浏览器地址，但各自维护自己的匹配结果和缓存。
-
-## 变量池模型
 
 ### `$data`
 
-当前组件实例私有状态。
-
-来源：
-
-- `<script setup>` 中定义的变量
-- 组件方法
-- props 映射结果
-
-特点：
-
-- 只属于当前实例
-- 不向子组件自动继承
-- 生命周期跟组件实例一致
-
-### `$sys`
-
-系统变量池。
-
-默认提供：
-
-- `$router`
-- `$emit`
-- `$message`
-
-### `$ctx`
-
-父子组件上下文链。
-
-来源：
-
-- 父组件显式传递
-- 运行时创建子组件时基于父组件派生原型链
-- 组件运行时显式写入
-
-特点：
-
-- 表示组件树上下文
-- 适合页面、布局、局部业务上下文
-- 不承担模块能力
-- 子组件默认读取父级最新值，除非自己覆盖同名键
+当前组件实例私有状态。来源：`<script setup>` 的裸赋值、props 映射。生命周期跟组件实例一致。
 
 ### `$mod`
 
-模块级上下文池。
+模块级上下文池。由 `scoped` 唯一标识，同 `scoped` 下所有组件共享同一个 `$mod`，不沿组件树继承。
 
-来源：
+框架定义的不可变 key（通过 `Object.defineProperty` 锁定 writable: false）：
 
-- 由 `scoped` 唯一标识
-- 同一个 `scoped` 共享同一个 `$mod`
-- 不沿组件树继承
+| key | 说明 |
+|-----|------|
+| `scoped` | 模块路径前缀，如 `/page`，根模块为 `""` |
+| `$bus` | 模块级 EventBus |
+| `$i18n` | I18n 实例 |
+| `$t(key, params)` | 翻译函数 |
+| `fetch(url, options)` | scoped fetch，相对路径自动加 scoped 前缀 |
+| `restrictedFetch` | unsafe 模式专用受限 fetch |
 
-特点：
+后端可通过 `vhtml-*` 响应头注入自定义配置到 `$mod`（如 `vhtml-debug` → `$mod.debug`）。
 
-- 是模块级单例
-- 只按模块隔离
-- 保存模块能力与模块资源
+### `$sys`
 
-当前模块能力都从 `$mod` 暴露：
+系统变量池，通过 `Object.create(parent.$sys)` 原型继承：
 
-- `$axios`
-- `$i18n`
-- `$t`
-- `$bus`
-
-## 模块入口文件规范
-
-### `env.js`
-
-每个模块可以提供：
-
-```text
-/$scoped/env.js
-```
-
-例如：
-
-```text
-/aic/env.js
-```
-
-当前加载位置与实现见：
-
-[`src/runtime/env.js`](/Users/veypi/vyes/vhtml/src/runtime/env.js)
-
-当前语义：
-
-- `env.js` 属于模块入口，不属于组件实例
-- 运行时在创建 `$scoped` 时加载一次
-- 默认导出应为一个函数
-- 函数签名为：
-
-```js
-export default async (env, manager) => {}
-```
-
-其中：
-
-- `env` 是当前模块的 `$scoped`
-- `manager` 是模块环境管理器
-
-当前 `env.js` 允许做的事：
-
-- 初始化模块级 `$axios`
-- 初始化模块级 `$i18n`
-- 注册模块级 `$bus` / `$message` 包装
-- 写入模块配置到 `$scoped`
-- 基于模块需求补充额外模块能力
-
-当前 `env.js` 不应该再承担的职责：
-
-- 配置 router 钩子
-- 操作局部 `$router`
-- 注入组件实例私有状态
-- 依赖父组件 `$env`
-
-也就是说：
-
-- router 配置属于 `routes.js`
-- 组件树上下文属于 `$env`
-- 模块能力属于 `env.js -> $scoped`
-
-### `routes.js`
-
-只有在页面里使用 `<vrouter>` 时，运行时才会加载：
-
-```text
-/$scoped/routes.js
-```
-
-当前 `routes.js` 设计上应该支持 4 种形式：
-
-```js
-export default [...]
-```
-
-```js
-export const routes = [...]
-export const beforeEnter = async () => {}
-export const afterEnter = () => {}
-```
-
-```js
-export default {
-  routes: [...],
-  beforeEnter,
-  afterEnter,
-}
-```
-
-```js
-export default ({ $scoped, router }) => ({
-  routes: [...],
-  beforeEnter,
-  afterEnter,
-})
-```
-
-其中：
-
-- `routes` 定义当前 router view 的路由表
-- `beforeEnter / afterEnter` 是当前 router view 的局部钩子
-- 这些钩子不应再通过 `env.js` 注入
-
-推荐语义：
-
-- `env.js` 只负责初始化模块级 `$scoped`
-- `routes.js` 负责消费 `$scoped` 并产出 router view 配置
-
-也就是说，模块里需要给 `beforeEnter / afterEnter` 使用的能力，应先放进 `$scoped`，再由 `routes.js` 使用，而不是让 `env.js` 反向依赖 router。
-
-推荐上下文形态：
-
-```js
-export default ({ $scoped, router }) => ({
-  routes: [...],
-  beforeEnter: async (to, from, next) => {
-    if (!$scoped.auth.isLogin()) {
-      next('/login')
-      return false
-    }
-  },
-})
-```
-
-这里：
-
-- `$scoped` 用于读取模块级能力
-- `router` 表示当前 `RouterView`
-
-当前设计约束：
-
-- `routes.js` 可以依赖 `$scoped`
-- `env.js` 不应接收 router 参数
-- router view 级逻辑留在 `routes.js`
-- 模块级能力留在 `env.js`
+| key | 说明 |
+|-----|------|
+| `$router` | 最近祖先 `<vrouter>` 的 RouterView 代理 |
+| `$emit(event, ...args)` | 向父组件发送自定义事件 |
+| `$message` | 全局 toast / dialog API |
 
 ### `$router`
 
-`$router` 不属于 `$scoped`。
+不属于 `$mod`，代表"当前组件最近祖先 `<vrouter>` 对应的 RouterView"。同一模块内多个 `<vrouter>` 各自维护自己的 `$router`。
 
-它代表“当前组件最近祖先 `<vrouter>` 对应的 `RouterView`”。
+### expose
 
-当前语义：
+sandbox 内置 API 分层：
 
-- 同一模块内多个 `<vrouter>` 可以各自提供不同的 `$router`
-- 组件脚本、生命周期脚本、链接激活态都优先使用最近祖先 router view
-- `$router.push()` 最终仍回到全局 `NavigationRuntime`，再广播给各个 router view
+| 层级 | 内容 |
+|------|------|
+| native | `console`, `Math`, `Date`, `JSON`, `Array`, `Object`, `parseInt`, `parseFloat`, `RegExp`, `TextDecoder` 等 |
+| framework | `alert`, `prompt`, `confirm`, `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`, `requestAnimationFrame` |
+| global | `window`, `document`, `history`, `fetch`(原生), `btoa`, `getComputedStyle` |
 
-## `scoped` 的语义
+## 沙盒执行引擎
 
-`scoped` 是模块资源根路径，也是模块前后端资源隔离边界。
+sandbox.js 基于 `with + Proxy` 实现：
 
-例如模块挂在：
+- `createScopeProxy(data, runtime, execArgs, options)` 创建沙盒作用域
+- `options.unsafe` 或 `runtime.__unsafe` 控制模式：`false` 时暴露 global 层，`true` 时仅 native + framework 层且无 window 兜底
+- 原型链：`expose → execArgs`，execArgs 携带 `$node`/`$watch`/`$scope`/`$event` 等执行上下文
+- `Run(code, data, runtime, execArgs, options)` — 同步表达式
+- `AsyncRun(code, data, runtime, execArgs, options)` — 异步脚本
 
-```text
-/aic
+## unsafe 沙盒
+
+组件标记 `unsafe` 属性后进入受限模式，**传染所有子孙组件**。
+
+传染路径：`parseRef` 检查 `dom.hasAttribute('unsafe') || parentInstance?.unsafe`，设置 `instance.unsafe = true` 和 `componentRuntime.__unsafe = true`。compiler 中 `Run()` 调用通过 `runtime.__unsafe` 自动感知模式。
+
+受限内容：
+
+- `fetch` → `$mod.restrictedFetch`，拒绝外部 URL 和跨 scoped 请求
+- `document` / `window` / `history` 从 expose 移除，无 window fallback
+- 外部 `<script src="...">` 不加载（loader.js `loadHeads` 跳过）
+- `<script setup>` 中 `import` 移除（imports.js）
+- `$mod` 框架 key 通过 `Object.defineProperty(writable: false)` 锁定，`$mod.scoped = 'x'` 静默失败
+
+## 模块上下文
+
+### `env.js`
+
+每个模块可提供 `{scoped}/env.js`，由 `ModuleContextManager` 在首次访问时加载一次。
+
+```js
+export default async ($mod, manager) => {
+  // 加载模块配置
+  const config = await $mod.fetch('/config.json').then(r => r.json())
+  $mod.config = config
+  // 加载翻译
+  $mod.$i18n.load(await $mod.fetch('/langs.json').then(r => r.json()))
+}
 ```
 
-则该模块下资源约定为：
+- `env.js` 属于模块入口，不属于组件实例
+- 不承担 router 钩子、组件私有状态、router 配置
 
-- HTML：`/aic/page/**/*.html`、`/aic/layout/**/*.html`、`/aic/local/**/*.html`
-- env：`/aic/env.js`
-- routes：`/aic/routes.js`
-- i18n：`/aic/langs.json`
-- API：`/aic/api/**`
+### `routes.js`
 
-同一个 `scoped` 当前共享：
+只有在页面里使用 `<vrouter>` 时加载 `{scoped}/routes.js`。
 
-- 同一个 `$scoped`
-- 同一个模块 `$axios`
-- 同一个模块 `$i18n`
-- 同一个模块 `$t`
+支持三种导出形式：
 
-不同 `scoped` 之间必须隔离：
+```js
+export default [...]                                       // 数组
+export default { routes, beforeEnter, afterEnter }         // 对象  
+export default ({ $mod, router }) => ({ routes, ... })     // 工厂
+```
 
-- 模块环境
-- `$axios.baseURL`
-- i18n 资源
-- 模块配置
+路由字段：`path`(必填)、`component`(必填)、`layout`、`name`、`meta`、`children`、`cacheKey`、`error_redirect`。
+
+### scoped 语义
+
+`scoped` 是模块资源根路径，也是模块隔离边界。同 `scoped` 共享同一个 `$mod`（`$bus`、`$i18n`、`$t`、`fetch`），不同 `scoped` 之间完全隔离。
 
 ## 统一实例模型
 
-当前运行时已经收敛到统一实例模型。
+### ComponentInstance
 
-统一实例定义见：
+```text
+host: DOM 元素
+kind: 'component' | 'boundary' | 'page' | 'layout' | 'slot-outlet'
+parent: 父实例
+children: Set<子实例>
+scope: ComponentScope (生命周期管理)
+runtime: { $sys, $mod }
+data: 响应式数据 (Wrap 对象)
+vsrc: 组件源 URL
+events: 自定义事件回调表
+slotContents: 插槽内容
+sourceNodes: 原始子节点快照 (v-if 恢复用)
+vforData: v-for 当前迭代数据
+slotOutletState: 插槽出口状态
+unsafe: bool (沙盒模式标记)
+```
 
-[`src/runtime/instance.js`](/Users/veypi/vyes/vhtml/src/runtime/instance.js)
+### DOM 接口
 
-当前实例字段包括：
+`nodeInst` WeakMap 索引，`setInstance()` 绑定后 DOM 暴露三个 getter：
 
-- `host`
-- `kind`
-- `parent`
-- `children`
-- `vsrc`
-- `data`
-- `env`
-- `scoped`
-- `router`
-- `route`
-- `cacheKey`
-- `scope`
-- `slots`
-- `slotOutletState`
-- `sourceNodes`
-- `vforData`
-- `events`
-- `parsed`
-- `meta`
+```js
+node.$data  // → instance.data
+node.$sys   // → instance.runtime.$sys
+node.$mod   // → instance.runtime.$mod
+```
 
-### 当前实例类型
+`nodeMeta` WeakMap 存储元素级元数据（sourceNodes、vforData、slotOutletState、parsed）。
 
-当前运行时已经把这些对象都纳入统一实例结构：
+### ComponentScope
 
-- 普通组件实例：`kind = 'component'`
-- 结构边界实例：`kind = 'boundary'`
-- router view 实例：`kind = 'router-view'`
-- page 实例：`kind = 'page'`
-- layout 实例：`kind = 'layout'`
+生命周期管理：`cleanups` 清理列表、`timers`/`intervals` Set、`lifecycle` hook 数组（active/deactive/dispose）。
 
-实例不是虚拟 DOM 节点，只是轻量运行时句柄。
+`setTimeout`/`setInterval`/`addEventListener` 自动注册到 scope，dispose 时自动清理。
 
-它负责承载状态、作用域、父子关系和运行时资源，不做 diff。
+## 组件编译管线
 
-## DOM 状态层
+```
+fetchUI(url)
+  → DOMParser 解析 HTML
+  → processStyles (CSS scoping)
+  → processBody (提取 body)
+  → processScripts (分类 script: setup / lifecycle)
+  → loadHeads (加载 link/script/style)
 
-当前 DOM 侧只保留 `WeakMap` 索引层。
+parseRef(vsrc, dom, data, runtime, target, options)
+  → ComponentInstance 创建
+  → setInstance 绑定 DOM
+  → fetchUI 获取模板
+  → createRuntimeContext 创建 runtime
+  → setupRef:
+      → AsyncRun 执行 <script setup>
+      → props/attrs 合并 (:, v:)
+      → slot 内容捕获
+      → body clone 插入 DOM
+  → compileNode 递归编译
+  → mountRef 注册生命周期脚本
+  → scope.activate()
+```
 
-见：
+### compileNode 编译顺序
 
-[`src/runtime/dom.js`](/Users/veypi/vyes/vhtml/src/runtime/dom.js)
+1. `<template>` → v-for 多根 或 解包子节点
+2. 自定义元素 (含 `-`) → `parseRef` 子组件
+3. `:vsrc` → 动态组件（响应式）
+4. `vsrc` → 静态组件
+5. `v-html` → 动态 innerHTML
+6. `vslot` → 插槽出口
+7. `vrouter` → 路由挂载
+8. `<select>` → 先子元素再属性
+9. 其他 → `compileAttrs` + 子节点递归
 
-职责：
+### v-for + v-if 同节点
 
-- `dom -> instance` 索引
-- 运行时状态桥接
-- 释放实例子树
+`compileVfor` 先移除 `v-for` 并克隆 sourceNodes（保留 `v-if`），然后 `compileVif` 处理每个克隆。所以 `v-for` 先执行生成逐项克隆，`v-if` 再过滤。
 
-当前主路径已经不再把 `$env/$scope/$router/$ref` 这类字段直接挂回 DOM 作为核心设计。
+## 响应式系统
 
-## 生命周期
+`Wrap(data)` 创建递归 Proxy：
 
-### `setup`
-
-对应 `<script setup>`。
-
-- 实例创建时执行一次
-- 初始化 `$data`
-- 不要求 DOM 已挂载
-
-### `mount`
-
-对应普通 `<script>`。
-
-- 初次挂载后执行一次
-- 适合访问 `$node`
-
-### `active`
-
-对应 `<script active>`。
-
-- 每次进入激活态执行
-
-### `deactive`
-
-对应 `<script deactive>`。
-
-- 实例保留但离开活跃态时执行
-
-### `dispose`
-
-对应 `<script dispose>`。
-
-- 实例真正销毁时执行一次
-
-### 当前触发语义
-
-- `v-if / v-else / v-else-if` 切掉的分支视为卸载，通常会触发 `dispose`
-- page cache 切换只触发 `deactive / active`
-- DOM 临时搬移不等价于销毁
-- 只有节点离开 DOM 且下一帧仍未挂回，才真正销毁
-
-## 指令与结构能力
-
-当前基础能力包括：
-
-- 文本插值 `{{ }}`
-- `:attr`
-- `:class`
-- `:style`
-- `@event`
-- `v:prop`
-- `v-if / v-else-if / v-else`
-- `v-for`
-- `vslot`
-- `v-html`
-- `:vsrc / vsrc`
-
-### 结构边界
-
-当前 `v-if` 和 `v-for` 根节点已经显式创建 boundary instance。
-
-这意味着：
-
-- 结构子树有明确的 `scope`
-- 结构子树里的 watcher 不再只是依赖父 DOM 链
-- 嵌套组件、slot、router 上下文能沿实例边界继续传递
+- get：记录监听 tag → 依赖收集
+- set：值变化 → rAF 批量调度 watcher 回调
+- 数组/map 原地更新（copyBind 保留现有绑定）
+- `Watch(target, callback)` 订阅依赖变化
+- `Cancel(id)` 取消监听
 
 ## slot 设计
 
-当前 slot 已经从旧的 `refSlots/originContent/slotHash` 模式重构为明确的两层：
+两层模型：
 
-- 父组件提供 `slotContents`
-- 子组件 `<vslot>` 作为 outlet 渲染 projected content 或 fallback content
+- 父组件 `createSlotContents` 捕获子节点为 `slotContents`
+- 子组件 `<vslot>` 渲染 projected content 或 fallback
 
-当前特性：
-
-- 支持默认 slot 与命名 slot
-- 支持 `vbind`
-- fallback content 独立保存
-- router outlet 与普通 slot 已经分离
-
-当前约束：
-
-- projected content 必须显式绑定调用方 runtime
-- projected content 继续使用调用方的 `$sys/$data/$ctx/$mod`
-- outlet `vbind` 只叠加这一次渲染的临时参数
-- fallback content 仍然使用子组件自己的 runtime
-- 子模块组件不能在执行 slot 表达式时抢走调用方 `$mod`
+projected content 使用调用方 runtime（`$data`/`$sys`/`$mod`），fallback 使用子组件 runtime。
 
 ## router 设计
 
-`vrouter` 是特殊组件，不是全局应用对象。
+`vrouter` 是特殊组件。`RouteMatcher` 负责路径匹配，`RouterView` 负责页面渲染与缓存，`NavigationRuntime` 负责全局地址广播。
 
-当前入口：
+每页 `Page` 有 `mount/deactive/active/destroy` 生命周期，layout 通过 vslot outlet 承载 page。
 
-```html
-<vrouter></vrouter>
-<vrouter routes="/admin_routes.js"></vrouter>
-<vrouter routes="./sidebar_routes.js"></vrouter>
+## 源码结构
+
+```
+src/
+├── index.js       # Vhtml 入口类（MutationObserver、vdelay、挂载/销毁）
+├── sandbox.js     # 沙盒执行引擎（with + Proxy）
+├── reactive.js    # 响应式系统（Wrap/Watch/rAF 批量更新）
+├── compiler.js    # DOM 编译器（指令、插值、组件引用）
+├── component.js   # 组件系统（实例、scope、slots、parseRef）
+├── env.js         # 模块上下文（ModuleContextManager、scoped）
+├── loader.js      # 模板加载器（fetch、parse、缓存）
+├── lifecycle.js   # 生命周期脚本执行
+├── imports.js     # import 解析（script setup）
+├── renderer.js    # 渲染上下文工厂（ctx 胶水对象）
+├── router.js      # 客户端路由（RouteMatcher、RouterView、NavigationRuntime）
+├── vcss.js        # CSS scoping 解析器
+├── vbus.js        # EventBus
+├── i18n.js        # 国际化
+├── vmessage.js    # toast/dialog
+├── utils.js       # DOM 工具（SetAttr、BindInputDomValue 等）
+├── url.js         # URL 工具
 ```
 
-当前规则：
+## 设计约束
 
-- 未设置 `routes` 时，默认加载 `$scoped/routes.js`
-- 每个 `<vrouter>` 都有自己的 `RouterView`
-- `RouterView` 维护自己的 routes、current、history、page cache
-- `NavigationRuntime` 只负责地址广播
-
-### 当前 page/layout 结构
-
-当前 page 和 layout 都已经进入统一实例模型：
-
-- `Page.instance`
-- `Page.layoutInstance`
-
-`Page` 自己更像围绕实例工作的控制器，而不是状态容器。
-
-当前 page 实例 meta 已承载：
-
-- `htmlPath`
-- `title`
-- `titleWatchers`
-- `didInitialActivation`
-- `layoutOutlet`
-
-## 当前源码结构
-
-运行时已拆分为这些主要模块：
-
-- [`src/runtime/context.js`](/Users/veypi/vyes/vhtml/src/runtime/context.js)
-- [`src/runtime/env.js`](/Users/veypi/vyes/vhtml/src/runtime/env.js)
-- [`src/runtime/loader.js`](/Users/veypi/vyes/vhtml/src/runtime/loader.js)
-- [`src/runtime/dom.js`](/Users/veypi/vyes/vhtml/src/runtime/dom.js)
-- [`src/runtime/instance.js`](/Users/veypi/vyes/vhtml/src/runtime/instance.js)
-- [`src/runtime/scope.js`](/Users/veypi/vyes/vhtml/src/runtime/scope.js)
-- [`src/runtime/lifecycle.js`](/Users/veypi/vyes/vhtml/src/runtime/lifecycle.js)
-- [`src/runtime/attributes.js`](/Users/veypi/vyes/vhtml/src/runtime/attributes.js)
-- [`src/runtime/structure.js`](/Users/veypi/vyes/vhtml/src/runtime/structure.js)
-- [`src/runtime/slots.js`](/Users/veypi/vyes/vhtml/src/runtime/slots.js)
-- [`src/runtime/component.js`](/Users/veypi/vyes/vhtml/src/runtime/component.js)
-- [`src/runtime/navigation.js`](/Users/veypi/vyes/vhtml/src/runtime/navigation.js)
-- [`src/runtime/routes.js`](/Users/veypi/vyes/vhtml/src/runtime/routes.js)
-- [`src/runtime/renderer.js`](/Users/veypi/vyes/vhtml/src/runtime/renderer.js)
-- [`src/vrouter.js`](/Users/veypi/vyes/vhtml/src/vrouter.js)
-
-## 当前设计约束
-
-- 不回退到单体 `index.js` 运行时
-- 不回退到混合 `env/context` 命名
-- 不回退到 DOM 侧挂字段作为主状态模型
+- 不回退到虚拟 DOM 或整树 diff
+- 不把 DOM 当主状态容器
 - 不为 router 污染普通组件和 slot 语义
-- 不为了兼容旧行为继续保留静默 fallback
+- 模块间 `$mod` 完全隔离
+- `$sys` 原型继承，`$mod` 共享引用

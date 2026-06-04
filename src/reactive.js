@@ -39,12 +39,6 @@ export function GenUniqueID() {
   return `${timestamp}-${random}`
 }
 
-export function ForceUpdate() {
-  for (let c of callbackList) {
-    if (c) c()
-  }
-}
-
 window.$vupdate = (id) => {
   if (typeof callbackList[id] === 'function') {
     callbackList[id]()
@@ -101,7 +95,7 @@ export function Cancel(idx) {
   callbackList[idx] = null
 }
 
-export const isProxy = Symbol("isProxy")
+const isProxy = Symbol("isProxy")
 export const DataID = Symbol("DataID")
 const DataBind = Symbol("bind")
 const rootObj = Symbol("root")
@@ -171,10 +165,7 @@ let stopChecking = false
 
 export function Wrap(data, root = undefined) {
   const did = GenUniqueID()
-  let isArray = false
-  if (Object.prototype.toString.call(data) === '[object Array]') {
-    isArray = true
-  }
+  const isArray = Array.isArray(data)
   if (root) SetDataRoot(data, root)
   data[DataID] = did
   const listeners = {}

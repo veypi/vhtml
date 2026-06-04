@@ -77,7 +77,11 @@ async function injectImportedModule(binding, module, target) {
   })
 }
 
-export async function parseImports(code, data = {}, runtime = {}, src = '') {
+export async function parseImports(code, data = {}, runtime = {}, src = '', unsafe = false) {
+  if (unsafe) {
+    return code.replace(/^(?:\s*\/\/.*|\s*\/\*[\s\S]*?\*\/)*\s*import\s+.+$/gm, '').trim()
+  }
+
   const scoped = getModulePath(runtime)
   const normalizedSrc = normalizeSourcePath(src, scoped)
   let codeCopy = code

@@ -18,13 +18,14 @@ function createScriptContext(dom, inst) {
   }
 }
 
-export function runScript(code, dom, inst, data, runtime) {
+export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}) {
   const runtimeData = inst?.data || data || {}
   const activeRuntime = inst?.runtime || runtime || {}
   if (activeRuntime.$sys) {
     activeRuntime.$sys.$router = inst?.runtime?.$sys?.$router || null
   }
-  return AsyncRun(code, runtimeData, activeRuntime, createScriptContext(dom, inst))
+  const options = inst?.unsafe ? { unsafe: true } : sandboxOptions
+  return AsyncRun(code, runtimeData, activeRuntime, createScriptContext(dom, inst), options)
     .catch((error) => {
       console.error('Lifecycle script error', {
         vsrc: dom?.getAttribute?.('vsrc') || '',
@@ -39,22 +40,23 @@ export function runScript(code, dom, inst, data, runtime) {
     })
 }
 
-export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime) {
+export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime, sandboxOptions = {}) {
   const code = scriptNode.innerHTML
   const scope = inst?.scope
+  const run = () => runScript(code, dom, inst, data, inst?.runtime || runtime, sandboxOptions)
   if (scriptNode.hasAttribute('active')) {
-    scope?.onActive(() => { runScript(code, dom, inst, data, inst?.runtime || runtime) })
+    scope?.onActive(run)
     return
   }
   if (scriptNode.hasAttribute('deactive')) {
-    scope?.onDeactive(() => { runScript(code, dom, inst, data, inst?.runtime || runtime) })
+    scope?.onDeactive(run)
     return
   }
   if (scriptNode.hasAttribute('dispose')) {
-    scope?.onDispose(() => { runScript(code, dom, inst, data, inst?.runtime || runtime) })
+    scope?.onDispose(run)
     return
   }
-  runScript(code, dom, inst, data, inst?.runtime || runtime || {})
+  run()
 }
 
 export function runMountedHandler(dom, data, runtime, expression) {

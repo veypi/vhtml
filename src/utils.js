@@ -14,7 +14,7 @@ function CamelToKebabCase(str) {
 }
 
 const outerClickList = []
-const globalClick = document.addEventListener('click', (event) => {
+document.addEventListener('click', (event) => {
   outerClickList.forEach((item) => {
     if (item?.dom instanceof Element && typeof item?.callback === 'function') {
       if (!item.dom.contains(event.target)) {

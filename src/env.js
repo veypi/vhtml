@@ -8,43 +8,36 @@
 
 import { Wrap, Watch } from './reactive.js'
 import EventBus from './vbus.js'
-import axios from './axios.min.js'
 import I18n from './i18n.js'
 import vmessage from './vmessage.js'
 
 // ---- 模块上下文 ----
 
-const moduleReservedKeys = new Set([
-  'scoped', 'baseURL', 'origin', '$axios', '$bus', '$i18n', '$t',
-])
-
-export function getModuleContext(source = null) {
-  if (!source || typeof source !== 'object') return null
-  return source.$mod || source
-}
-
 export function getModulePath(source = null) {
   return resolveScope(source)
 }
 
-export function getBaseURL(source = null) {
-  const mod = getModuleContext(source)
-  return mod?.baseURL || window.location.origin
+function lockProperty(obj, key) {
+  if (!obj || typeof obj !== 'object' || !(key in obj)) return
+  Object.defineProperty(obj, key, {
+    value: obj[key],
+    writable: false,
+    configurable: false,
+    enumerable: true,
+  })
 }
 
-export function createModuleHttpClient(baseURL) {
-  return axios.create({ baseURL })
+function lockProperties(obj, keys) {
+  keys.forEach(key => lockProperty(obj, key))
 }
 
-export function createModuleContext(scoped, baseURL, sharedLocale, initial = {}) {
-  const mod = {
-    ...initial,
-    scoped,
-    baseURL,
-    origin: window.location.origin,
-    $bus: new EventBus(),
-    $i18n: new I18n(sharedLocale),
-  }
+export function createModuleContext(scoped, sharedLocale, initial = {}) {
+  const frameworkKeys = ['scoped',  '$bus', '$i18n', '$t', 'fetch', 'restrictedFetch']
+
+  const mod = { ...initial }
+  mod.scoped = scoped
+  mod.$bus = new EventBus()
+  mod.$i18n = new I18n(sharedLocale)
   mod.$t = (key, params = {}) => mod.$i18n.t(key, params)
   mod.fetch = (url, options) => {
     let resolvedUrl = url
@@ -55,6 +48,23 @@ export function createModuleContext(scoped, baseURL, sharedLocale, initial = {})
     }
     return fetch(resolvedUrl, options)
   }
+  mod.restrictedFetch = (url, options) => {
+    let resolvedUrl = url
+    if (typeof url === 'string') {
+      if (url.startsWith('@')) {
+        resolvedUrl = url.slice(1)
+      } else if (/^https?:\/\//.test(url)) {
+        throw new Error(`fetch: external URL blocked in unsafe mode: ${url}`)
+      } else if (!url.startsWith('/')) {
+        resolvedUrl = `${scoped}/${url}`
+      } else if (scoped && !url.startsWith(scoped)) {
+        throw new Error(`fetch: cross-scope request blocked: ${url} (scoped: ${scoped})`)
+      }
+    }
+    return fetch(resolvedUrl, options)
+  }
+
+  lockProperties(mod, frameworkKeys)
   return mod
 }
 
@@ -62,26 +72,21 @@ export function createModuleContext(scoped, baseURL, sharedLocale, initial = {})
 
 export function createSystemContext(parent = null, initial = {}) {
   const sys = Object.create(parent || null)
+
   if (!Object.prototype.hasOwnProperty.call(sys, '$message')) {
     sys.$message = vmessage
   }
   if (initial && typeof initial === 'object') {
     Object.assign(sys, initial)
   }
+
   return sys
 }
 
-export function createCtxContext(parent = null, initial = {}) {
-  const seed = initial && typeof initial === 'object' ? { ...initial } : {}
-  return Wrap(seed, parent || undefined)
-}
-
-export function createRuntimeContext(parent = null, mod = null, initialSys = {}, initialCtx = {}) {
+export function createRuntimeContext(parent = null, mod = null, initialSys = {}) {
   const parentSys = parent?.$sys || null
-  const parentCtx = parent?.$ctx || null
   return {
     $sys: createSystemContext(parentSys, initialSys),
-    $ctx: createCtxContext(parentCtx, initialCtx),
     $mod: mod || parent?.$mod || null,
   }
 }
@@ -93,10 +98,6 @@ function trimTrailingSlash(value) {
   return value.endsWith('/') ? value.slice(0, -1) : value
 }
 
-const scopedMarkerSegments = new Set([
-  'page', 'layout', 'local', 'form', 'component', 'components', 'widget', 'widgets',
-])
-
 export function normalizeScoped(scoped = '') {
   if (!scoped) return ''
   if (/^https?:\/\//.test(scoped)) {
@@ -107,19 +108,6 @@ export function normalizeScoped(scoped = '') {
   const normalized = trimTrailingSlash(scoped)
   if (!normalized) return ''
   return normalized.startsWith('/') ? normalized : `/${normalized}`
-}
-
-export function inferScopedFromUrl(url = '') {
-  if (!url) return ''
-  let pathname = ''
-  try {
-    pathname = new URL(url, window.location.origin).pathname
-  } catch (_) { return '' }
-  const segments = pathname.split('/').filter(Boolean)
-  if (segments.length === 0) return ''
-  const markerIndex = segments.findIndex(segment => scopedMarkerSegments.has(segment))
-  if (markerIndex <= 0) return ''
-  return normalizeScoped(`/${segments.slice(0, markerIndex).join('/')}`)
 }
 
 export function resolveScope(source) {
@@ -147,19 +135,11 @@ export function resolveScopedUrl(path = '', scoped = '') {
   return `${normalizedScoped}${path}`
 }
 
-export function scopedBaseURL(scoped = '') {
-  const normalizedScoped = normalizeScoped(scoped)
-  if (!normalizedScoped) return window.location.origin
-  if (/^https?:\/\//.test(normalizedScoped)) return normalizedScoped
-  return `${window.location.origin}${normalizedScoped}`
-}
-
 // ---- ModuleContextManager ----
 
-function mergeModulePatch(mod, patch = {}) {
+export function mergeModulePatch(mod, patch = {}) {
   if (!patch || typeof patch !== 'object') return
   Object.entries(patch).forEach(([key, value]) => {
-    if (moduleReservedKeys.has(key)) return
     mod[key] = value
   })
 }
@@ -208,17 +188,9 @@ export class ModuleContextManager {
     return mod
   }
 
-  patchModule(mod, patch = {}) {
-    mergeModulePatch(mod, patch)
-    return mod
-  }
-
   async createModule(scoped, patch = {}) {
-    const baseURL = scopedBaseURL(scoped)
-    const mod = createModuleContext(scoped, baseURL, this.sharedLocale, {
-      $axios: createModuleHttpClient(baseURL),
-    })
-    this.patchModule(mod, patch)
+    const mod = createModuleContext(scoped, this.sharedLocale)
+    mergeModulePatch(mod, patch)
     await this.loadEnvConfig(mod)
     for (const wrapper of this.wrappers) {
       wrapper(scoped, mod)
@@ -227,7 +199,8 @@ export class ModuleContextManager {
   }
 
   async loadEnvConfig(mod) {
-    const envUrl = `${scopedBaseURL(mod.scoped)}/env.js`
+    const base = mod.scoped && /^https?:\/\//.test(mod.scoped) ? mod.scoped : `${window.location.origin}${mod.scoped}`
+    const envUrl = `${base}/env.js`
     try {
       const envModule = await import(envUrl)
       if (typeof envModule.default === 'function') {
