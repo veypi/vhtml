@@ -24,8 +24,7 @@ export function getModuleContext(source = null) {
 }
 
 export function getModulePath(source = null) {
-  const mod = getModuleContext(source)
-  return mod?.scoped || ''
+  return resolveScope(source)
 }
 
 export function getBaseURL(source = null) {
@@ -121,6 +120,18 @@ export function inferScopedFromUrl(url = '') {
   const markerIndex = segments.findIndex(segment => scopedMarkerSegments.has(segment))
   if (markerIndex <= 0) return ''
   return normalizeScoped(`/${segments.slice(0, markerIndex).join('/')}`)
+}
+
+export function resolveScope(source) {
+  if (!source) return ''
+  if (typeof source === 'string') {
+    const v = source === '/' ? '' : source
+    return v.endsWith('/') ? v.slice(0, -1) : v
+  }
+  const mod = source.$mod || source
+  const v = mod?.scoped || ''
+  if (!v || v === '/') return ''
+  return v.endsWith('/') ? v.slice(0, -1) : v
 }
 
 export function resolveScopedUrl(path = '', scoped = '') {

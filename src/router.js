@@ -9,7 +9,7 @@
 import { Wrap, Watch, Cancel } from './reactive.js'
 import { Run } from './sandbox.js'
 import { templateLoader } from './loader.js'
-import { createRuntimeContext, getModulePath, resolveScopedUrl } from './env.js'
+import { createRuntimeContext, getModulePath, resolveScopedUrl, resolveScope } from './env.js'
 import { isRouterNavigableHref } from './url.js'
 import {
   instanceOf, setInstance,
@@ -39,6 +39,7 @@ class NavigationRuntime {
     this.#handleBodyClick = (event) => {
       const linkElement = event.target.closest('a')
       if (!linkElement) return
+      if (linkElement.hasAttribute('download')) return
       const href = linkElement.getAttribute('href')
       if (!isRouterNavigableHref(href)) return
       if (linkElement.getAttribute('target') == '_blank') {
@@ -83,6 +84,10 @@ export class RouteMatcher {
     regexpStr = regexpStr.replace(/:([^(/?]+)/g, (_, key) => {
       this.keys.push(key)
       return `(?<${key}>[^/]+)`
+    })
+    regexpStr = regexpStr.replace(/\/\*(\w+)\?/g, (_, key) => {
+      this.keys.push(key)
+      return `(?:/(?<${key}>.*))?`
     })
     regexpStr = regexpStr.replace(/\*(\w+)/g, (_, key) => {
       this.keys.push(key)
@@ -410,6 +415,7 @@ class RouterView {
   #renderer = null
   #disposeNavListener = null
   #currentPage = null
+  #scope = ''
 
   constructor(nav) {
     this.#nav = nav
@@ -424,7 +430,7 @@ class RouterView {
   get current() { return this.instance.data }
   get query() { return this.instance.data?.query || {} }
   get params() { return this.instance.data?.params || {} }
-  get modulePath() { return '' }
+  get modulePath() { return this.#scope }
   get routesSource() { return this.#routesSource }
   get runtime() { return this.instance.runtime }
   get activePage() { return this.#currentPage }
@@ -554,6 +560,8 @@ class RouterView {
       } else return null
     } else return null
     if (path && !path.startsWith('/')) path = `/${path}`
+    if (this.#scope && path?.startsWith(this.#scope)) path = path.slice(this.#scope.length) || '/'
+    if (path && !path.startsWith('/')) path = `/${path}`
     if (path !== '/' && path?.endsWith('/')) path = path.slice(0, -1)
     return { path, query, params, hash, name }
   }
@@ -595,7 +603,7 @@ class RouterView {
     if (query && Object.keys(query).length > 0) {
       search = `?${Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}`
     }
-    const fullPath = `${path || matchResult.path}${search}${hash || ''}`
+    const fullPath = `${this.#scope}${path || matchResult.path}${search}${hash || ''}`
     return { route, params, query, name: name || route.name, path: path || matchResult.path, fullPath, matched: [route] }
   }
 
@@ -705,6 +713,7 @@ class RouterView {
     this.#hostNode = node
     this.#renderer = renderer
     const routerRuntime = createRuntimeContext(runtime || null, runtime?.$mod || runtime || null, { $router: this })
+    this.#scope = resolveScope(routerRuntime)
     setInstance(node, this.instance)
     this.instance.host = node
     this.instance.runtime = routerRuntime

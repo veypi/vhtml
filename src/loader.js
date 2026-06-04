@@ -238,7 +238,11 @@ class TemplateLoader {
     tempEnv = tempEnv || {}
     try {
       let params = {}
-      if (!ignoreScoped) params = { headers: { 'X-No-Fallback': 1 } }
+      if (!ignoreScoped) {
+        params = { headers: { 'X-No-Fallback': 1 } }
+      } else {
+        params = { headers: { 'accept': 'text/html' } }
+      }
       const response = await fetch(fetchUrl, params)
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const scopedHeaders = this.readScopedHeaders(response)

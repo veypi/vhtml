@@ -8,6 +8,7 @@
 
 import { Wrap, Watch, Cancel, DataID } from './reactive.js'
 import { Run } from './sandbox.js'
+import { resolveScope } from './env.js'
 import utils from './utils.js'
 import { runMountedHandler } from './lifecycle.js'
 import { isRelativeHref } from './url.js'
@@ -51,7 +52,7 @@ function normalizePath(path, minDepth = 0) {
 }
 
 function anchorPrefix(runtime) {
-  return runtime?.$mod?.url_prefix || runtime?.$mod?.scoped
+  return runtime?.$mod?.url_prefix || resolveScope(runtime)
 }
 
 function resolveScopedUrl(rawUrl, runtime, scoped) {
@@ -304,7 +305,8 @@ export function compileVif(nodes, data, runtime, ctx) {
       }
       const clones = sourceBranches[index].map(n => n.cloneNode(true))
       insertBefore(clones, endMark)
-      clones.forEach(n => {
+      const remaining = compileVif(clones, data, runtime, ctx)
+      remaining.forEach(n => {
         if (n.nodeType === 1) {
           ensureStructuralBoundary(n, data, runtime)
           compileNode(n, data, runtime, ctx)
@@ -756,9 +758,21 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
     return
   }
 
+  // <select> 需要先编译子元素（option），再编译属性（v:value），
+  // 否则 v:value 初始同步时 v-for 生成的 option 尚不存在，无法匹配选中项
+  if (nodeName === 'select') {
+    const childs = compileVif(Array.from(dom.childNodes), scopedData, activeRuntime, ctx)
+    for (const n of childs) {
+      compileNode(n, scopedData, activeRuntime, ctx, runtimeScope)
+    }
+    compileAttrs(dom, scopedData, activeRuntime, ctx)
+    metaOf(dom).parsed = true
+    return
+  }
+
   compileAttrs(dom, scopedData, activeRuntime, ctx)
-  let childs = compileVif(Array.from(dom.childNodes), scopedData, activeRuntime, ctx)
-  for (let n of childs) {
+  const childs = compileVif(Array.from(dom.childNodes), scopedData, activeRuntime, ctx)
+  for (const n of childs) {
     compileNode(n, scopedData, activeRuntime, ctx, runtimeScope)
   }
   metaOf(dom).parsed = true

@@ -10,7 +10,7 @@
 import { Wrap, Watch, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
 import { Run, AsyncRun } from './sandbox.js'
 import utils from './utils.js'
-import { createRuntimeContext } from './env.js'
+import { createRuntimeContext, resolveScope } from './env.js'
 import { parseImports } from './imports.js'
 import { registerScriptLifecycle } from './lifecycle.js'
 import { templateLoader } from './loader.js'
@@ -476,8 +476,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, singleMode = fa
 
   const mod = target?.mod || runtime?.$mod || null
   const rootRouter = runtime?.$sys?.$router || null
-  const scoped = mod?.url_prefix || mod?.scoped || ''
-  const runtimeRouter = createLocalRouter(rootRouter, scoped)
+  const runtimeRouter = createLocalRouter(rootRouter, mod?.url_prefix || resolveScope(mod))
   const componentRuntime = createRuntimeContext(runtime || null, mod, { $router: runtimeRouter })
   componentRuntime.$sys.$emit = (evt, ...args) => {
     evt = evt.toLowerCase()
