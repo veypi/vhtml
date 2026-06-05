@@ -8,7 +8,7 @@
 
 import { createRenderContext } from './renderer.js'
 import { templateLoader } from './loader.js'
-import { disposeRuntimeSubtree } from './component.js'
+import { disposeRuntimeSubtree } from './component-instance.js'
 
 class Vhtml {
   static _globalStyled = false

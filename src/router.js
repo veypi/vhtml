@@ -15,7 +15,7 @@ import {
   instanceOf, setInstance,
   createInstance, detachInstance,
   attachChildInstance, disposeRuntimeSubtree,
-} from './component.js'
+} from './component-instance.js'
 
 // ---- NavigationRuntime (原 navigation.js) ----
 

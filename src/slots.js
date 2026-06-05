@@ -1,0 +1,155 @@
+/*
+ * slots.js — vslot 内容投影
+ */
+
+import { Wrap, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
+import { Run } from './sandbox.js'
+import { instanceOf, metaOf, setNodeScope } from './component-instance.js'
+import { watch } from './runtime-watch.js'
+
+function cloneNodes(nodes) {
+  return (nodes || []).map(node => node.cloneNode(true))
+}
+
+function normalizeSlotName(name) {
+  return name === undefined || name === null ? '' : String(name)
+}
+
+function resolveSlotOwner(dom) {
+  const slotOf = dom.getAttribute('vrefof')
+  let refDom = dom.closest(`*[vref='${slotOf}']`)
+  if (!refDom) return null
+  while (true) {
+    const parentRef = refDom?.parentNode?.closest?.('*[vref]')
+    if (!parentRef) break
+    if (parentRef.getAttribute('vref') === slotOf) {
+      refDom = parentRef
+      continue
+    }
+    break
+  }
+  return refDom
+}
+
+function createSlotBindingData(dom, outletData, sourceData) {
+  const bindValue = dom.getAttribute('vbind')
+  if (!bindValue) return { data: sourceData, cleanup: null }
+  const slotData = Wrap({})
+  SetDataRoot(slotData, sourceData)
+  const bindAttrs = bindValue.split(',').map(item => item.trim()).filter(Boolean)
+  const scope = instanceOf(dom)?.scope
+  const watcherIds = []
+  bindAttrs.forEach(attr => {
+    const watcherId = watch(scope, () => outletData[attr], (value) => {
+      slotData[attr] = value
+    }, { deep: true })
+    watcherIds.push(watcherId)
+    slotData[attr] = outletData[attr]
+  })
+  return { data: slotData, cleanup: () => watcherIds.forEach(id => Cancel(id)) }
+}
+
+function createOutletState(dom) {
+  const state = metaOf(dom).slotOutletState
+  if (state) return state
+  const nextState = {
+    fallbackTemplates: cloneNodes(Array.from(dom.childNodes)),
+    currentKey: '',
+    currentMode: '',
+    cleanup: null,
+  }
+  dom.innerHTML = ''
+  metaOf(dom).slotOutletState = nextState
+  return nextState
+}
+
+function renderSlotNodes(dom, templates, data, runtime, ctx) {
+  dom.innerHTML = ''
+  dom.append(...cloneNodes(templates))
+  const projectedScope = instanceOf(dom)?.scope
+  const children = ctx.compileVif(Array.from(dom.childNodes), data, runtime, ctx)
+  children.forEach(node => {
+    if (node.nodeType === 1) {
+      ctx.ensureBoundary?.(node, data, runtime)
+    } else {
+      setNodeScope(node, runtime, projectedScope)
+    }
+    ctx.compileNode(node, data, runtime, ctx, projectedScope)
+  })
+}
+
+function resetOutletState(state) {
+  state.cleanup?.()
+  state.cleanup = null
+}
+
+function evaluateSlotName(dom, data, runtime) {
+  if (dom.hasAttribute(':name')) {
+    return normalizeSlotName(Run(dom.getAttribute(':name'), data, runtime))
+  }
+  return normalizeSlotName(dom.getAttribute('name'))
+}
+
+export function createSlotContents(sourceNodes, data, runtime) {
+  const slots = Object.create(null)
+  sourceNodes.forEach(node => {
+    if (node.nodeType === 3 && !node.textContent.trim()) return
+    const template = node.cloneNode(true)
+    const slotName = normalizeSlotName(template.getAttribute?.('vslot'))
+    template.removeAttribute?.('vslot')
+    if (!slots[slotName]) {
+      slots[slotName] = {
+        id: GenUniqueID(),
+        name: slotName,
+        templates: [],
+        data,
+        runtime,
+      }
+    }
+    slots[slotName].templates.push(template)
+  })
+  return slots
+}
+
+export function parseSlots(dom, data, runtime, ctx) {
+  if (dom.hasAttribute?.('data-vrouter-managed')) {
+    ctx.compileAttrs(dom, data, runtime, ctx)
+    return dom
+  }
+  const owner = resolveSlotOwner(dom)
+  if (!owner) {
+    ctx.onMountedRun?.(dom, (node) => {
+      parseSlots(node, data, runtime, ctx)
+    })
+    return dom
+  }
+  const state = createOutletState(dom)
+  const scope = instanceOf(dom)?.scope
+  watch(scope, () => {
+    const slotName = evaluateSlotName(dom, data, runtime)
+    const ownerInstance = instanceOf(owner)
+    const slotContents = ownerInstance?.slotContents || {}
+    const selected = slotContents[slotName] || null
+    return { slotName, selected }
+  }, ({ slotName, selected }) => {
+    if (selected) {
+      const renderKey = `projected:${slotName}:${selected.id}`
+      if (state.currentKey === renderKey && state.currentMode === 'projected') return
+      resetOutletState(state)
+      const slotBinding = createSlotBindingData(dom, data, selected.data)
+      renderSlotNodes(dom, selected.templates, slotBinding.data, selected.runtime, ctx)
+      state.currentKey = renderKey
+      state.currentMode = 'projected'
+      state.cleanup = slotBinding.cleanup
+      return
+    }
+    const renderKey = `fallback:${slotName}`
+    if (state.currentKey === renderKey && state.currentMode === 'fallback') return
+    resetOutletState(state)
+    renderSlotNodes(dom, state.fallbackTemplates, data, runtime, ctx)
+    state.currentKey = renderKey
+    state.currentMode = 'fallback'
+  })
+  ctx.compileAttrs(dom, data, runtime, ctx)
+  return dom
+}

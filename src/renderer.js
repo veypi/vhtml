@@ -6,8 +6,8 @@
  * 无全局副作用：MO、vdelay、样式注入由 Vhtml 实例管理。
  */
 
-import { Watch, Cancel } from './reactive.js'
 import { $router } from './router.js'
+import { watch } from './runtime-watch.js'
 import {
   compileNode, compileAttrs, compileVif, compileAttr,
   ensureStructuralBoundary,
@@ -40,14 +40,7 @@ export function findLastAccess(code, data) {
   return res
 }
 
-/**
- * scope 绑定的 watcher — 自动在 scope dispose 时取消
- */
-export function watch(scope, target, callback, options) {
-  const id = Watch(target, callback, options)
-  scope?.addWatcher(() => Cancel(id))
-  return id
-}
+export { watch } from './runtime-watch.js'
 
 /**
  * 创建渲染上下文（ctx 胶水对象）。
