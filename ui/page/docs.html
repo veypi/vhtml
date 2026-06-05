@@ -5,196 +5,288 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="vhtml 文档" details="vhtml 框架使用文档，包含快速开始指南、API参考和最佳实践" />
+  <meta name="description" content="vhtml 文档" details="vhtml 框架使用文档，包含快速开始指南、核心概念、进阶主题和 API 参考" />
   <title>{{ $t('docs.title') }}</title>
 </head>
 <style>
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    line-height: 1.6;
-    color: var(--text-color);
+    width: 100%;
+    background: var(--bg-color);
   }
 
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-xl);
+  .docs-header {
+    text-align: center;
+    padding: var(--space-12) 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color-secondary);
   }
 
-  /* 主体布局 */
-  .main-layout {
+  .docs-header h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+  }
+
+  .docs-header p {
+    color: var(--text-color-tertiary);
+    font-size: var(--text-lg);
+  }
+
+  .docs-layout {
     display: grid;
     grid-template-columns: 260px 1fr;
-    gap: var(--spacing-xl);
-    padding: var(--spacing-xl) 0;
+    gap: var(--space-8);
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-8) var(--space-6);
+    align-items: start;
   }
 
-  /* 侧边栏 */
+  /* Sidebar */
   .sidebar {
-    background: #fff;
-    border-radius: var(--radius-xl);
-    padding: var(--spacing-lg);
-    height: fit-content;
     position: sticky;
-    top: var(--spacing-md);
-    box-shadow: var(--shadow-sm);
+    top: 80px;
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
   }
 
-  .sidebar-section {
-    margin-bottom: var(--spacing-lg);
+  .sidebar-group {
+    margin-bottom: var(--space-3);
   }
 
-  .sidebar-title {
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-bold);
-    color: var(--text-color-tertiary);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: var(--spacing-sm);
-  }
-
-  .sidebar-link {
-    display: block;
-    padding: var(--spacing-sm) var(--spacing-md);
-    color: var(--text-color-secondary);
-    text-decoration: none;
+  .sidebar-group-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
     border-radius: var(--radius-md);
-    font-size: var(--font-size-md);
-    margin-bottom: 4px;
+    color: var(--text-color-tertiary);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     cursor: pointer;
     transition: all var(--transition-fast);
   }
 
-  .sidebar-link:hover,
-  .sidebar-link.active {
-    background: var(--bg-color);
-    color: var(--color-primary);
+  .sidebar-group-title:hover {
+    color: var(--text-color);
+    background: var(--gray-50);
   }
 
-  /* 内容区 */
+  .sidebar-group-title .arrow {
+    width: 16px;
+    height: 16px;
+    transition: transform var(--transition-fast);
+  }
+
+  .sidebar-group-title .arrow.open {
+    transform: rotate(90deg);
+  }
+
+  .sidebar-links {
+    display: none;
+    padding: var(--space-1) 0;
+  }
+
+  .sidebar-links.open {
+    display: block;
+  }
+
+  .sidebar-link {
+    display: block;
+    padding: 7px 12px;
+    border-radius: var(--radius-md);
+    color: var(--text-color-secondary);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-left: 3px solid transparent;
+    margin-left: 8px;
+  }
+
+  .sidebar-link:hover {
+    color: var(--text-color);
+    background: var(--gray-50);
+  }
+
+  .sidebar-link.active {
+    color: var(--color-primary);
+    background: var(--accent-50);
+    border-left-color: var(--color-primary);
+  }
+
+  /* Content */
   .content {
-    background: #fff;
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
     border-radius: var(--radius-xl);
-    padding: var(--spacing-xl);
-    box-shadow: var(--shadow-sm);
+    padding: var(--space-8);
+    min-height: 600px;
   }
 
   .content h1 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--spacing-lg);
-    color: var(--text-color);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-6);
+    letter-spacing: -0.02em;
   }
 
   .content h2 {
-    font-size: var(--font-size-xl);
-    margin-top: var(--spacing-xl);
-    margin-bottom: var(--spacing-md);
-    color: var(--text-color);
-    padding-bottom: var(--spacing-sm);
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    margin-top: var(--space-8);
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-2);
     border-bottom: 1px solid var(--border-color);
   }
 
   .content h3 {
-    font-size: var(--font-size-lg);
-    margin-top: var(--spacing-lg);
-    margin-bottom: var(--spacing-sm);
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    margin-top: var(--space-6);
+    margin-bottom: var(--space-3);
     color: var(--text-color-secondary);
   }
 
   .content p {
-    margin-bottom: var(--spacing-md);
+    margin-bottom: var(--space-4);
     color: var(--text-color-secondary);
-  }
-
-  .content code {
-    background: var(--bg-color);
-    padding: 2px 6px;
-    border-radius: var(--radius-sm);
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: var(--font-size-sm);
-    color: var(--color-danger);
-  }
-
-  .content pre {
-    background: #1a1a2e;
-    color: #fff;
-    padding: var(--spacing-lg);
-    border-radius: var(--radius-lg);
-    overflow-x: auto;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: var(--font-size-md);
-    line-height: 1.6;
-  }
-
-  .content pre code {
-    background: transparent;
-    color: inherit;
-    padding: 0;
+    line-height: var(--leading-docs);
   }
 
   .content ul {
-    margin-bottom: var(--spacing-md);
-    padding-left: var(--spacing-xl);
+    margin-bottom: var(--space-4);
+    padding-left: var(--space-6);
   }
 
   .content li {
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: var(--space-1);
     color: var(--text-color-secondary);
+    line-height: var(--leading-docs);
   }
 
   .content table {
     width: 100%;
     border-collapse: collapse;
-    margin: var(--spacing-md) 0;
+    margin: var(--space-4) 0;
   }
 
-  .content th,
-  .content td {
-    padding: var(--spacing-sm);
+  .content th, .content td {
+    padding: var(--space-2) var(--space-3);
     text-align: left;
     border-bottom: 1px solid var(--border-color);
+    font-size: var(--text-sm);
   }
 
   .content th {
-    background: var(--bg-color);
-    font-weight: var(--font-weight-bold);
+    background: var(--gray-50);
+    font-weight: var(--font-weight-semibold);
     color: var(--text-color);
+  }
+
+  .content td {
+    color: var(--text-color-secondary);
+  }
+
+  .content pre {
+    margin-bottom: var(--space-4);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .docs-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .sidebar {
+      position: static;
+      max-height: none;
+    }
+
+    .content {
+      padding: var(--space-6);
+    }
   }
 </style>
 
 <body>
-  <!-- 主体内容 -->
-  <div class="container main-layout">
+  <!-- 页头 -->
+  <header class="docs-header">
+    <h1>{{ $t('docs.heading') }}</h1>
+    <p>{{ $t('docs.subtitle') }}</p>
+  </header>
+
+  <div class="docs-layout">
     <!-- 侧边栏 -->
     <aside class="sidebar">
-      <div class="sidebar-section">
-        <div class="sidebar-title">{{ $t('docs.sidebar.guide') }}</div>
-        <a class="sidebar-link" :class="{active: currentSection === 'intro'}" @click="switchSection('intro')">{{
-          $t('docs.sections.intro') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'quickstart'}"
-          @click="switchSection('quickstart')">{{ $t('docs.sections.quickstart') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'structure'}" @click="switchSection('structure')">{{
-          $t('docs.sections.structure') }}</a>
+      <div class="sidebar-group">
+        <div class="sidebar-group-title" @click="toggleGroup('getting-started')">
+          {{ $t('docs.sidebar.gettingStarted') }}
+          <svg class="arrow" :class="{ open: openGroups.includes('getting-started') }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+        <div class="sidebar-links" :class="{ open: openGroups.includes('getting-started') }">
+          <a class="sidebar-link" :class="{ active: currentSection === 'intro' }" @click="switchSection('intro')">{{
+            $t('docs.sidebar.intro') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'install' }"
+            @click="switchSection('install')">{{ $t('docs.sidebar.install') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'structure' }"
+            @click="switchSection('structure')">{{ $t('docs.sidebar.structure') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'firstPage' }"
+            @click="switchSection('firstPage')">{{ $t('docs.sidebar.firstPage') }}</a>
+        </div>
       </div>
-      <div class="sidebar-section">
-        <div class="sidebar-title">{{ $t('docs.sidebar.basics') }}</div>
-        <a class="sidebar-link" :class="{active: currentSection === 'template'}" @click="switchSection('template')">{{
-          $t('docs.sections.template') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'data'}" @click="switchSection('data')">{{
-          $t('docs.sections.data') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'events'}" @click="switchSection('events')">{{
-          $t('docs.sections.events') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'components'}"
-          @click="switchSection('components')">{{ $t('docs.sections.components') }}</a>
+      <div class="sidebar-group">
+        <div class="sidebar-group-title" @click="toggleGroup('core')">
+          {{ $t('docs.sidebar.core') }}
+          <svg class="arrow" :class="{ open: openGroups.includes('core') }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+        <div class="sidebar-links" :class="{ open: openGroups.includes('core') }">
+          <a class="sidebar-link" :class="{ active: currentSection === 'template' }"
+            @click="switchSection('template')">{{ $t('docs.sidebar.template') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'data' }" @click="switchSection('data')">{{
+            $t('docs.sidebar.data') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'events' }" @click="switchSection('events')">{{
+            $t('docs.sidebar.events') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'components' }"
+            @click="switchSection('components')">{{ $t('docs.sidebar.components') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'slots' }" @click="switchSection('slots')">{{
+            $t('docs.sidebar.slots') }}</a>
+        </div>
       </div>
-      <div class="sidebar-section">
-        <div class="sidebar-title">{{ $t('docs.sidebar.advanced') }}</div>
-        <a class="sidebar-link" :class="{active: currentSection === 'router'}" @click="switchSection('router')">{{
-          $t('docs.sections.router') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'api'}" @click="switchSection('api')">{{
-          $t('docs.sections.api') }}</a>
-        <a class="sidebar-link" :class="{active: currentSection === 'slots'}" @click="switchSection('slots')">{{
-          $t('docs.sections.slots') }}</a>
+      <div class="sidebar-group">
+        <div class="sidebar-group-title" @click="toggleGroup('advanced')">
+          {{ $t('docs.sidebar.advanced') }}
+          <svg class="arrow" :class="{ open: openGroups.includes('advanced') }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+        <div class="sidebar-links" :class="{ open: openGroups.includes('advanced') }">
+          <a class="sidebar-link" :class="{ active: currentSection === 'router' }" @click="switchSection('router')">{{
+            $t('docs.sidebar.router') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'i18n' }" @click="switchSection('i18n')">{{
+            $t('docs.sidebar.i18n') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'mod' }" @click="switchSection('mod')">{{
+            $t('docs.sidebar.mod') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'sys' }" @click="switchSection('sys')">{{
+            $t('docs.sidebar.sys') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'api' }" @click="switchSection('api')">{{
+            $t('docs.sidebar.api') }}</a>
+          <a class="sidebar-link" :class="{ active: currentSection === 'bestPractices' }"
+            @click="switchSection('bestPractices')">{{ $t('docs.sidebar.bestPractices') }}</a>
+        </div>
       </div>
     </aside>
 
@@ -204,70 +296,82 @@
       <div v-if="currentSection === 'intro'">
         <h1>{{ $t('docs.content.intro.title') }}</h1>
         <p>{{ $t('docs.content.intro.desc') }}</p>
-        <h2>{{ $t('docs.content.intro.features') }}</h2>
+        <h2>{{ $t('docs.content.intro.philosophy') }}</h2>
         <ul>
-          <li>{{ $t('docs.content.intro.featureList.lightweight') }}</li>
-          <li>{{ $t('docs.content.intro.featureList.simple') }}</li>
-          <li>{{ $t('docs.content.intro.featureList.reactive') }}</li>
-          <li>{{ $t('docs.content.intro.featureList.component') }}</li>
-          <li>{{ $t('docs.content.intro.featureList.router') }}</li>
+          <li>{{ $t('docs.content.intro.p1') }}</li>
+          <li>{{ $t('docs.content.intro.p2') }}</li>
+          <li>{{ $t('docs.content.intro.p3') }}</li>
+          <li>{{ $t('docs.content.intro.p4') }}</li>
         </ul>
-        <h2>{{ $t('docs.content.intro.browser') }}</h2>
-        <p>{{ $t('docs.content.intro.browserDesc') }}</p>
       </div>
 
-      <!-- 快速开始 -->
-      <div v-if="currentSection === 'quickstart'">
-        <h1>{{ $t('docs.content.quickstart.title') }}</h1>
-        <h2>{{ $t('docs.content.quickstart.install') }}</h2>
-        <p>{{ $t('docs.content.quickstart.npmInstall') }}</p>
-        <local-code :code="npmInstallCode" :language="'bash'"></local-code>
-        <p>{{ $t('docs.content.quickstart.cdn') }}</p>
-        <local-code :code="cdnCode" :language="'html'"></local-code>
-        <h2>{{ $t('docs.content.quickstart.firstPage') }}</h2>
-        <p>{{ $t('docs.content.quickstart.createIndex') }}</p>
-        <local-preview :code="firstPageCode"></local-preview>
+      <!-- 安装 -->
+      <div v-if="currentSection === 'install'">
+        <h1>{{ $t('docs.content.install.title') }}</h1>
+        <h2>{{ $t('docs.content.install.npm') }}</h2>
+        <p>{{ $t('docs.content.install.npmDesc') }}</p>
+        <pre><code>npm install @veypi/vhtml</code></pre>
+        <h2>{{ $t('docs.content.install.cdn') }}</h2>
+        <p>{{ $t('docs.content.install.cdnDesc') }}</p>
+        <pre><code>&lt;script type="module" src="https://ivec.ai/vhtml/vhtml.min.js"&gt;&lt;/script&gt;</code></pre>
       </div>
 
-      <!-- 目录结构 -->
+      <!-- 项目结构 -->
       <div v-if="currentSection === 'structure'">
         <h1>{{ $t('docs.content.structure.title') }}</h1>
         <p>{{ $t('docs.content.structure.desc') }}</p>
         <pre><code>project/
-            ├── ui/
-            │ ├── root.html # 应用根页面
-            │ ├── app.js # 应用配置
-            │ ├── routes.js # 路由配置
-            │ ├── assets/
-            │ │ └── global.css # 全局样式
-            │ ├── layout/
-            │ │ └── default.html # 默认布局
-            │ ├── page/
-            │ │ ├── index.html # 首页
-            │ │ └── 404.html # 404页面
-            │ └── components/ # 组件目录
-            └── ...</code></pre>
+  ├── ui/
+  │   ├── root.html          # 应用入口
+  │   ├── env.js             # 模块初始化
+  │   ├── routes.js          # 路由配置
+  │   ├── langs.json         # 国际化资源
+  │   ├── assets/
+  │   │   └── global.css     # 全局样式
+  │   ├── layout/
+  │   │   └── default.html   # 默认布局
+  │   ├── page/
+  │   │   ├── index.html     # 首页
+  │   │   └── 404.html       # 404 页面
+  │   └── local/             # 局部组件
+  │       ├── card.html
+  │       └── modal.html</code></pre>
+      </div>
+
+      <!-- 第一个页面 -->
+      <div v-if="currentSection === 'firstPage'">
+        <h1>{{ $t('docs.content.firstPage.title') }}</h1>
+        <p>{{ $t('docs.content.firstPage.desc') }}</p>
+        <local-preview :code="firstPageCode"></local-preview>
       </div>
 
       <!-- 模板语法 -->
       <div v-if="currentSection === 'template'">
         <h1>{{ $t('docs.content.template.title') }}</h1>
-        <h2>{{ $t('docs.content.template.textInterpolation') }}</h2>
-        <pre><code>&lt;p&gt;{{ message }}&lt;/p&gt;</code></pre>
+        <h2>{{ $t('docs.content.template.interpolation') }}</h2>
+        <p>{{ $t('docs.content.template.interpolationDesc') }}</p>
+        <pre><code>&lt;p&gt;{{ '{{ message }}' }}&lt;/p&gt;</code></pre>
         <h2>{{ $t('docs.content.template.attrBinding') }}</h2>
-        <pre><code>&lt;!-- {{ $t('docs.content.template.dynamicAttr') }} --&gt;
-            &lt;a :href="url"&gt;链接&lt;/a&gt;
+        <p>{{ $t('docs.content.template.attrBindingDesc') }}</p>
+        <pre><code>&lt;!-- 动态属性 --&gt;
+&lt;a :href="url"&gt;链接&lt;/a&gt;
+&lt;img :src="avatarUrl" :title="name" /&gt;
 
-            &lt;!-- {{ $t('docs.content.template.twoWay') }} --&gt;
-            &lt;input v:value="inputValue"&gt;</code></pre>
+&lt;!-- 双向绑定 --&gt;
+&lt;input v:value="form.name" /&gt;</code></pre>
         <h2>{{ $t('docs.content.template.condition') }}</h2>
+        <p>{{ $t('docs.content.template.conditionDesc') }}</p>
         <pre><code>&lt;div v-if="type === 'A'"&gt;A&lt;/div&gt;
-            &lt;div v-else-if="type === 'B'"&gt;B&lt;/div&gt;
-            &lt;div v-else&gt;其他&lt;/div&gt;</code></pre>
+&lt;div v-else-if="type === 'B'"&gt;B&lt;/div&gt;
+&lt;div v-else&gt;其他&lt;/div&gt;</code></pre>
         <h2>{{ $t('docs.content.template.list') }}</h2>
+        <p>{{ $t('docs.content.template.listDesc') }}</p>
         <pre><code>&lt;div v-for="(item, index) in list"&gt;
-            {{ index }}: {{ item.name }}
-            &lt;/div&gt;</code></pre>
+  {{ '{{ index }}' }}: {{ '{{ item.name }}' }}
+&lt;/div&gt;</code></pre>
+        <h2>{{ $t('docs.content.template.classBinding') }}</h2>
+        <p>{{ $t('docs.content.template.classBindingDesc') }}</p>
+        <pre><code>&lt;div :class="{ active: isActive, disabled: !enabled }"&gt;&lt;/div&gt;</code></pre>
       </div>
 
       <!-- 响应式数据 -->
@@ -276,70 +380,109 @@
         <h2>{{ $t('docs.content.data.declare') }}</h2>
         <p>{{ $t('docs.content.data.declareDesc') }}</p>
         <pre><code>&lt;script setup&gt;
-            // 基础类型
-            count = 0;
-            message = 'Hello';
+  // 基础类型
+  count = 0
+  message = 'Hello vhtml!'
 
-            // 对象和数组
-            user = { name: '张三', age: 25 };
-            items = ['a', 'b', 'c'];
-            &lt;/script&gt;</code></pre>
-        <h2>{{ $t('docs.content.data.access') }}</h2>
-        <p>{{ $t('docs.content.data.accessDesc') }}</p>
-        <pre><code>&lt;p&gt;{{ message }}&lt;/p&gt;
-            &lt;p&gt;{{ user.name }}&lt;/p&gt;</code></pre>
-        <h2>{{ $t('docs.content.data.inScript') }}</h2>
-        <p>{{ $t('docs.content.data.inScriptDesc') }}</p>
-        <pre><code>&lt;script&gt;
-            // 使用 $data 访问和修改
-            $data.count = 10;
-            $data.message = '新消息';
-            &lt;/script&gt;</code></pre>
+  // 对象和数组
+  user = { name: '张三', age: 25 }
+  items = ['a', 'b', 'c']
+
+  // 方法
+  increment = () => {
+    count++
+  }
+&lt;/script&gt;</code></pre>
+        <h2>{{ $t('docs.content.data.computed') }}</h2>
+        <p>{{ $t('docs.content.data.computedDesc') }}</p>
+        <pre><code>&lt;script setup&gt;
+  count = 0
+  double = () => count * 2
+  greeting = () => 'Hello, ' + name
+&lt;/script&gt;
+
+&lt;p&gt;{{ '{{ double }}' }}&lt;/p&gt;</code></pre>
       </div>
 
       <!-- 事件处理 -->
       <div v-if="currentSection === 'events'">
         <h1>{{ $t('docs.content.events.title') }}</h1>
-        <h2>{{ $t('docs.content.events.listen') }}</h2>
-        <pre><code>&lt;button @click="handleClick"&gt;{{ $t('docs.codeComments.event') }}&lt;/button&gt;
-            &lt;input @input="onInput"&gt;</code></pre>
-        <h2>{{ $t('docs.content.events.handler') }}</h2>
-        <pre><code>&lt;script setup&gt;
-            handleClick = () =&gt; {
-            console.log('Button clicked');
-            };
-
-            onInput = (event) =&gt; {
-            console.log('Input:', event.target.value);
-            };
-            &lt;/script&gt;</code></pre>
+        <h2>{{ $t('docs.content.events.binding') }}</h2>
+        <p>{{ $t('docs.content.events.bindingDesc') }}</p>
+        <pre><code>&lt;button @click="save"&gt;保存&lt;/button&gt;
+&lt;input @input="onInput"&gt;
+&lt;form @submit="onSubmit"&gt;&lt;/form&gt;</code></pre>
+        <h2>{{ $t('docs.content.events.modifiers') }}</h2>
+        <p>{{ $t('docs.content.events.modifiersDesc') }}</p>
+        <pre><code>&lt;button @click.stop="remove(id)"&gt;删除&lt;/button&gt;</code></pre>
         <h2>{{ $t('docs.content.events.custom') }}</h2>
         <p>{{ $t('docs.content.events.customDesc') }}</p>
         <pre><code>&lt;script&gt;
-            // {{ $t('docs.content.events.customDesc') }}
-            $emit('custom_event', data);
-            &lt;/script&gt;</code></pre>
+  $emit('custom-event', { id: 1, name: 'test' })
+&lt;/script&gt;</code></pre>
       </div>
 
       <!-- 组件 -->
       <div v-if="currentSection === 'components'">
         <h1>{{ $t('docs.content.components.title') }}</h1>
-        <h2>{{ $t('docs.content.components.create') }}</h2>
-        <p>{{ $t('docs.content.components.createDesc') }}</p>
-        <pre><code>&lt;!-- /ui/components/my-button.html --&gt;
-            &lt;button @click="@click"&gt;{{ label }}&lt;/button&gt;
-            &lt;script setup&gt;
-            label = 'Button';
-            @click = () =&gt; {
-            $emit('click');
-            };
-            &lt;/script&gt;</code></pre>
-        <h2>{{ $t('docs.content.components.usage') }}</h2>
-        <p>{{ $t('docs.content.components.usageDesc') }}</p>
-        <pre><code>&lt;components-my-button
-            :label="'Submit'"
-            @click="handleSubmit"&gt;
-            &lt;/components-my-button&gt;</code></pre>
+        <h2>{{ $t('docs.content.components.define') }}</h2>
+        <p>{{ $t('docs.content.components.defineDesc') }}</p>
+        <pre><code>&lt;!-- /ui/local/my-button.html --&gt;
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta name="description" content="按钮组件" /&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;button @click="handleClick"&gt;{{ '{{ label }}' }}&lt;/button&gt;
+&lt;/body&gt;
+&lt;script setup&gt;
+  label = 'Click'
+  handleClick = () => {
+    $emit('click')
+  }
+&lt;/script&gt;
+&lt;/html&gt;</code></pre>
+        <h2>{{ $t('docs.content.components.use') }}</h2>
+        <p>{{ $t('docs.content.components.useDesc') }}</p>
+        <pre><code>&lt;local-my-button :label="'提交'" @click="onSubmit"&gt;&lt;/local-my-button&gt;</code></pre>
+        <h2>{{ $t('docs.content.components.refs') }}</h2>
+        <p>{{ $t('docs.content.components.refsDesc') }}</p>
+        <pre><code>&lt;local-panel ref="panel"&gt;&lt;/local-panel&gt;
+&lt;script setup&gt;
+  reload = () => $refs.panel.$data.refresh()
+&lt;/script&gt;</code></pre>
+      </div>
+
+      <!-- 插槽 -->
+      <div v-if="currentSection === 'slots'">
+        <h1>{{ $t('docs.content.slots.title') }}</h1>
+        <h2>{{ $t('docs.content.slots.default') }}</h2>
+        <p>{{ $t('docs.content.slots.defaultDesc') }}</p>
+        <pre><code>&lt;!-- 子组件 --&gt;
+&lt;body&gt;
+  &lt;vslot&gt;
+    &lt;p&gt;默认内容&lt;/p&gt;
+  &lt;/vslot&gt;
+&lt;/body&gt;
+
+&lt;!-- 调用方 --&gt;
+&lt;local-card&gt;
+  &lt;div&gt;自定义内容&lt;/div&gt;
+&lt;/local-card&gt;</code></pre>
+        <h2>{{ $t('docs.content.slots.named') }}</h2>
+        <p>{{ $t('docs.content.slots.namedDesc') }}</p>
+        <pre><code>&lt;!-- 子组件 --&gt;
+&lt;vslot name="header"&gt;
+  &lt;h2&gt;默认标题&lt;/h2&gt;
+&lt;/vslot&gt;
+
+&lt;!-- 调用方 --&gt;
+&lt;local-card&gt;
+  &lt;div vslot="header"&gt;自定义标题&lt;/div&gt;
+&lt;/local-card&gt;</code></pre>
+        <h2>{{ $t('docs.content.slots.runtime') }}</h2>
+        <p>{{ $t('docs.content.slots.runtimeDesc') }}</p>
       </div>
 
       <!-- 路由 -->
@@ -347,98 +490,145 @@
         <h1>{{ $t('docs.content.router.title') }}</h1>
         <h2>{{ $t('docs.content.router.config') }}</h2>
         <p>{{ $t('docs.content.router.configDesc') }}</p>
-        <pre><code>const routes = [
-            { path: '/', component: '/page/index.html', name: 'home' },
-            { path: '/about', component: '/page/about.html', name: 'about' },
-            { path: '*', component: '/page/404.html', name: '404' },
-            ];
-
-            export default routes;</code></pre>
+        <pre><code>export default [
+  { path: '/', component: '/page/index.html', name: 'home' },
+  { path: '/user/:id', component: '/page/user.html', name: 'user' },
+  { path: '*', component: '/page/404.html', name: '404' },
+]</code></pre>
         <h2>{{ $t('docs.content.router.nav') }}</h2>
-        <pre><code>&lt;!-- {{ $t('docs.content.router.linkNav') }} --&gt;
-            &lt;a href="/about"&gt;{{ $t('common.about') }}&lt;/a&gt;
+        <p>{{ $t('docs.content.router.navDesc') }}</p>
+        <pre><code>&lt;!-- 声明式导航 --&gt;
+&lt;a href="/about"&gt;关于&lt;/a&gt;
 
-            &lt;!-- {{ $t('docs.content.router.progNav') }} --&gt;
-            &lt;script&gt;
-            $router.push('/about');
-            $router.back();
-            &lt;/script&gt;</code></pre>
+&lt;!-- 编程式导航 --&gt;
+&lt;script&gt;
+  $router.push('/user/123')
+  $router.back()
+&lt;/script&gt;</code></pre>
+        <h2>{{ $t('docs.content.router.params') }}</h2>
+        <p>{{ $t('docs.content.router.paramsDesc') }}</p>
+        <pre><code>&lt;script&gt;
+  const userId = $router.params.id
+&lt;/script&gt;</code></pre>
       </div>
 
-      <!-- API 调用 -->
+      <!-- i18n -->
+      <div v-if="currentSection === 'i18n'">
+        <h1>{{ $t('docs.content.i18n.title') }}</h1>
+        <h2>{{ $t('docs.content.i18n.setup') }}</h2>
+        <p>{{ $t('docs.content.i18n.setupDesc') }}</p>
+        <pre><code>// env.js
+export default async ($mod) => {
+  const res = await fetch(`${'$'}{$mod.scoped}/langs.json`)
+  const messages = await res.json()
+  $mod.$i18n.load(messages)
+}</code></pre>
+        <h2>{{ $t('docs.content.i18n.translate') }}</h2>
+        <p>{{ $t('docs.content.i18n.translateDesc') }}</p>
+        <pre><code>&lt;!-- 模板中 --&gt;
+&lt;h1&gt;{{ '{{ $t("home.title") }}' }}&lt;/h1&gt;
+
+&lt;!-- 脚本中 --&gt;
+&lt;script&gt;
+  const title = $t('home.title')
+&lt;/script&gt;</code></pre>
+        <h2>{{ $t('docs.content.i18n.locale') }}</h2>
+        <p>{{ $t('docs.content.i18n.localeDesc') }}</p>
+        <pre><code>&lt;script setup&gt;
+  switchLang = (lang) => {
+    $i18n.setLocale(lang)
+  }
+&lt;/script&gt;</code></pre>
+      </div>
+
+      <!-- $mod -->
+      <div v-if="currentSection === 'mod'">
+        <h1>{{ $t('docs.content.mod.title') }}</h1>
+        <p>{{ $t('docs.content.mod.desc') }}</p>
+        <h2>{{ $t('docs.content.mod.api') }}</h2>
+        <table>
+          <tr><th>属性</th><th>说明</th></tr>
+          <tr><td><code>scoped</code></td><td>{{ $t('docs.content.mod.scoped') }}</td></tr>
+          <tr><td><code>$i18n</code></td><td>{{ $t('docs.content.mod.i18n') }}</td></tr>
+          <tr><td><code>$bus</code></td><td>{{ $t('docs.content.mod.bus') }}</td></tr>
+          <tr><td><code>fetch</code></td><td>{{ $t('docs.content.mod.fetch') }}</td></tr>
+        </table>
+      </div>
+
+      <!-- $sys -->
+      <div v-if="currentSection === 'sys'">
+        <h1>{{ $t('docs.content.sys.title') }}</h1>
+        <p>{{ $t('docs.content.sys.desc') }}</p>
+        <h2>{{ $t('docs.content.sys.api') }}</h2>
+        <table>
+          <tr><th>属性</th><th>说明</th></tr>
+          <tr><td><code>$router</code></td><td>{{ $t('docs.content.sys.router') }}</td></tr>
+          <tr><td><code>$message</code></td><td>{{ $t('docs.content.sys.message') }}</td></tr>
+          <tr><td><code>$emit</code></td><td>{{ $t('docs.content.sys.emit') }}</td></tr>
+        </table>
+      </div>
+
+      <!-- API 参考 -->
       <div v-if="currentSection === 'api'">
         <h1>{{ $t('docs.content.api.title') }}</h1>
         <p>{{ $t('docs.content.api.desc') }}</p>
-        <p>运行时变量池固定为 <code>$sys &gt; $data &gt; $ctx &gt; $mod</code>。其中系统能力来自 <code>$sys</code>，模块能力来自 <code>$mod</code>。</p>
-        <h2>{{ $t('docs.content.api.get') }}</h2>
+        <h2>$data</h2>
+        <p>当前组件实例的私有状态。script setup 中的裸赋值自动注册到 $data。</p>
+        <h2>{{ $t('docs.content.api.refs') }}</h2>
+        <p>{{ $t('docs.content.api.refs') }}</p>
+        <h2>{{ $t('docs.content.api.watch') }}</h2>
+        <p>{{ $t('docs.content.api.watch') }}</p>
         <pre><code>&lt;script&gt;
-            $mod.$axios.get('/api/users')
-            .then(data =&gt; {
-            console.log('Users:', data);
-            })
-            .catch(error =&gt; {
-            $message.error('{{ $t('docs.content.api.error') }}');
-            });
-            &lt;/script&gt;</code></pre>
-        <h2>{{ $t('docs.content.api.post') }}</h2>
+  $watch(() => [count, name], () => {
+    console.log('count or name changed')
+  })
+&lt;/script&gt;</code></pre>
+        <h2>{{ $t('docs.content.api.node') }}</h2>
+        <p>{{ $t('docs.content.api.node') }}</p>
         <pre><code>&lt;script&gt;
-            $mod.$axios.post('/api/users', { name: 'User', age: 25 })
-            .then(data =&gt; {
-            $message.success('{{ $t('docs.content.api.success') }}');
-            });
-            &lt;/script&gt;</code></pre>
+  const rect = $node.getBoundingClientRect()
+&lt;/script&gt;</code></pre>
+        <h2>{{ $t('docs.content.api.parseRaw') }}</h2>
+        <p>{{ $t('docs.content.api.parseRaw') }}</p>
+        <pre><code>&lt;script&gt;
+  await $vhtml.parseRaw(containerDom, {}, {}, htmlString)
+&lt;/script&gt;</code></pre>
       </div>
 
-      <!-- 插槽 -->
-      <div v-if="currentSection === 'slots'">
-        <h1>{{ $t('docs.content.slots.title') }}</h1>
-        <p>slot projected content 始终使用调用方的 <code>$sys/$data/$ctx/$mod</code>；子组件里的 fallback content 才使用子组件自己的 runtime。</p>
-        <h2>{{ $t('docs.content.slots.default') }}</h2>
-        <pre><code>&lt;!-- {{ $t('docs.content.slots.componentSide') }} --&gt;
-            &lt;vslot&gt;
-            &lt;p&gt;Default&lt;/p&gt;
-            &lt;/vslot&gt;
-
-            &lt;!-- {{ $t('docs.content.slots.usageSide') }} --&gt;
-            &lt;my-component&gt;
-            &lt;div&gt;Custom content&lt;/div&gt;
-            &lt;/my-component&gt;</code></pre>
-        <h2>{{ $t('docs.content.slots.named') }}</h2>
-        <pre><code>&lt;!-- {{ $t('docs.content.slots.componentSide') }} --&gt;
-            &lt;vslot name="header"&gt;
-            &lt;h1&gt;Default Title&lt;/h1&gt;
-            &lt;/vslot&gt;
-
-            &lt;!-- {{ $t('docs.content.slots.usageSide') }} --&gt;
-            &lt;my-component&gt;
-            &lt;div vslot="header"&gt;
-            &lt;h1&gt;Custom Title&lt;/h1&gt;
-            &lt;/div&gt;
-            &lt;/my-component&gt;</code></pre>
-        <h2>Runtime</h2>
-        <pre><code>&lt;script setup&gt;
-            count = 0;
-            save = async () =&gt; {
-            await $mod.$axios.post('/api/save', { id: $ctx.recordId, count });
-            $message.success($t('common.saved'));
-            };
-            $ctx.recordId = 'abc123';
-            &lt;/script&gt;</code></pre>
+      <!-- 最佳实践 -->
+      <div v-if="currentSection === 'bestPractices'">
+        <h1>{{ $t('docs.content.bestPractices.title') }}</h1>
+        <h2>{{ $t('docs.content.bestPractices.structure') }}</h2>
+        <p>{{ $t('docs.content.bestPractices.structureDesc') }}</p>
+        <h2>{{ $t('docs.content.bestPractices.naming') }}</h2>
+        <p>{{ $t('docs.content.bestPractices.namingDesc') }}</p>
+        <h2>{{ $t('docs.content.bestPractices.state') }}</h2>
+        <p>{{ $t('docs.content.bestPractices.stateDesc') }}</p>
+        <table>
+          <tr><th>作用域</th><th>使用</th><th>示例</th></tr>
+          <tr><td>组件本地</td><td><code>$data</code></td><td>UI 状态、表单数据</td></tr>
+          <tr><td>模块全局</td><td><code>$mod</code></td><td>i18n、fetch、auth</td></tr>
+        </table>
       </div>
     </main>
   </div>
 </body>
 <script setup>
   currentSection = 'intro';
+  openGroups = ['getting-started'];
 
   switchSection = (section) => {
     currentSection = section;
   };
 
-  // 代码示例
-  npmInstallCode = 'npm install @veypi/vhtml';
-
-  cdnCode = '<script src="https://unpkg.com/@veypi/vhtml/dist/vhtml.min.js"><\/script>';
+  toggleGroup = (group) => {
+    const idx = openGroups.indexOf(group);
+    if (idx >= 0) {
+      openGroups.splice(idx, 1);
+    } else {
+      openGroups.push(group);
+    }
+  };
 
   firstPageCode = `<!DOCTYPE html>
 <html>
@@ -446,20 +636,45 @@
   <meta charset="UTF-8" />
   <title>我的应用</title>
 </head>
+<style>
+  body {
+    text-align: center;
+    padding: 60px 24px;
+    font-family: system-ui, sans-serif;
+    color: #334155;
+  }
+  h1 { color: #6366f1; }
+  .counter {
+    font-size: 48px;
+    font-weight: 700;
+    color: #6366f1;
+    margin: 20px 0;
+  }
+  button {
+    padding: 10px 22px;
+    margin: 0 6px;
+    border: none;
+    border-radius: 8px;
+    background: #6366f1;
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  button:hover { background: #4f46e5; }
+</style>
 <body>
-  <h1>{{ message }}</h1>
-  <button @click="updateMessage">点击</button>
+  <h1>{{ title }}</h1>
+  <div class="counter">{{ count }}</div>
+  <div>
+    <button @click="count--">-</button>
+    <button @click="count++">+</button>
+  </div>
 </body>
 <script setup>
-  message = 'Hello vhtml!';
-  updateMessage = () => {
-    message = '你好，世界！';
-  };
+  title = 'Counter'
+  count = 0
 <\/script>
-<\/html>`;
-</script>
-<script>
-  console.log('文档页面已加载');
+</html>`;
 </script>
 
 </html>

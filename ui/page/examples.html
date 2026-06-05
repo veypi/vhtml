@@ -5,484 +5,484 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="vhtml 示例" details="vhtml 框架功能演示和代码示例，包含数据绑定、条件渲染、列表渲染等" />
+  <meta name="description" content="vhtml 示例" details="vhtml 框架交互式功能示例，支持在线编辑和实时预览" />
   <title>{{ $t('examples.title') }}</title>
 </head>
 <style>
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    line-height: 1.6;
-    color: var(--text-color);
+    width: 100%;
   }
 
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-xl);
-  }
-
-  /* 页面标题 */
   .page-header {
     text-align: center;
-    padding: var(--spacing-2xl) 0 var(--spacing-xl);
+    padding: var(--space-12) 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color-secondary);
   }
 
   .page-header h1 {
-    font-size: var(--font-size-2xl);
-    margin-bottom: var(--spacing-sm);
-    color: var(--text-color);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
   }
 
   .page-header p {
     color: var(--text-color-tertiary);
-    font-size: var(--font-size-lg);
+    font-size: var(--text-lg);
+    max-width: 560px;
+    margin: 0 auto;
   }
 
-  /* 示例卡片 */
-  .examples-grid {
-    display: grid;
-    gap: var(--spacing-xl);
-    padding-bottom: var(--spacing-2xl);
-  }
-
-  .example-card {
-    background: #fff;
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-  }
-
-  .example-header {
-    padding: var(--spacing-md) var(--spacing-lg);
-    background: var(--bg-color);
-    border-bottom: 1px solid var(--border-color);
-  }
-
-  .example-header h3 {
-    margin: 0;
-    font-size: var(--font-size-lg);
-    color: var(--text-color);
-  }
-
-  .example-body {
-    padding: var(--spacing-lg);
-  }
-
-  .example-preview {
-    background: var(--bg-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
-    margin-bottom: var(--spacing-lg);
-  }
-
-  .example-code {
-    background: #1a1a2e;
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
-    overflow-x: auto;
-  }
-
-  .example-code pre {
-    margin: 0;
-    color: #fff;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: var(--font-size-sm);
-    line-height: 1.6;
-  }
-
-  /* 交互样式 */
-  .counter-box {
+  /* Filter tabs */
+  .filters {
     display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-6) 0;
+    flex-wrap: wrap;
   }
 
-  .counter-value {
-    font-size: 32px;
-    font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
-    min-width: 60px;
-    text-align: center;
-  }
-
-  .btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: var(--radius-md);
-    background: var(--color-primary);
-    color: #fff;
+  .filter-btn {
+    padding: 6px 18px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-full);
+    background: var(--bg-color-secondary);
+    color: var(--text-color-secondary);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
-    font-size: var(--font-size-md);
-    transition: background var(--transition-fast);
-  }
-
-  .btn:hover {
-    background: var(--color-primary-hover);
-  }
-
-  .btn-danger {
-    background: var(--color-danger);
-  }
-
-  .btn-danger:hover {
-    background: var(--color-danger-hover);
-  }
-
-  .input-field {
-    padding: 10px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-md);
-    width: 200px;
-  }
-
-  .todo-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .todo-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm);
-    background: #fff;
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-xs);
-  }
-
-  .todo-item.completed span {
-    text-decoration: line-through;
-    color: var(--text-color-disabled);
-  }
-
-  .todo-input-group {
-    display: flex;
-    gap: var(--spacing-sm);
-    margin-bottom: var(--spacing-md);
-  }
-
-  .tab-buttons {
-    display: flex;
-    gap: var(--spacing-xs);
-    margin-bottom: var(--spacing-md);
-  }
-
-  .tab-btn {
-    padding: 8px 16px;
-    border: 1px solid var(--border-color);
-    background: #fff;
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: var(--font-size-md);
     transition: all var(--transition-fast);
   }
 
-  .tab-btn.active {
-    background: var(--color-primary);
-    color: #fff;
-    border-color: var(--color-primary);
+  .filter-btn:hover {
+    border-color: var(--border-color-hover);
+    color: var(--text-color);
   }
 
-  .tab-content {
-    padding: var(--spacing-lg);
-    background: var(--bg-color);
-    border-radius: var(--radius-lg);
+  .filter-btn.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+  }
+
+  /* Examples grid */
+  .examples-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-6);
+    padding-bottom: var(--space-16);
+  }
+
+  .example-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    transition: all var(--transition-base);
+  }
+
+  .example-card:hover {
+    box-shadow: var(--shadow-lg);
+  }
+
+  .example-header {
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--border-color);
+    background: var(--gray-50);
+  }
+
+  .example-header h3 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+    margin-bottom: 4px;
+  }
+
+  .example-header p {
+    font-size: var(--text-sm);
+    color: var(--text-color-tertiary);
+  }
+
+  .example-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+  }
+
+  .example-body local-preview {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .examples-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 
 <body>
-  <!-- 页面标题 -->
   <header class="page-header">
-    <div class="container">
-      <h1>{{ $t('examples.demoList.counter') }}</h1>
-      <p>{{ $t('examples.subtitle') }}</p>
-    </div>
+    <h1>{{ $t('examples.heading') }}</h1>
+    <p>{{ $t('examples.subtitle') }}</p>
   </header>
 
-  <!-- 示例列表 -->
-  <div class="container examples-grid">
-    <!-- 计数器示例 -->
-    <div class="example-card">
-      <div class="example-header">
-        <h3>{{ $t('examples.demoList.counter') }}</h3>
-      </div>
-      <div class="example-body">
-        <local-preview v:code="counterCode"></local-preview>
-      </div>
+  <div class="container">
+    <div class="filters">
+      <button class="filter-btn" :class="{ active: currentFilter === 'all' }" @click="currentFilter = 'all'">{{
+        $t('examples.filter.all') }}</button>
+      <button class="filter-btn" :class="{ active: currentFilter === 'basics' }" @click="currentFilter = 'basics'">{{
+        $t('examples.filter.basics') }}</button>
+      <button class="filter-btn" :class="{ active: currentFilter === 'forms' }" @click="currentFilter = 'forms'">{{
+        $t('examples.filter.forms') }}</button>
+      <button class="filter-btn" :class="{ active: currentFilter === 'components' }"
+        @click="currentFilter = 'components'">{{ $t('examples.filter.components') }}</button>
+      <button class="filter-btn" :class="{ active: currentFilter === 'advanced' }" @click="currentFilter = 'advanced'">{{
+        $t('examples.filter.advanced') }}</button>
     </div>
 
-    <!-- 双向绑定示例 -->
-    <div class="example-card">
-      <div class="example-header">
-        <h3>{{ $t('examples.demoList.twoWay') }}</h3>
-      </div>
-      <div class="example-body">
-        <local-preview v:code="twoWayCode"></local-preview>
-      </div>
-    </div>
-
-    <!-- 条件渲染示例 -->
-    <div class="example-card">
-      <div class="example-header">
-        <h3>{{ $t('examples.demoList.condition') }}</h3>
-      </div>
-      <div class="example-body">
-        <local-preview v:code="conditionCode"></local-preview>
-      </div>
-    </div>
-
-    <!-- 列表渲染示例 -->
-    <div class="example-card">
-      <div class="example-header">
-        <h3>{{ $t('examples.demoList.list') }}</h3>
-      </div>
-      <div class="example-body">
-        <local-preview v:code="listCode"></local-preview>
-      </div>
-    </div>
-
-    <!-- Tab 切换示例 -->
-    <div class="example-card">
-      <div class="example-header">
-        <h3>{{ $t('examples.demoList.tabs') }}</h3>
-      </div>
-      <div class="example-body">
-        <local-preview v:code="tabsCode"></local-preview>
+    <div class="examples-grid">
+      <div v-for="example in filteredExamples" class="example-card">
+        <div class="example-header">
+          <h3>{{ example.title }}</h3>
+          <p>{{ example.desc }}</p>
+        </div>
+        <div class="example-body">
+          <local-preview mode="switch" :code="example.code"></local-preview>
+        </div>
       </div>
     </div>
   </div>
 </body>
 <script setup>
-  // 计数器示例代码
+  currentFilter = 'all';
+
+  // --- Example Codes ---
+
   counterCode = `<style>
-  .counter-box {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px;
+  .box { padding: 20px; text-align: center; }
+  .value { font-size: 40px; font-weight: 700; color: #6366f1; margin: 12px 0; }
+  button {
+    padding: 10px 20px; margin: 0 5px; border: none;
+    border-radius: 8px; background: #6366f1; color: #fff;
+    font-size: 16px; cursor: pointer;
   }
-  .counter-value {
-    font-size: 32px;
-    font-weight: bold;
-    color: #667eea;
-    min-width: 60px;
-    text-align: center;
-  }
-  .btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    background: #667eea;
-    color: #fff;
-    cursor: pointer;
-    font-size: 16px;
-  }
-  .btn:hover {
-    background: #5568d3;
-  }
+  button:hover { background: #4f46e5; }
 </style>
-<div class="counter-box">
-  <button class="btn" @click="count--">-</button>
-  <span class="counter-value">{{ count }}</span>
-  <button class="btn" @click="count++">+</button>
+<div class="box">
+  <div class="value">{{ count }}</div>
+  <button @click="count--">-</button>
+  <button @click="count++">+</button>
 </div>
 <script setup>
   count = 0;
 <\/script>`;
 
-  // 双向绑定示例代码
   twoWayCode = `<style>
-  .two-way-box {
-    padding: 20px;
+  .box { padding: 20px; }
+  input {
+    padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; width: 100%;
   }
-  .input-field {
-    padding: 10px 14px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 14px;
-    width: 200px;
-  }
-  .result {
-    margin-top: 12px;
-    color: #666;
-  }
-  .result strong {
-    color: #667eea;
-  }
+  .result { margin-top: 12px; color: #666; }
+  .result strong { color: #6366f1; }
 </style>
-<div class="two-way-box">
-  <input class="input-field" v:value="inputText" placeholder="请输入内容...">
-  <p class="result">你输入了：<strong>{{ inputText }}</strong></p>
+<div class="box">
+  <input v:value="text" placeholder="输入内容...">
+  <p class="result">你输入了：<strong>{{ text }}</strong></p>
 </div>
 <script setup>
-  inputText = '';
+  text = '';
 <\/script>`;
 
-  // 条件渲染示例代码
   conditionCode = `<style>
-  .condition-box {
-    padding: 20px;
+  .box { padding: 20px; }
+  button {
+    padding: 10px 20px; border: none; border-radius: 8px;
+    background: #6366f1; color: #fff; cursor: pointer;
   }
-  .btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    background: #667eea;
-    color: #fff;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  .content {
-    margin-top: 16px;
-    padding: 16px;
-    background: #e0e7ff;
-    border-radius: 8px;
-    color: #333;
-  }
+  .content { margin-top: 16px; padding: 16px; background: #eef2ff; border-radius: 8px; }
 </style>
-<div class="condition-box">
-  <button class="btn" @click="isVisible = !isVisible">
-    {{ isVisible ? '隐藏内容' : '显示内容' }}
+<div class="box">
+  <button @click="show = !show">
+    {{ show ? '隐藏' : '显示' }}内容
   </button>
-  <div class="content" v-if="isVisible">
-    🎉 这是条件渲染的内容！
+  <div class="content" v-if="show">
+    这是条件渲染的内容！
   </div>
 </div>
 <script setup>
-  isVisible = true;
+  show = true;
 <\/script>`;
 
-  // 列表渲染示例代码
   listCode = `<style>
-  .list-box {
-    padding: 20px;
+  .box { padding: 20px; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  input {
+    padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; flex: 1;
   }
-  .input-group {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+  button {
+    padding: 10px 16px; border: none; border-radius: 8px;
+    background: #6366f1; color: #fff; cursor: pointer; font-size: 14px;
   }
-  .input-field {
-    padding: 10px 14px;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    font-size: 14px;
-    flex: 1;
-  }
-  .btn {
-    padding: 10px 16px;
-    border: none;
-    border-radius: 6px;
-    background: #667eea;
-    color: #fff;
-    cursor: pointer;
-    font-size: 14px;
-  }
-  .btn-danger {
-    background: #ef4444;
-  }
-  .todo-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  .todo-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px;
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    margin-bottom: 8px;
-  }
-  .todo-item.completed span {
-    text-decoration: line-through;
-    color: #999;
-  }
-  .todo-item span {
-    flex: 1;
-  }
+  .danger { background: #ef4444; }
+  .todo { display: flex; align-items: center; gap: 8px;
+    padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; }
+  .todo.done span { text-decoration: line-through; color: #999; }
+  .todo span { flex: 1; }
 </style>
-<div class="list-box">
-  <div class="input-group">
-    <input class="input-field" v:value="newTodo" placeholder="添加待办事项...">
-    <button class="btn" @click="addTodo()">添加</button>
+<div class="box">
+  <div class="input-row">
+    <input v:value="text" placeholder="添加待办...">
+    <button @click="add()">添加</button>
   </div>
-  <ul class="todo-list">
-    <li v-for="(todo, index) in todos" class="todo-item" :class="{completed: todo.done}">
-      <input type="checkbox" :checked="todo.done" @change="todo.done = !todo.done">
-      <span>{{ todo.text }}</span>
-      <button class="btn btn-danger" @click="removeTodo(index)">删除</button>
-    </li>
-  </ul>
+  <div class="todo" v-for="(t, i) in todos" :class="{done: t.done}">
+    <input type="checkbox" :checked="t.done" @change="t.done = !t.done">
+    <span>{{ t.text }}</span>
+    <button class="danger" @click="todos.splice(i, 1)">删除</button>
+  </div>
 </div>
 <script setup>
-  newTodo = '';
+  text = '';
   todos = [
     {text: '学习 vhtml', done: true},
     {text: '创建项目', done: false},
-    {text: '发布应用', done: false}
   ];
-  addTodo = () => {
-    if (newTodo.trim()) {
-      todos.push({text: newTodo, done: false});
-      newTodo = '';
-    }
-  };
-  removeTodo = (index) => {
-    todos.splice(index, 1);
+  add = () => {
+    if (text.trim()) { todos.push({text, done: false}); text = ''; }
   };
 <\/script>`;
 
-  // Tab 切换示例代码
   tabsCode = `<style>
-  .tabs-box {
-    padding: 20px;
+  .box { padding: 20px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .tab {
+    padding: 8px 18px; border: 1px solid #ddd; border-radius: 8px;
+    background: #fff; cursor: pointer; font-size: 14px;
   }
-  .tab-buttons {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-  }
-  .tab-btn {
-    padding: 8px 16px;
-    border: 1px solid #ddd;
-    background: #fff;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.2s;
-  }
-  .tab-btn.active {
-    background: #667eea;
-    color: #fff;
-    border-color: #667eea;
-  }
-  .tab-content {
-    padding: 20px;
-    background: #f5f5f5;
-    border-radius: 8px;
-  }
+  .tab.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+  .panel { padding: 20px; background: #f8fafc; border-radius: 8px; }
 </style>
-<div class="tabs-box">
-  <div class="tab-buttons">
-    <button class="tab-btn" :class="{active: activeTab === 'home'}" @click="activeTab = 'home'">首页</button>
-    <button class="tab-btn" :class="{active: activeTab === 'profile'}" @click="activeTab = 'profile'">个人</button>
-    <button class="tab-btn" :class="{active: activeTab === 'settings'}" @click="activeTab = 'settings'">设置</button>
+<div class="box">
+  <div class="tabs">
+    <div class="tab" :class="{active: tab === 'a'}" @click="tab = 'a'">首页</div>
+    <div class="tab" :class="{active: tab === 'b'}" @click="tab = 'b'">个人</div>
+    <div class="tab" :class="{active: tab === 'c'}" @click="tab = 'c'">设置</div>
   </div>
-  <div class="tab-content">
-    <div v-if="activeTab === 'home'">🏠 这是首页内容</div>
-    <div v-if="activeTab === 'profile'">👤 这是个人资料内容</div>
-    <div v-if="activeTab === 'settings'">⚙️ 这是设置内容</div>
+  <div class="panel">
+    <div v-if="tab === 'a'">首页内容</div>
+    <div v-if="tab === 'b'">个人资料内容</div>
+    <div v-if="tab === 'c'">设置内容</div>
   </div>
 </div>
 <script setup>
-  activeTab = 'home';
+  tab = 'a';
 <\/script>`;
+
+  formCode = `<style>
+  .box { padding: 20px; }
+  .field { margin-bottom: 16px; }
+  label { display: block; margin-bottom: 4px; font-size: 14px; color: #666; }
+  input {
+    padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; width: 100%;
+  }
+  input.error { border-color: #ef4444; }
+  .msg { font-size: 12px; color: #ef4444; margin-top: 4px; }
+  button {
+    padding: 10px 24px; border: none; border-radius: 8px;
+    background: #6366f1; color: #fff; cursor: pointer;
+  }
+  button:disabled { background: #ccc; cursor: not-allowed; }
+</style>
+<div class="box">
+  <div class="field">
+    <label>邮箱</label>
+    <input v:value="email" :class="{error: email && !valid}">
+    <div class="msg" v-if="email && !valid">请输入有效邮箱</div>
+  </div>
+  <button :disabled="!valid" @click="submit()">提交</button>
+</div>
+<script setup>
+  email = '';
+  valid = () => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);
+  submit = () => alert('提交: ' + email);
+<\/script>`;
+
+  fetchCode = `<style>
+  .box { padding: 20px; }
+  button {
+    padding: 10px 20px; border: none; border-radius: 8px;
+    background: #6366f1; color: #fff; cursor: pointer; margin-bottom: 16px;
+  }
+  button:disabled { background: #ccc; }
+  .card { padding: 16px; background: #f8fafc; border-radius: 8px; }
+  .error { color: #ef4444; }
+</style>
+<div class="box">
+  <button @click="load()" :disabled="loading">
+    {{ loading ? '加载中...' : '获取数据' }}
+  </button>
+  <div class="card" v-if="data">
+    <h3>{{ data.title }}</h3>
+    <p>{{ data.body }}</p>
+  </div>
+  <div class="error" v-if="error">{{ error }}</div>
+</div>
+<script setup>
+  loading = false;
+  data = null;
+  error = '';
+  load = async () => {
+    loading = true; error = ''; data = null;
+    try {
+      const res = await $mod.fetch('https://jsonplaceholder.typicode.com/posts/1');
+      data = await res.json();
+    } catch(e) {
+      error = '请求失败: ' + e.message;
+    }
+    loading = false;
+  };
+<\/script>`;
+
+  componentCode = `<style>
+  .parent { padding: 20px; }
+  .child { margin-top: 16px; padding: 16px; background: #eef2ff; border-radius: 8px; }
+  input {
+    padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 14px; margin-right: 8px;
+  }
+  button {
+    padding: 8px 16px; border: none; border-radius: 6px;
+    background: #6366f1; color: #fff; cursor: pointer;
+  }
+</style>
+<div class="parent">
+  <input v:value="msg" placeholder="输入消息...">
+  <button @click="send()">发送</button>
+  <div class="child">
+    <p>收到消息：{{ msg }}</p>
+  </div>
+</div>
+<script setup>
+  msg = '';
+  send = () => {
+    // $emit 向父组件发送事件
+    $message.success('消息: ' + msg);
+  };
+<\/script>`;
+
+  i18nCode = `<style>
+  .box { padding: 20px; }
+  .langs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .lang-btn {
+    padding: 6px 14px; border: 1px solid #ddd; border-radius: 20px;
+    background: #fff; cursor: pointer; font-size: 13px;
+  }
+  .lang-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+  .output { padding: 16px; background: #f8fafc; border-radius: 8px; }
+  .output h3 { margin-bottom: 8px; }
+  .output p { color: #666; margin-bottom: 4px; }
+</style>
+<div class="box">
+  <div class="langs">
+    <div class="lang-btn" :class="{active: locale === 'zh-CN'}" @click="set('zh-CN')">中文</div>
+    <div class="lang-btn" :class="{active: locale === 'en-US'}" @click="set('en-US')">EN</div>
+  </div>
+  <div class="output">
+    <h3>{{ title }}</h3>
+    <p>{{ desc }}</p>
+    <p>{{ countMsg }}</p>
+  </div>
+  <button @click="count++" style="margin-top:12px;padding:8px 16px;border:none;border-radius:6px;background:#6366f1;color:#fff;cursor:pointer;">
+    +1 ({{ count }})
+  </button>
+</div>
+<script setup>
+  locale = 'zh-CN';
+  count = 0;
+  title = () => locale === 'zh-CN' ? '欢迎使用 vhtml' : 'Welcome to vhtml';
+  desc = () => locale === 'zh-CN' ? '这是一个国际化示例。' : 'This is an i18n demo.';
+  countMsg = () => locale === 'zh-CN' ? '点击次数: ' + count : 'Clicks: ' + count;
+  set = (l) => { locale = l; };
+<\/script>`;
+
+  examples = [
+    {
+      id: 'counter',
+      category: 'basics',
+      title: () => $t('examples.demo.counter'),
+      desc: () => $t('examples.demo.counterDesc'),
+      code: counterCode,
+    },
+    {
+      id: 'twoWay',
+      category: 'forms',
+      title: () => $t('examples.demo.twoWay'),
+      desc: () => $t('examples.demo.twoWayDesc'),
+      code: twoWayCode,
+    },
+    {
+      id: 'condition',
+      category: 'basics',
+      title: () => $t('examples.demo.condition'),
+      desc: () => $t('examples.demo.conditionDesc'),
+      code: conditionCode,
+    },
+    {
+      id: 'list',
+      category: 'basics',
+      title: () => $t('examples.demo.list'),
+      desc: () => $t('examples.demo.listDesc'),
+      code: listCode,
+    },
+    {
+      id: 'tabs',
+      category: 'components',
+      title: () => $t('examples.demo.tabs'),
+      desc: () => $t('examples.demo.tabsDesc'),
+      code: tabsCode,
+    },
+    {
+      id: 'form',
+      category: 'forms',
+      title: () => $t('examples.demo.form'),
+      desc: () => $t('examples.demo.formDesc'),
+      code: formCode,
+    },
+    {
+      id: 'fetch',
+      category: 'advanced',
+      title: () => $t('examples.demo.fetch'),
+      desc: () => $t('examples.demo.fetchDesc'),
+      code: fetchCode,
+    },
+    {
+      id: 'component',
+      category: 'components',
+      title: () => $t('examples.demo.component'),
+      desc: () => $t('examples.demo.componentDesc'),
+      code: componentCode,
+    },
+    {
+      id: 'i18n',
+      category: 'advanced',
+      title: () => $t('examples.demo.i18n'),
+      desc: () => $t('examples.demo.i18nDesc'),
+      code: i18nCode,
+    },
+  ];
+
+  filteredExamples = () => {
+    if (currentFilter === 'all') return examples;
+    return examples.filter(e => e.category === currentFilter);
+  };
 </script>
 
 </html>

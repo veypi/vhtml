@@ -5,235 +5,326 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="vhtml 首页" details="vhtml 轻量级响应式前端框架官方首页，展示核心特性和快速开始指南" />
+  <meta name="description" content="vhtml 首页" details="vhtml 轻量级响应式前端框架官方首页" />
   <title>{{ $t('home.title') }}</title>
 </head>
 <style>
   body {
-    line-height: 1.6;
-    color: var(--text-color);
     width: 100%;
   }
 
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-xl);
+  /* Hero */
+  .hero {
+    position: relative;
+    padding: var(--space-20) 0 var(--space-16);
+    text-align: center;
+    overflow: hidden;
   }
 
-  /* Hero 区域 */
-  .hero {
-    text-align: center;
-    padding: var(--spacing-2xl) 0 100px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+    transform: translateZ(0);
+  }
+
+  .hero-content {
+    position: relative;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 0 var(--space-6);
   }
 
   .hero h1 {
-    font-size: 56px;
-    margin: 0 0 var(--spacing-md);
+    font-size: var(--text-4xl);
     font-weight: var(--font-weight-bold);
+    letter-spacing: -0.03em;
+    margin-bottom: var(--space-6);
+    line-height: 1.1;
+  }
+
+  .hero h1 .gradient {
+    background: var(--gradient-hero);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .hero .subtitle {
-    font-size: 22px;
-    opacity: 0.9;
-    margin-bottom: var(--spacing-xl);
+    font-size: var(--text-xl);
+    color: var(--text-color-secondary);
+    margin-bottom: var(--space-8);
+    line-height: 1.6;
+    max-width: 540px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .hero-actions {
     display: flex;
-    gap: var(--spacing-md);
+    gap: var(--space-3);
     justify-content: center;
+    flex-wrap: wrap;
   }
 
-  .btn {
-    padding: 14px 32px;
-    border-radius: var(--radius-lg);
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-medium);
-    text-decoration: none;
-    transition: all var(--transition-base);
-    cursor: pointer;
-    border: none;
-  }
-
-  .btn-primary {
-    background: #fff;
-    color: #667eea;
-  }
-
-  .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  }
-
-  .btn-secondary {
-    background: transparent;
-    color: #fff;
-    border: 2px solid rgba(255, 255, 255, 0.5);
-  }
-
-  .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: #fff;
-  }
-
-  /* 特性区域 */
+  /* Features */
   .features {
-    background: #fff;
-    padding: var(--spacing-2xl) 0;
-  }
-
-  .features h2 {
-    text-align: center;
-    font-size: 36px;
-    margin-bottom: 60px;
-    color: var(--text-color);
+    background: var(--bg-color-secondary);
+    padding: var(--space-20) 0;
   }
 
   .feature-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: var(--spacing-xl);
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
   }
 
   .feature-card {
-    padding: var(--spacing-xl);
-    border-radius: var(--radius-xl);
+    padding: var(--space-8) var(--space-6);
+    border-radius: var(--radius-2xl);
     background: var(--bg-color);
-    transition: transform var(--transition-base), box-shadow var(--transition-base);
+    border: 1px solid transparent;
+    transition: all var(--transition-base);
   }
 
   .feature-card:hover {
-    transform: translateY(-5px);
+    background: var(--bg-color-secondary);
+    border-color: var(--border-color);
     box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
   }
 
   .feature-icon {
-    font-size: 40px;
-    margin-bottom: var(--spacing-md);
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-xl);
+    background: var(--gradient-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: var(--space-5);
   }
 
   .feature-card h3 {
-    font-size: var(--font-size-xl);
-    margin-bottom: var(--spacing-sm);
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-2);
     color: var(--text-color);
   }
 
   .feature-card p {
+    font-size: var(--text-sm);
     color: var(--text-color-secondary);
     line-height: 1.7;
   }
 
-  /* 代码示例区域 */
-  .code-section {
-    padding: var(--spacing-2xl) 0;
-    color: #fff;
+  /* Demo */
+  .demo-section {
+    padding: var(--space-20) 0;
+    background: var(--bg-color);
   }
 
-  .code-section h2 {
+  .demo-box {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-2xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Stats */
+  .stats {
+    background: var(--gray-900);
+    padding: var(--space-12) 0;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-6);
+  }
+
+  .stat-item {
     text-align: center;
-    font-size: 36px;
-    margin-bottom: var(--spacing-xl);
   }
 
-  .code-block {
-    background: #16213e;
+  .stat-value {
+    font-size: var(--text-3xl);
+    font-weight: var(--font-weight-bold);
+    color: #fff;
+    margin-bottom: var(--space-1);
+    letter-spacing: -0.02em;
+  }
+
+  .stat-label {
+    font-size: var(--text-sm);
+    color: var(--gray-400);
+  }
+
+  /* CTA */
+  .cta {
+    padding: var(--space-20) 0;
+    text-align: center;
+    background: var(--gradient-hero);
+  }
+
+  .cta h2 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    color: #fff;
+    margin-bottom: var(--space-6);
+    letter-spacing: -0.02em;
+  }
+
+  .cta-code {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 12px 24px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: var(--radius-lg);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: #fff;
+    margin-bottom: var(--space-8);
+  }
+
+  .cta .btn {
+    background: #fff;
+    color: var(--accent-600);
+    font-size: var(--text-base);
+    padding: 14px 36px;
     border-radius: var(--radius-xl);
-    padding: var(--spacing-xl);
-    overflow-x: auto;
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: var(--font-size-md);
-    line-height: 1.8;
   }
 
-  .code-block .comment {
-    color: #6272a4;
+  .cta .btn:hover {
+    background: var(--gray-50);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   }
 
-  .code-block .tag {
-    color: #ff79c6;
-  }
+  /* Responsive */
+  @media (max-width: 768px) {
+    .hero {
+      padding: var(--space-16) 0 var(--space-12);
+    }
 
-  .code-block .attr {
-    color: #50fa7b;
-  }
+    .feature-grid {
+      grid-template-columns: 1fr;
+    }
 
-  .code-block .value {
-    color: #f1fa8c;
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-8);
+    }
   }
 </style>
 
 <body>
-  <!-- Hero 区域 -->
+  <!-- Hero -->
   <section class="hero">
-    <div class="container">
-      <h1>vhtml</h1>
+    <div class="hero-content">
+      <h1>
+        <span class="gradient">vhtml</span><br/>
+        轻量级响应式前端框架
+      </h1>
       <p class="subtitle">{{ $t('home.subtitle') }}</p>
       <div class="hero-actions">
-        <a href="/docs" class="btn btn-primary">{{ $t('home.quickStart') }}</a>
-        <a href="/examples" class="btn btn-secondary">{{ $t('home.viewExamples') }}</a>
+        <a href="/docs" class="btn btn-primary btn-lg">{{ $t('home.getStarted') }}</a>
+        <a href="/examples" class="btn btn-secondary btn-lg">{{ $t('home.viewExamples') }}</a>
       </div>
     </div>
   </section>
 
-  <!-- 特性区域 -->
+  <!-- 核心特性 -->
   <section class="features">
     <div class="container">
-      <h2>{{ $t('home.features') }}</h2>
+      <h2 class="section-title">{{ $t('home.features.heading') }}</h2>
+      <p class="section-subtitle">六个核心特性，让前端开发回归简洁。</p>
       <div class="feature-grid">
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
-          <h3>{{ $t('home.featureList.lightweight.title') }}</h3>
-          <p>{{ $t('home.featureList.lightweight.desc') }}</p>
+          <h3>{{ $t('home.features.lightweight.title') }}</h3>
+          <p>{{ $t('home.features.lightweight.desc') }}</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🎯</div>
-          <h3>{{ $t('home.featureList.native.title') }}</h3>
-          <p>{{ $t('home.featureList.native.desc') }}</p>
+          <h3>{{ $t('home.features.native.title') }}</h3>
+          <p>{{ $t('home.features.native.desc') }}</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🔄</div>
-          <h3>{{ $t('home.featureList.reactive.title') }}</h3>
-          <p>{{ $t('home.featureList.reactive.desc') }}</p>
+          <h3>{{ $t('home.features.reactive.title') }}</h3>
+          <p>{{ $t('home.features.reactive.desc') }}</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🧩</div>
-          <h3>{{ $t('home.featureList.component.title') }}</h3>
-          <p>{{ $t('home.featureList.component.desc') }}</p>
+          <h3>{{ $t('home.features.component.title') }}</h3>
+          <p>{{ $t('home.features.component.desc') }}</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">🛣️</div>
-          <h3>{{ $t('home.featureList.router.title') }}</h3>
-          <p>{{ $t('home.featureList.router.desc') }}</p>
+          <h3>{{ $t('home.features.router.title') }}</h3>
+          <p>{{ $t('home.features.router.desc') }}</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">📦</div>
-          <h3>{{ $t('home.featureList.ready.title') }}</h3>
-          <p>{{ $t('home.featureList.ready.desc') }}</p>
+          <h3>{{ $t('home.features.zero.title') }}</h3>
+          <p>{{ $t('home.features.zero.desc') }}</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 代码示例 -->
-  <section class="code-section">
+  <!-- 在线 Demo -->
+  <section class="demo-section">
     <div class="container">
-      <local-preview mode='split' :code='code()'></local-preview>
+      <h2 class="section-title">{{ $t('home.demo.heading') }}</h2>
+      <p class="section-subtitle">{{ $t('home.demo.subtitle') }}</p>
+      <div class="demo-box">
+        <local-preview mode="split" :code="demoCode"></local-preview>
+      </div>
+    </div>
+  </section>
+
+  <!-- 统计数据 -->
+  <section class="stats">
+    <div class="container">
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value">{{ $t('home.stats.sizeValue') }}</div>
+          <div class="stat-label">{{ $t('home.stats.size') }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ $t('home.stats.depsValue') }}</div>
+          <div class="stat-label">{{ $t('home.stats.deps') }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ $t('home.stats.licenseValue') }}</div>
+          <div class="stat-label">{{ $t('home.stats.license') }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">{{ $t('home.stats.envValue') }}</div>
+          <div class="stat-label">{{ $t('home.stats.env') }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <div class="container">
+      <h2>{{ $t('home.cta.heading') }}</h2>
+      <div class="cta-code">&lt;script type="module" src="https://ivec.ai/vhtml/vhtml.min.js"&gt;&lt;/script&gt;</div>
+      <br/>
+      <a href="/docs" class="btn">{{ $t('home.getStarted') }}</a>
     </div>
   </section>
 </body>
 <script setup>
-  message = 'Hello vhtml!';
-  isShow = true;
-  list = [
-    {name: '简洁'},
-    {name: '高效'},
-    {name: '强大'}
-  ];
-  code = () => {
-    return `<!DOCTYPE html>
+  demoCode = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -243,62 +334,59 @@
   body {
     text-align: center;
     padding: 40px;
-    color: #667eea;
+    font-family: system-ui, sans-serif;
+    color: #334155;
   }
   .counter {
-    font-size: 48px;
-    color: #667eea;
-    margin: 20px 0;
+    font-size: 56px;
+    font-weight: 700;
+    color: #6366f1;
+    margin: 24px 0;
+    font-variant-numeric: tabular-nums;
   }
   button {
-    padding: 10px 20px;
-    margin: 0 5px;
+    padding: 10px 22px;
+    margin: 0 6px;
     border: none;
-    border-radius: 6px;
-    background: #667eea;
+    border-radius: 8px;
+    background: #6366f1;
     color: white;
+    font-size: 16px;
     cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
   }
   button:hover {
-    background: #5a6fd6;
+    background: #4f46e5;
+  }
+  button:active {
+    transform: scale(0.96);
+  }
+  .reset {
+    background: #e2e8f0;
+    color: #475569;
+  }
+  .reset:hover {
+    background: #cbd5e1;
   }
 </style>
 <body>
   <h2>{{ title }}</h2>
   <div class="counter">{{ count }}</div>
   <div>
-    <button @click="decrement">-</button>
-    <button @click="increment">+</button>
-    <button @click="reset">Reset</button>
+    <button @click="count--">-</button>
+    <button @click="count++">+</button>
+    <button class="reset" @click="count = 0">Reset</button>
   </div>
-  <p v-if="count > 5">{{ message }}</p>
+  <p v-if="count > 10" style="margin-top:20px;color:#6366f1">
+    You clicked more than 10 times!
+  </p>
 </body>
 <script setup>
   title = 'Counter App'
-  message = 'Count is getting high!'
   count = 0
-
-  increment = () => {
-    count++
-  }
-
-  decrement = () => {
-    count--
-  }
-
-  reset = () => {
-    count = 0
-  }
 <\/script>
 </html>`
-  }
-
-  handleClick = () => {
-    $message.success('欢迎使用 vhtml！');
-  };
-</script>
-<script>
-  console.log('vhtml 首页已加载');
 </script>
 
 </html>

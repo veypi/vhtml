@@ -1,99 +1,75 @@
 <!DOCTYPE html>
 
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="404 页面未找到"
-      details="vhtml 官方网站的 404 错误页面"
-    />
-    <title>{{ $t('notFound.title') }}</title>
-  </head>
-  <style>
-    body {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: var(--bg-color);
-    }
-    .error-container {
-      text-align: center;
-      padding: var(--spacing-xl);
-    }
-    .error-code {
-      font-size: 120px;
-      font-weight: var(--font-weight-bold);
-      color: var(--color-primary);
-      line-height: 1;
-      margin-bottom: var(--spacing-md);
-      background: linear-gradient(135deg, var(--color-primary) 0%, #764ba2 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-    .error-title {
-      font-size: var(--font-size-2xl);
-      color: var(--text-color);
-      margin-bottom: var(--spacing-sm);
-    }
-    .error-message {
-      font-size: var(--font-size-lg);
-      color: var(--text-color-tertiary);
-      margin-bottom: var(--spacing-xl);
-    }
-    .error-actions {
-      display: flex;
-      gap: var(--spacing-md);
-      justify-content: center;
-    }
-    .btn {
-      padding: 12px 24px;
-      border-radius: var(--radius-md);
-      font-size: var(--font-size-md);
-      font-weight: var(--font-weight-medium);
-      text-decoration: none;
-      transition: all var(--transition-fast);
-      cursor: pointer;
-      border: none;
-    }
-    .btn-primary {
-      background: var(--color-primary);
-      color: #fff;
-    }
-    .btn-primary:hover {
-      background: var(--color-primary-hover);
-    }
-    .btn-secondary {
-      background: transparent;
-      color: var(--text-color-secondary);
-      border: 1px solid var(--border-color);
-    }
-    .btn-secondary:hover {
-      background: var(--bg-color);
-      border-color: var(--border-color-hover);
-    }
-  </style>
-  <body>
-    <div class="error-container">
-      <div class="error-code">404</div>
-      <h1 class="error-title">{{ $t('notFound.titleText') }}</h1>
-      <p class="error-message">{{ $t('notFound.message') }}</p>
-      <div class="error-actions">
-        <a href="/" class="btn btn-primary">{{ $t('notFound.backHome') }}</a>
-        <button class="btn btn-secondary" @click="goBack">{{ $t('notFound.backPrev') }}</button>
-      </div>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="404 页面未找到" details="vhtml 官方站点 404 错误页面" />
+  <title>{{ $t('notFound.title') }}</title>
+</head>
+<style>
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: var(--bg-color);
+    padding: var(--space-6);
+  }
+
+  .error-box {
+    text-align: center;
+    max-width: 420px;
+  }
+
+  .error-code {
+    font-size: 140px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
+    margin-bottom: var(--space-4);
+    background: var(--gradient-hero);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .error-title {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+    margin-bottom: var(--space-3);
+  }
+
+  .error-message {
+    font-size: var(--text-base);
+    color: var(--text-color-secondary);
+    margin-bottom: var(--space-8);
+    line-height: 1.6;
+  }
+
+  .error-actions {
+    display: flex;
+    gap: var(--space-3);
+    justify-content: center;
+  }
+</style>
+
+<body>
+  <div class="error-box">
+    <div class="error-code">404</div>
+    <h1 class="error-title">{{ $t('notFound.heading') }}</h1>
+    <p class="error-message">{{ $t('notFound.message') }}</p>
+    <div class="error-actions">
+      <a href="/" class="btn btn-primary">{{ $t('notFound.backHome') }}</a>
+      <button class="btn btn-secondary" @click="goBack">{{ $t('notFound.backPrev') }}</button>
     </div>
-  </body>
-  <script setup>
-    goBack = () => {
-      $router.back();
-    };
-  </script>
-  <script>
-    console.log('404 页面');
-  </script>
+  </div>
+</body>
+<script setup>
+  goBack = () => {
+    $router.back();
+  };
+</script>
+
 </html>

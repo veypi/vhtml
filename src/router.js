@@ -9,11 +9,12 @@
 import { Wrap, Watch, Cancel } from './reactive.js'
 import { Run } from './sandbox.js'
 import { templateLoader } from './loader.js'
-import { createRuntimeContext, getModulePath, resolveScopedUrl, resolveScope } from './env.js'
+import { createRuntimeContext, getModulePath, resolveScopedUrl, resolveScope } from './module.js'
 import { isRouterNavigableHref } from './url.js'
 import {
   instanceOf, setInstance,
   createInstance, detachInstance,
+  attachChildInstance, disposeRuntimeSubtree,
 } from './component.js'
 
 // ---- NavigationRuntime (原 navigation.js) ----
@@ -300,6 +301,8 @@ class Page {
       }
       this.layoutInstance.host = this.layoutDom
       this.instance.host = this.dom
+      const layoutInst = instanceOf(this.layoutDom, false)
+      if (layoutInst) attachChildInstance(instanceOf(this.node), layoutInst)
       return
     }
     if (this.dom && !this.dom.isConnected) {
@@ -307,6 +310,8 @@ class Page {
       this.node.append(this.dom)
     }
     this.instance.host = this.dom
+    const contentInst = instanceOf(this.dom, false)
+    if (contentInst) attachChildInstance(instanceOf(this.node), contentInst)
   }
 
   async mount(runtime, layout, existingLayout = null) {
@@ -410,9 +415,18 @@ class Page {
     const skipLayout = opts?.skipLayout ?? false
     if (skipLayout && this.layoutDom && this.dom) {
       runRuntimeTreeLifecycle(this.dom, 'deactive')
+      // 只断开与父实例的连接（保留子树），不能用 detachInstance 因为
+      // detachInstance 会清空 children 破坏子树，导致 reactivate 时遍历失败
+      const inst = instanceOf(this.dom, false)
+      if (inst?.parent) { inst.parent.children.delete(inst); inst.parent = null }
       return
     }
-    this.roots().forEach(root => runRuntimeTreeLifecycle(root, 'deactive'))
+    this.roots().forEach(root => {
+      runRuntimeTreeLifecycle(root, 'deactive')
+      // 同上：软断开，保留子树
+      const inst = instanceOf(root, false)
+      if (inst?.parent) { inst.parent.children.delete(inst); inst.parent = null }
+    })
   }
 
   detachLayout() {
@@ -430,6 +444,8 @@ class Page {
 
   destroy() {
     this.clearTitleWatchers()
+    if (this.dom) disposeRuntimeSubtree(this.dom)
+    if (this.layoutDom) disposeRuntimeSubtree(this.layoutDom)
     detachInstance(this.layoutInstance)
     detachInstance(this.instance)
     this.layoutInstance = null

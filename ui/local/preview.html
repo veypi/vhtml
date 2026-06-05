@@ -242,14 +242,33 @@
   /* 嵌入模式样式 */
   .preview-page.embedded {
     padding: 0;
+    margin: 0;
+    max-width: none;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   .preview-page.embedded .preview-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     box-shadow: none;
     border-radius: var(--radius-lg);
   }
 
-  .preview-page.embedded .preview-body {}
+  .preview-page.embedded .preview-body {
+    flex: 1;
+  }
+
+  .preview-page.embedded .preview-content {
+    padding: 0;
+    align-items: flex-start;
+  }
+
+  .preview-page.embedded .code-panel {
+    min-height: 260px;
+  }
 
   .preview-page.embedded .floating-controls {
     top: 8px;
@@ -325,7 +344,7 @@
 
         <!-- 代码面板 -->
         <div class="code-panel" :class="{hidden: switchView === 'preview'}">
-          <textarea class="code-editor" v:value="code" @input="updateCode" :readonly="code ? true : false"
+          <textarea class="code-editor" v:value="code"
             spellcheck="false" placeholder="<!-- 输入 HTML 代码 -->"></textarea>
         </div>
       </div>
@@ -361,13 +380,6 @@
   // 切换视图（切换模式下使用）
   toggleSwitchView = () => {
     switchView = switchView === 'code' ? 'preview' : 'code';
-  };
-
-  // 更新代码（仅在非嵌入模式下）
-  updateCode = (e) => {
-    if (!code) {
-      code = e.target.value;
-    }
   };
 
   // 复制代码

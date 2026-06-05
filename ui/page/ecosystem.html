@@ -1,269 +1,286 @@
 <!DOCTYPE html>
 
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="vhtml 生态"
-      details="vhtml 框架生态系统和周边工具，包含插件、组件库、社区资源"
-    />
-    <title>{{ $t('ecosystem.title') }}</title>
-  </head>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      color: var(--text-color);
-    }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 var(--spacing-xl);
-    }
-    /* 页面标题 */
-    .page-header {
-      text-align: center;
-      padding: var(--spacing-2xl) 0 var(--spacing-xl);
-    }
-    .page-header h1 {
-      font-size: var(--font-size-2xl);
-      margin-bottom: var(--spacing-sm);
-      color: var(--text-color);
-    }
-    .page-header p {
-      color: var(--text-color-tertiary);
-      font-size: var(--font-size-lg);
-    }
-    /* 生态网格 */
-    .ecosystem-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: var(--spacing-xl);
-      padding-bottom: var(--spacing-xl);
-    }
-    .eco-card {
-      background: #fff;
-      border-radius: var(--radius-xl);
-      padding: var(--spacing-xl);
-      box-shadow: var(--shadow-sm);
-      transition: transform var(--transition-base), box-shadow var(--transition-base);
-    }
-    .eco-card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-lg);
-    }
-    .eco-icon {
-      width: 56px;
-      height: 56px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: var(--radius-lg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 28px;
-      margin-bottom: var(--spacing-md);
-    }
-    .eco-card h3 {
-      font-size: var(--font-size-xl);
-      margin-bottom: var(--spacing-sm);
-      color: var(--text-color);
-    }
-    .eco-card p {
-      color: var(--text-color-secondary);
-      margin-bottom: var(--spacing-md);
-      line-height: 1.7;
-    }
-    .eco-links {
-      display: flex;
-      gap: var(--spacing-md);
-    }
-    .eco-link {
-      color: var(--color-primary);
-      text-decoration: none;
-      font-size: var(--font-size-md);
-      font-weight: var(--font-weight-medium);
-    }
-    .eco-link:hover {
-      text-decoration: underline;
-    }
-    /* 资源列表 */
-    .resource-section {
-      background: #fff;
-      border-radius: var(--radius-xl);
-      padding: var(--spacing-xl);
-      margin-bottom: var(--spacing-xl);
-    }
-    .resource-section h2 {
-      font-size: var(--font-size-xl);
-      margin-bottom: var(--spacing-lg);
-      color: var(--text-color);
-    }
-    .resource-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .resource-item {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--spacing-md);
-      padding: var(--spacing-md) 0;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .resource-item:last-child {
-      border-bottom: none;
-    }
-    .resource-icon {
-      width: 48px;
-      height: 48px;
-      background: var(--bg-color);
-      border-radius: var(--radius-lg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      flex-shrink: 0;
-    }
-    .resource-info h4 {
-      font-size: var(--font-size-md);
-      margin: 0 0 6px;
-      color: var(--text-color);
-    }
-    .resource-info p {
-      margin: 0;
-      color: var(--text-color-tertiary);
-      font-size: var(--font-size-sm);
-    }
-    .resource-tag {
-      display: inline-block;
-      padding: 4px 10px;
-      background: var(--bg-color-tertiary);
-      color: var(--color-primary);
-      border-radius: var(--radius-full);
-      font-size: var(--font-size-xs);
-      margin-top: var(--spacing-xs);
-    }
-  </style>
-  <body>
-    <!-- 页面标题 -->
-    <header class="page-header">
-      <div class="container">
-        <h1>{{ $t('common.ecosystem') }}</h1>
-        <p>{{ $t('ecosystem.subtitle') }}</p>
-      </div>
-    </header>
 
-    <!-- 核心生态 -->
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="vhtml 生态" details="vhtml 框架生态系统和周边工具" />
+  <title>{{ $t('ecosystem.title') }}</title>
+</head>
+<style>
+  body {
+    width: 100%;
+  }
+
+  .page-header {
+    text-align: center;
+    padding: var(--space-12) 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color-secondary);
+  }
+
+  .page-header h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+  }
+
+  .page-header p {
+    color: var(--text-color-tertiary);
+    font-size: var(--text-lg);
+  }
+
+  .section {
+    padding: var(--space-10) 0;
+  }
+
+  .section > .container > h2 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-6);
+  }
+
+  /* Tool cards */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-6);
+  }
+
+  .tool-card {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    transition: all var(--transition-base);
+  }
+
+  .tool-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+    border-color: var(--border-color-hover);
+  }
+
+  .tool-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--radius-xl);
+    background: var(--gradient-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    margin-bottom: var(--space-4);
+  }
+
+  .tool-card h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-2);
+  }
+
+  .tool-card p {
+    font-size: var(--text-sm);
+    color: var(--text-color-secondary);
+    line-height: 1.7;
+    margin-bottom: var(--space-4);
+  }
+
+  .tool-footer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  /* Resource list */
+  .resource-list {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+
+  .resource-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .resource-item:last-child {
+    border-bottom: none;
+  }
+
+  .resource-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-lg);
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  .resource-info {
+    flex: 1;
+  }
+
+  .resource-info h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    margin-bottom: 2px;
+  }
+
+  .resource-info p {
+    font-size: var(--text-sm);
+    color: var(--text-color-tertiary);
+  }
+
+  /* Contribute section */
+  .contribute-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-6);
+  }
+
+  .contribute-card {
+    padding: var(--space-6);
+    border-radius: var(--radius-xl);
+    text-decoration: none;
+    transition: all var(--transition-base);
+    border: 1px solid var(--border-color);
+  }
+
+  .contribute-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border-color-hover);
+  }
+
+  .contribute-card h3 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-color);
+    margin-bottom: var(--space-2);
+  }
+
+  .contribute-card p {
+    font-size: var(--text-sm);
+    color: var(--text-color-secondary);
+  }
+
+  .contribute-card.primary {
+    background: var(--accent-50);
+    border-color: var(--accent-200);
+  }
+
+  .contribute-card.primary h3 {
+    color: var(--accent-700);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .tools-grid, .contribute-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<body>
+  <header class="page-header">
+    <h1>{{ $t('ecosystem.heading') }}</h1>
+    <p>{{ $t('ecosystem.subtitle') }}</p>
+  </header>
+
+  <!-- 核心工具 -->
+  <section class="section">
     <div class="container">
-      <div class="ecosystem-grid">
-        <div class="eco-card">
-          <div class="eco-icon">📦</div>
-          <h3>{{ $t('ecosystem.core.cli.title') }}</h3>
-          <p>{{ $t('ecosystem.core.cli.desc') }}</p>
-          <div class="eco-links">
-            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
-            <a href="#" class="eco-link">GitHub</a>
+      <h2>{{ $t('ecosystem.tools.heading') }}</h2>
+      <div class="tools-grid">
+        <div class="tool-card">
+          <div class="tool-icon">🛠️</div>
+          <h3>{{ $t('ecosystem.tools.cli.title') }}</h3>
+          <p>{{ $t('ecosystem.tools.cli.desc') }}</p>
+          <div class="tool-footer">
+            <span class="badge badge-success">{{ $t('ecosystem.tools.cli.status') }}</span>
+            <a href="https://www.npmjs.com/package/@veypi/create-vhtml" target="_blank" class="btn btn-ghost btn-sm">NPM</a>
           </div>
         </div>
-
-        <div class="eco-card">
-          <div class="eco-icon">🎨</div>
-          <h3>{{ $t('ecosystem.core.ui.title') }}</h3>
-          <p>{{ $t('ecosystem.core.ui.desc') }}</p>
-          <div class="eco-links">
-            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
-            <a href="#" class="eco-link">{{ $t('examples.viewExamples') }}</a>
+        <div class="tool-card">
+          <div class="tool-icon">🌐</div>
+          <h3>{{ $t('ecosystem.tools.website.title') }}</h3>
+          <p>{{ $t('ecosystem.tools.website.desc') }}</p>
+          <div class="tool-footer">
+            <span class="badge badge-success">{{ $t('ecosystem.tools.website.status') }}</span>
+            <a href="https://github.com/veypi/vhtml" target="_blank" class="btn btn-ghost btn-sm">GitHub</a>
           </div>
         </div>
-
-        <div class="eco-card">
-          <div class="eco-icon">🔌</div>
-          <h3>{{ $t('ecosystem.core.router.title') }}</h3>
-          <p>{{ $t('ecosystem.core.router.desc') }}</p>
-          <div class="eco-links">
-            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
-            <a href="#" class="eco-link">GitHub</a>
+        <div class="tool-card">
+          <div class="tool-icon">🔍</div>
+          <h3>{{ $t('ecosystem.tools.devtools.title') }}</h3>
+          <p>{{ $t('ecosystem.tools.devtools.desc') }}</p>
+          <div class="tool-footer">
+            <span class="badge badge-warning">{{ $t('ecosystem.tools.devtools.status') }}</span>
           </div>
         </div>
-
-        <div class="eco-card">
-          <div class="eco-icon">📊</div>
-          <h3>{{ $t('ecosystem.core.charts.title') }}</h3>
-          <p>{{ $t('ecosystem.core.charts.desc') }}</p>
-          <div class="eco-links">
-            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
-            <a href="#" class="eco-link">{{ $t('examples.viewExamples') }}</a>
-          </div>
-        </div>
-
-        <div class="eco-card">
-          <div class="eco-icon">📝</div>
-          <h3>{{ $t('ecosystem.core.form.title') }}</h3>
-          <p>{{ $t('ecosystem.core.form.desc') }}</p>
-          <div class="eco-links">
-            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
-            <a href="#" class="eco-link">GitHub</a>
-          </div>
-        </div>
-
-        <div class="eco-card">
-          <div class="eco-icon">🌐</div>
-          <h3>{{ $t('ecosystem.core.i18n.title') }}</h3>
-          <p>{{ $t('ecosystem.core.i18n.desc') }}</p>
-          <div class="eco-links">
-            <a href="#" class="eco-link">{{ $t('common.docs') }}</a>
-            <a href="#" class="eco-link">GitHub</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- 社区资源 -->
-      <div class="resource-section">
-        <h2>{{ $t('ecosystem.community.title') }}</h2>
-        <ul class="resource-list">
-          <li class="resource-item">
-            <div class="resource-icon">📚</div>
-            <div class="resource-info">
-              <h4>{{ $t('ecosystem.community.awesome.title') }}</h4>
-              <p>{{ $t('ecosystem.community.awesome.desc') }}</p>
-              <span class="resource-tag">{{ $t('ecosystem.community.awesome.tag') }}</span>
-            </div>
-          </li>
-          <li class="resource-item">
-            <div class="resource-icon">🛠️</div>
-            <div class="resource-info">
-              <h4>{{ $t('ecosystem.community.devtools.title') }}</h4>
-              <p>{{ $t('ecosystem.community.devtools.desc') }}</p>
-              <span class="resource-tag">{{ $t('ecosystem.community.devtools.tag') }}</span>
-            </div>
-          </li>
-          <li class="resource-item">
-            <div class="resource-icon">📖</div>
-            <div class="resource-info">
-              <h4>{{ $t('ecosystem.community.tutorial.title') }}</h4>
-              <p>{{ $t('ecosystem.community.tutorial.desc') }}</p>
-              <span class="resource-tag">{{ $t('ecosystem.community.tutorial.tag') }}</span>
-            </div>
-          </li>
-          <li class="resource-item">
-            <div class="resource-icon">🏗️</div>
-            <div class="resource-info">
-              <h4>{{ $t('ecosystem.community.templates.title') }}</h4>
-              <p>{{ $t('ecosystem.community.templates.desc') }}</p>
-              <span class="resource-tag">{{ $t('ecosystem.community.templates.tag') }}</span>
-            </div>
-          </li>
-        </ul>
       </div>
     </div>
-  </body>
-  <script setup>
-    // 生态页面数据
-    console.log('生态页面已加载');
-  </script>
-  <script>
-    console.log('vhtml 生态系统页面');
-  </script>
+  </section>
+
+  <!-- 社区资源 -->
+  <section class="section" style="background: var(--bg-color-secondary);">
+    <div class="container">
+      <h2 style="margin-bottom: var(--space-6);">{{ $t('ecosystem.community.heading') }}</h2>
+      <div class="resource-list">
+        <div class="resource-item">
+          <div class="resource-icon">📚</div>
+          <div class="resource-info">
+            <h4>{{ $t('ecosystem.community.awesome.title') }}</h4>
+            <p>{{ $t('ecosystem.community.awesome.desc') }}</p>
+          </div>
+          <span class="badge badge-primary">Curated</span>
+        </div>
+        <div class="resource-item">
+          <div class="resource-icon">🏗️</div>
+          <div class="resource-info">
+            <h4>{{ $t('ecosystem.community.templates.title') }}</h4>
+            <p>{{ $t('ecosystem.community.templates.desc') }}</p>
+          </div>
+          <span class="badge badge-muted">Template</span>
+        </div>
+        <div class="resource-item">
+          <div class="resource-icon">💬</div>
+          <div class="resource-info">
+            <h4>{{ $t('ecosystem.community.discussions.title') }}</h4>
+            <p>{{ $t('ecosystem.community.discussions.desc') }}</p>
+          </div>
+          <a href="https://github.com/veypi/vhtml/discussions" target="_blank" class="btn btn-ghost btn-sm">前往</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 参与贡献 -->
+  <section class="section">
+    <div class="container">
+      <h2 style="margin-bottom: var(--space-6);">{{ $t('ecosystem.contribute.heading') }}</h2>
+      <div class="contribute-grid">
+        <a href="https://github.com/veypi/vhtml" target="_blank" class="contribute-card primary">
+          <h3>{{ $t('ecosystem.contribute.code') }}</h3>
+          <p>{{ $t('ecosystem.contribute.codeDesc') }}</p>
+        </a>
+        <a href="https://github.com/veypi/vhtml/issues" target="_blank" class="contribute-card">
+          <h3>{{ $t('ecosystem.contribute.report') }}</h3>
+          <p>{{ $t('ecosystem.contribute.reportDesc') }}</p>
+        </a>
+      </div>
+    </div>
+  </section>
+</body>
+<script setup>
+</script>
+
 </html>

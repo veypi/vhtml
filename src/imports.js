@@ -1,4 +1,4 @@
-import { getModulePath } from './env.js'
+import { getModulePath } from './module.js'
 
 function resolvePath(relativePath, currentPath) {
   if (relativePath.startsWith('/')) {

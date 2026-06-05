@@ -5,163 +5,385 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="默认布局" details="vhtml 官方网站的默认布局，包含导航栏和页脚" />
+  <meta name="description" content="默认布局" details="vhtml 官方站点默认布局，包含导航栏和页脚" />
   <title>默认布局</title>
 </head>
 <style>
   body {
     width: 100%;
-    height: 100%;
+    min-height: 100%;
     display: flex;
     flex-direction: column;
-    overflow: auto;
+    overflow-x: hidden;
   }
 
-  /* 导航栏 */
+  /* Navbar */
   .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: var(--spacing-md) var(--spacing-xl);
-    background: #fff;
-    border-bottom: 1px solid var(--border-color);
+    justify-content: space-between;
+    padding: 0 var(--space-6);
+    height: 60px;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid transparent;
+    transition: all var(--transition-base);
+  }
+
+  .navbar.scrolled {
+    border-bottom-color: var(--border-color);
     box-shadow: var(--shadow-sm);
   }
 
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+
   .logo {
-    font-size: var(--font-size-2xl);
+    font-size: var(--text-xl);
     font-weight: var(--font-weight-bold);
-    color: var(--color-primary);
+    color: var(--text-color);
     text-decoration: none;
+    letter-spacing: -0.02em;
     transition: color var(--transition-fast);
   }
 
   .logo:hover {
-    color: var(--color-primary-hover);
+    color: var(--color-primary);
   }
 
   .nav-links {
     display: flex;
-    gap: var(--spacing-xl);
+    align-items: center;
+    gap: var(--space-1);
   }
 
   .nav-links a {
+    padding: 6px 14px;
+    border-radius: var(--radius-md);
     color: var(--text-color-secondary);
     text-decoration: none;
-    font-size: var(--font-size-md);
+    font-size: var(--text-sm);
     font-weight: var(--font-weight-medium);
-    transition: color var(--transition-fast);
-    padding: var(--spacing-sm) 0;
-    position: relative;
+    transition: all var(--transition-fast);
   }
 
-  .nav-links a:hover,
+  .nav-links a:hover {
+    color: var(--text-color);
+    background: var(--gray-100);
+  }
+
   .nav-links a.active {
     color: var(--color-primary);
+    background: var(--accent-50);
   }
 
-  .nav-links a.active::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 2px;
-    background: var(--color-primary);
-    border-radius: var(--radius-full);
-  }
-
-  /* 语言切换器 */
-  .lang-switcher {
+  .nav-right {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    margin-left: var(--spacing-lg);
+    gap: var(--space-3);
+  }
+
+  /* Lang switcher */
+  .lang-switch {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
   }
 
   .lang-btn {
-    padding: 4px 10px;
-    border: 1px solid var(--border-color);
-    background: #fff;
-    border-radius: var(--radius-md);
+    padding: 5px 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-color-tertiary);
+    font-size: var(--text-xs);
+    font-weight: var(--font-weight-medium);
     cursor: pointer;
-    font-size: var(--font-size-sm);
-    color: var(--text-color-secondary);
     transition: all var(--transition-fast);
   }
 
   .lang-btn:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    color: var(--text-color);
   }
 
   .lang-btn.active {
     background: var(--color-primary);
     color: #fff;
-    border-color: var(--color-primary);
   }
 
-  /* 主内容区 */
+  /* GitHub icon */
+  .gh-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    color: var(--text-color-secondary);
+    transition: all var(--transition-fast);
+  }
+
+  .gh-link:hover {
+    color: var(--text-color);
+    background: var(--gray-100);
+  }
+
+  .gh-link svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Mobile menu */
+  .menu-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: var(--text-color-secondary);
+  }
+
+  .menu-btn:hover {
+    background: var(--gray-100);
+    color: var(--text-color);
+  }
+
+  .mobile-nav {
+    display: none;
+    position: fixed;
+    top: 60px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: var(--space-6);
+    z-index: 99;
+  }
+
+  .mobile-nav.open {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .mobile-nav a {
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    color: var(--text-color-secondary);
+    text-decoration: none;
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-fast);
+  }
+
+  .mobile-nav a:hover,
+  .mobile-nav a.active {
+    color: var(--color-primary);
+    background: var(--accent-50);
+  }
+
+  /* Main content */
   .main-content {
     flex: 1;
     width: 100%;
   }
 
-  /* 页脚 */
+  /* Footer */
   .footer {
-    background: var(--text-color);
-    color: var(--text-color-disabled);
-    padding: var(--spacing-xl);
-    text-align: center;
+    background: var(--gray-900);
+    color: var(--gray-400);
+    padding: var(--space-16) 0 var(--space-8);
+    margin-top: auto;
   }
 
-  .footer a {
-    color: var(--text-color-tertiary);
+  .footer-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: var(--space-10);
+  }
+
+  .footer-brand p {
+    margin-top: var(--space-4);
+    max-width: 280px;
+    font-size: var(--text-sm);
+    line-height: 1.7;
+  }
+
+  .footer-col h4 {
+    color: var(--gray-200);
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-4);
+  }
+
+  .footer-col a {
+    display: block;
+    padding: 4px 0;
+    color: var(--gray-400);
+    font-size: var(--text-sm);
     text-decoration: none;
     transition: color var(--transition-fast);
   }
 
-  .footer a:hover {
-    color: var(--bg-color);
+  .footer-col a:hover {
+    color: #fff;
+  }
+
+  .footer-bottom {
+    margin-top: var(--space-10);
+    padding-top: var(--space-6);
+    border-top: 1px solid var(--gray-800);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--text-sm);
+    color: var(--gray-500);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .nav-links {
+      display: none;
+    }
+
+    .menu-btn {
+      display: flex;
+    }
+
+    .footer-grid {
+      grid-template-columns: 1fr;
+      gap: var(--space-8);
+    }
+
+    .footer-bottom {
+      flex-direction: column;
+      gap: var(--space-2);
+      text-align: center;
+    }
   }
 </style>
 
 <body>
   <!-- 导航栏 -->
-  <nav class="navbar">
-    <a href="/" class="logo">vhtml</a>
-    <div class="nav-links">
-      <a href="/docs">{{ $t('common.docs') }}</a>
-      <a href="/examples">{{ $t('common.examples') }}</a>
-      <a href="/runtime-smoke">Smoke</a>
-      <a href="/ecosystem">{{ $t('common.ecosystem') }}</a>
-      <a href="/about">{{ $t('common.about') }}</a>
-      <div class="lang-switcher">
-        <button class="lang-btn" :class="{active: currentLang === 'zh-CN'}" @click="switchLang('zh-CN')">中文</button>
-        <button class="lang-btn" :class="{active: currentLang === 'en-US'}" @click="switchLang('en-US')">EN</button>
+  <nav class="navbar" :class="{ scrolled: scrolled }">
+    <div class="nav-left">
+      <a href="/" class="logo">vhtml</a>
+      <div class="nav-links">
+        <a href="/docs" :class="{ active: isActive('/docs') }">{{ $t('common.docs') }}</a>
+        <a href="/examples" :class="{ active: isActive('/examples') }">{{ $t('common.examples') }}</a>
+        <a href="/ecosystem" :class="{ active: isActive('/ecosystem') }">{{ $t('common.ecosystem') }}</a>
+        <a href="/about" :class="{ active: isActive('/about') }">{{ $t('common.about') }}</a>
       </div>
     </div>
+    <div class="nav-right">
+      <div class="lang-switch">
+        <button class="lang-btn" :class="{ active: currentLang === 'zh-CN' }" @click="switchLang('zh-CN')">中文</button>
+        <button class="lang-btn" :class="{ active: currentLang === 'en-US' }" @click="switchLang('en-US')">EN</button>
+      </div>
+      <a href="https://github.com/veypi/vhtml" target="_blank" class="gh-link" title="GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+      </a>
+      <button class="menu-btn" @click="mobileOpen = !mobileOpen" title="菜单">
+        <svg v-if="!mobileOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="22" height="22">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
   </nav>
+
+  <!-- 移动端菜单 -->
+  <div class="mobile-nav" :class="{ open: mobileOpen }">
+    <a href="/docs" :class="{ active: isActive('/docs') }" @click="mobileOpen = false">{{ $t('common.docs') }}</a>
+    <a href="/examples" :class="{ active: isActive('/examples') }" @click="mobileOpen = false">{{ $t('common.examples') }}</a>
+    <a href="/ecosystem" :class="{ active: isActive('/ecosystem') }" @click="mobileOpen = false">{{ $t('common.ecosystem') }}</a>
+    <a href="/about" :class="{ active: isActive('/about') }" @click="mobileOpen = false">{{ $t('common.about') }}</a>
+    <a href="https://github.com/veypi/vhtml" target="_blank">{{ $t('common.github') }}</a>
+  </div>
 
   <!-- 主内容插槽 -->
   <vslot class="main-content"></vslot>
 
   <!-- 页脚 -->
   <footer class="footer">
-    <p>{{ $t('common.copyright', { github: 'GitHub' }) }} | <a href="https://github.com/veypi/vhtml"
-        target="_blank">GitHub</a></p>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a href="/" class="logo" style="color:#fff">vhtml</a>
+          <p>基于真实 DOM 的轻量级响应式前端框架。零编译，零虚拟 DOM，导入即用。</p>
+        </div>
+        <div class="footer-col">
+          <h4>{{ $t('common.docs') }}</h4>
+          <a href="/docs">{{ $t('common.docs') }}</a>
+          <a href="/examples">{{ $t('common.examples') }}</a>
+          <a href="/ecosystem">{{ $t('common.ecosystem') }}</a>
+          <a href="/about">{{ $t('common.about') }}</a>
+        </div>
+        <div class="footer-col">
+          <h4>Links</h4>
+          <a href="https://github.com/veypi/vhtml" target="_blank">GitHub</a>
+          <a href="https://www.npmjs.com/package/@veypi/vhtml" target="_blank">NPM</a>
+          <a href="https://github.com/veypi/vhtml/releases" target="_blank">Releases</a>
+          <a href="https://github.com/veypi/vhtml/issues" target="_blank">Issues</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <span>{{ $t('common.copyright', { framework: 'vhtml' }) }}</span>
+        <span>Apache 2.0</span>
+      </div>
+    </div>
   </footer>
 </body>
 <script setup>
-  $mod.$i18n.load(await(await fetch($mod.scoped + '/langs.json')).json())
+  mobileOpen = false;
+  scrolled = false;
   currentLang = $i18n.getLocale() || 'zh-CN';
+  currentPath = '';
+
   switchLang = (lang) => {
     if (lang === currentLang) return;
     currentLang = lang;
     $i18n.setLocale(lang);
   };
+
+  isActive = (path) => {
+    if (!currentPath) return false;
+    if (path === '/') return currentPath === '/';
+    return currentPath.startsWith(path);
+  };
 </script>
 <script>
+  const onRoute = () => {
+    currentPath = $router.path || '/';
+  };
+  onRoute();
+  $watch(() => $router.path, onRoute);
+
+  const onScroll = () => {
+    scrolled = window.scrollY > 8;
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
 </script>
 
 </html>

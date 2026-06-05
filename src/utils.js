@@ -223,7 +223,7 @@ function BindInputDomValue(dom, data, key, watch, scope) {
       break;
 
     default:
-      console.warn(`${elementType} not support v!bind  only for input element`, element);
+      console.warn(`${elementType} not support v:bind  only for input element`, element);
       return false
   }
   return true

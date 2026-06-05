@@ -27,6 +27,7 @@ export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}) {
   const options = inst?.unsafe ? { unsafe: true } : sandboxOptions
   return AsyncRun(code, runtimeData, activeRuntime, createScriptContext(dom, inst), options)
     .catch((error) => {
+      if (inst) inst._scriptError = { code: code.trim().slice(0, 200), message: error?.message || String(error) }
       console.error('Lifecycle script error', {
         vsrc: dom?.getAttribute?.('vsrc') || '',
         vref: dom?.getAttribute?.('vref') || '',
@@ -36,7 +37,6 @@ export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}) {
         message: error?.message || String(error),
         stack: error?.stack || '',
       })
-      throw error
     })
 }
 

@@ -172,8 +172,8 @@ async function executeAsyncFn(fn, originCode, data, runtime, execArgs, options, 
     return await fn(createScopeProxy(data, runtime, execArgs, options))
   } catch (error) {
     logError(originCode, data, runtime, execArgs, label, error)
-    throw error
   }
+  return undefined
 }
 
 // ============================================================

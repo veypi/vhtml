@@ -5,11 +5,13 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased]
+## [0.8.3] - 2026-06-06
 
 ### 新增
 - **unsafe 沙盒模式**：组件标记 `unsafe` 属性进入受限沙盒，传染所有子孙组件。restricted 下 `fetch` 仅限 scoped 内请求，禁止 `document`/`window`/`history`，不加载外部脚本，禁止 `import`。
 - **`$mod.restrictedFetch`**：模块初始化时定义受限 fetch，unsafe 模式下自动使用。
+- **组件别名（alias）机制**：`addAlias(prefix, baseUrl)` 将 HTML 标签前缀映射到 URL 路径，支持全局和 scoped 别名，`resolveComponentUrl` 自动解析。
+- **`_scriptError` 错误标记**：`ComponentInstance` 新增 `_scriptError` 字段，生命周期脚本执行失败时记录错误信息，调用方可检查脚本是否成功。
 
 ### 变更
 - **变量池优先级重构**：`$data → $mod → $sys → expose → execArgs → window`。
@@ -18,6 +20,15 @@
 - **删除 `$ctx`**：移除 `createCtxContext`、DOM `$ctx` getter、sandbox 中 `$ctx` 链。`createRuntimeContext` 仅返回 `{ $sys, $mod }`。
 - **Object.defineProperty 写保护**：`$mod` 框架 key 通过 `writable: false` 锁定，替代 Proxy 封装层。
 - **删除 `!` 前缀**：属性编译中移除已废弃的 `!` 前缀判断。
+- **`url_prefix` 空字符串语义统一**：`parseRef` 与 `anchorPrefix` 行为一致，`''` 表示根路径无前缀，`undefined` 回退到 scope。
+- **404 占位组件视觉增强**：从 1em 红色圆点改为可见错误块，日志级别从 warn 提升到 error。
+- **`addAlias` 参数校验**：`url_prefixb` 必须以 `/` 或 `https://` 开头，防止路径拼接错误。
+
+### 修复
+- **页面实例树泄漏**：`Page.deactive` 不再仅运行生命周期，同时将页面内容实例从父实例树断开（保留子树），防止 `runRuntimeTreeLifecycle` 遍历到旧页面实例导致多次激活。
+- **`ModuleContextManager.clear()` alias 残留**：`clear()` 现在同时清空 `_aliasMap` 和 `_globalAliases`，防止重载模块时旧 alias 冲突。
+- **`loadEnvConfig` base URL 防御**：增加 `mod.scoped &&` 空值保护，防止构建非法 URL。
+- **`_scriptError` 追踪**：生命周期脚本失败时在实例上设置错误标记，替代静默吞异常。
 
 ### 移除
 - `getModuleContext`、`getBaseURL`、`scopedBaseURL` — 未使用的导出函数。

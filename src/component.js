@@ -10,7 +10,7 @@
 import { Wrap, Watch, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
 import { Run, AsyncRun } from './sandbox.js'
 import utils from './utils.js'
-import { createRuntimeContext, resolveScope } from './env.js'
+import { createRuntimeContext, resolveScope } from './module.js'
 import { parseImports } from './imports.js'
 import { registerScriptLifecycle } from './lifecycle.js'
 import { templateLoader } from './loader.js'
@@ -119,6 +119,7 @@ export class ComponentInstance {
     this.vforData = null      // v-for 当前迭代数据
     this.slotOutletState = null // 插槽出口状态
     this.unsafe = false
+    this._scriptError = null  // { code, message } 脚本执行失败时设置
   }
 }
 
@@ -481,7 +482,8 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
 
   const mod = target?.mod || runtime?.$mod || null
   const rootRouter = runtime?.$sys?.$router || null
-  const runtimeRouter = createLocalRouter(rootRouter, mod?.url_prefix || resolveScope(mod))
+  const url_prefix = mod?.url_prefix ?? resolveScope(mod)
+  const runtimeRouter = createLocalRouter(rootRouter, url_prefix)
   const componentRuntime = createRuntimeContext(runtime || null, mod, { $router: runtimeRouter })
   if (isUnsafe) componentRuntime.__unsafe = true
   componentRuntime.$sys.$emit = (evt, ...args) => {

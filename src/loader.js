@@ -7,7 +7,7 @@
  */
 
 import vcss from './vcss.js'
-import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch } from './env.js'
+import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch } from './module.js'
 
 function normalizeFetchUrl(url, scoped = '') {
   if (!url || url === '/') return resolveScopedUrl('/', scoped)
@@ -60,9 +60,12 @@ class ResourceLoader {
     if (src) script.src = src
     if (key) script.setAttribute('key', key)
     script.type = dom.getAttribute('type') || 'text/javascript'
-    await new Promise((resolve, reject) => {
+    await new Promise((resolve) => {
       script.onload = () => resolve(script)
-      script.onerror = () => reject(new Error(`Failed to load script ${src}`))
+      script.onerror = () => {
+        console.error(`[vhtml] Failed to load external script: ${src}`)
+        resolve()
+      }
       document.head.appendChild(script)
     })
   }
@@ -175,9 +178,12 @@ class TemplateParser {
   }
 
   create404Descriptor(url, mod, error) {
+    console.error(`[vhtml] Component load failed: ${url}`, error?.message || error)
     const body = document.createElement('div')
-    body.style.cssText = 'background:#aaa;height:100%;width:100%;display:grid;place-items:center;'
-    body.innerHTML = `<div style="width:20rem;height:15rem;border-radius:1rem;padding:1rem;background:#cfc0aa;display:grid;place-items:center;"><div style="font-size:2rem">404</div><p>${url}</p></div>`
+    body.style.cssText = 'display:block;padding:8px 12px;margin:4px 0;' +
+      'background:#fef2f2;border:1px solid #f87171;border-radius:4px;' +
+      'color:#991b1b;font-size:13px;line-height:1.4;'
+    body.textContent = `[Load Error] ${url}`
     return {
       url, scoped: getModulePath(mod), mod,
       heads: [], body, setup: undefined, scripts: [], styles: '', title: '',

@@ -85,6 +85,14 @@ class Vhtml {
   }
 
   /**
+   * 解析并挂载原始 HTML 代码到指定 DOM 节点
+   */
+  async parseRaw(dom, data = {}, runtime = {}, code = '') {
+    if (!this._ctx) return
+    return this._ctx.parseRaw(dom, data, runtime, code)
+  }
+
+  /**
    * 加载并挂载组件到指定 DOM 节点
    */
   async parseRef(vsrc, dom, data = {}, runtime = {}, target = null, singleMode = false) {

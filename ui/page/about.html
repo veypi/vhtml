@@ -1,286 +1,340 @@
 <!DOCTYPE html>
 
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="vhtml 关于"
-      details="vhtml 框架版本信息、开发者介绍、开源协议"
-    />
-    <title>{{ $t('about.title') }}</title>
-  </head>
-  <style>
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      line-height: 1.6;
-      color: var(--text-color);
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="vhtml 关于" details="vhtml 框架版本信息、设计理念和开发者介绍" />
+  <title>{{ $t('about.title') }}</title>
+</head>
+<style>
+  body {
+    width: 100%;
+  }
+
+  .page-header {
+    text-align: center;
+    padding: var(--space-12) 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-color-secondary);
+  }
+
+  .page-header h1 {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    margin-bottom: var(--space-2);
+  }
+
+  .page-header p {
+    color: var(--text-color-tertiary);
+    font-size: var(--text-lg);
+  }
+
+  .section {
+    padding: var(--space-10) 0;
+  }
+
+  .section-title {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-6);
+  }
+
+  .card {
+    background: var(--bg-color-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    margin-bottom: var(--space-6);
+  }
+
+  /* Philosophy */
+  .philosophy-text p {
+    font-size: var(--text-lg);
+    color: var(--text-color-secondary);
+    line-height: var(--leading-docs);
+    margin-bottom: var(--space-4);
+    max-width: 680px;
+  }
+
+  /* Stats */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-4);
+  }
+
+  .stat-box {
+    text-align: center;
+    padding: var(--space-6);
+    background: var(--gray-50);
+    border-radius: var(--radius-xl);
+  }
+
+  .stat-value {
+    font-size: var(--text-2xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary);
+    margin-bottom: var(--space-1);
+  }
+
+  .stat-label {
+    font-size: var(--text-sm);
+    color: var(--text-color-tertiary);
+  }
+
+  /* Maintainer */
+  .maintainer-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    padding: var(--space-6);
+    background: var(--gray-50);
+    border-radius: var(--radius-xl);
+  }
+
+  .avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: var(--gradient-card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .maintainer-info h3 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-semibold);
+    margin-bottom: var(--space-1);
+  }
+
+  .maintainer-info p {
+    color: var(--text-color-secondary);
+    margin-bottom: var(--space-3);
+  }
+
+  .maintainer-links {
+    display: flex;
+    gap: var(--space-4);
+  }
+
+  .maintainer-links a {
+    font-size: var(--text-sm);
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+
+  .maintainer-links a:hover {
+    text-decoration: underline;
+  }
+
+  /* Links */
+  .link-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    padding: var(--space-4) 0;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .link-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .link-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .link-info {
+    flex: 1;
+  }
+
+  .link-info h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    margin-bottom: 2px;
+  }
+
+  .link-info p {
+    font-size: var(--text-sm);
+    color: var(--text-color-tertiary);
+  }
+
+  .link-arrow {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    color: var(--text-color-tertiary);
+    text-decoration: none;
+    transition: all var(--transition-fast);
+  }
+
+  .link-arrow:hover {
+    background: var(--gray-100);
+    color: var(--color-primary);
+  }
+
+  /* License */
+  .license-block {
+    padding: var(--space-6);
+    background: var(--gray-950);
+    border-radius: var(--radius-xl);
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    color: var(--gray-300);
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
     }
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 var(--spacing-xl);
-    }
-    /* 页面标题 */
-    .page-header {
+
+    .maintainer-card {
+      flex-direction: column;
       text-align: center;
-      padding: var(--spacing-2xl) 0 var(--spacing-xl);
     }
-    .page-header h1 {
-      font-size: var(--font-size-2xl);
-      margin-bottom: var(--spacing-sm);
-      color: var(--text-color);
-    }
-    .page-header p {
-      color: var(--text-color-tertiary);
-      font-size: var(--font-size-lg);
-    }
-    /* 关于卡片 */
-    .about-section {
-      background: #fff;
-      border-radius: var(--radius-xl);
-      padding: var(--spacing-xl);
-      margin-bottom: var(--spacing-xl);
-    }
-    .about-section h2 {
-      font-size: var(--font-size-xl);
-      margin-bottom: var(--spacing-md);
-      color: var(--text-color);
-    }
-    .about-section p {
-      color: var(--text-color-secondary);
-      line-height: 1.8;
-      margin-bottom: var(--spacing-md);
-    }
-    /* 版本信息 */
-    .version-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: var(--spacing-md);
-      margin-top: var(--spacing-md);
-    }
-    .version-item {
-      background: var(--bg-color);
-      border-radius: var(--radius-lg);
-      padding: var(--spacing-lg);
-      text-align: center;
-    }
-    .version-label {
-      font-size: var(--font-size-sm);
-      color: var(--text-color-tertiary);
-      margin-bottom: var(--spacing-xs);
-    }
-    .version-value {
-      font-size: 24px;
-      font-weight: var(--font-weight-bold);
-      color: var(--color-primary);
-    }
-    /* 开发者 */
-    .developer-card {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-md);
-      padding: var(--spacing-lg);
-      background: var(--bg-color);
-      border-radius: var(--radius-lg);
-    }
-    .developer-avatar {
-      width: 80px;
-      height: 80px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 36px;
-      color: #fff;
-    }
-    .developer-info h3 {
-      margin: 0 0 var(--spacing-xs);
-      font-size: var(--font-size-xl);
-      color: var(--text-color);
-    }
-    .developer-info p {
-      margin: 0;
-      color: var(--text-color-tertiary);
-    }
-    .developer-links {
-      display: flex;
-      gap: var(--spacing-md);
-      margin-top: var(--spacing-sm);
-    }
-    .developer-links a {
-      color: var(--color-primary);
-      text-decoration: none;
-      font-size: var(--font-size-sm);
-    }
-    .developer-links a:hover {
-      text-decoration: underline;
-    }
-    /* 开源协议 */
-    .license-box {
-      background: var(--bg-color);
-      border-radius: var(--radius-lg);
-      padding: var(--spacing-lg);
-      font-family: 'Consolas', 'Monaco', monospace;
-      font-size: var(--font-size-sm);
-      line-height: 1.8;
-      color: var(--text-color-secondary);
-    }
-    /* 链接列表 */
-    .link-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-    .link-item {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-md);
-      padding: var(--spacing-md) 0;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .link-item:last-child {
-      border-bottom: none;
-    }
-    .link-icon {
-      width: 40px;
-      height: 40px;
-      background: var(--bg-color);
-      border-radius: var(--radius-md);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-    }
-    .link-info {
-      flex: 1;
-    }
-    .link-info h4 {
-      margin: 0 0 4px;
-      font-size: var(--font-size-md);
-      color: var(--text-color);
-    }
-    .link-info p {
-      margin: 0;
-      color: var(--text-color-tertiary);
-      font-size: var(--font-size-sm);
-    }
-    .link-arrow {
-      color: var(--text-color-disabled);
-      font-size: 20px;
-    }
-  </style>
-  <body>
-    <!-- 页面标题 -->
-    <header class="page-header">
-      <div class="container">
-        <h1>{{ $t('common.about') }} vhtml</h1>
-        <p>{{ $t('about.subtitle') }}</p>
-      </div>
-    </header>
+  }
+</style>
 
-    <!-- 内容区 -->
-    <div class="container">
-      <!-- 项目介绍 -->
-      <div class="about-section">
-        <h2>{{ $t('about.project.title') }}</h2>
-        <p>{{ $t('about.project.p1') }}</p>
-        <p>{{ $t('about.project.p2') }}</p>
-      </div>
+<body>
+  <header class="page-header">
+    <h1>{{ $t('about.heading') }}</h1>
+    <p>{{ $t('about.subtitle') }}</p>
+  </header>
 
-      <!-- 版本信息 -->
-      <div class="about-section">
-        <h2>{{ $t('about.version.title') }}</h2>
-        <div class="version-grid">
-          <div class="version-item">
-            <div class="version-label">{{ $t('about.version.current') }}</div>
-            <div class="version-value">v0.6.0</div>
-          </div>
-          <div class="version-item">
-            <div class="version-label">{{ $t('about.version.size') }}</div>
-            <div class="version-value">96KB</div>
-          </div>
-          <div class="version-item">
-            <div class="version-label">{{ $t('about.version.firstRelease') }}</div>
-            <div class="version-value">2024</div>
-          </div>
-          <div class="version-item">
-            <div class="version-label">{{ $t('about.version.license') }}</div>
-            <div class="version-value">MIT</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 开发者 -->
-      <div class="about-section">
-        <h2>{{ $t('about.developer.title') }}</h2>
-        <div class="developer-card">
-          <div class="developer-avatar">👨‍💻</div>
-          <div class="developer-info">
-            <h3>{{ $t('about.developer.name') }}</h3>
-            <p>{{ $t('about.developer.desc') }}</p>
-            <div class="developer-links">
-              <a href="https://github.com/veypi" target="_blank">GitHub</a>
-              <a href="mailto:veypi@qq.com">{{ $t('about.developer.email') }}</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 相关链接 -->
-      <div class="about-section">
-        <h2>{{ $t('about.links.title') }}</h2>
-        <ul class="link-list">
-          <li class="link-item">
-            <div class="link-icon">📦</div>
-            <div class="link-info">
-              <h4>{{ $t('about.links.npm.title') }}</h4>
-              <p>{{ $t('about.links.npm.desc') }}</p>
-            </div>
-            <a href="https://www.npmjs.com/package/@veypi/vhtml" target="_blank" class="link-arrow">→</a>
-          </li>
-          <li class="link-item">
-            <div class="link-icon">🐙</div>
-            <div class="link-info">
-              <h4>{{ $t('about.links.github.title') }}</h4>
-              <p>{{ $t('about.links.github.desc') }}</p>
-            </div>
-            <a href="https://github.com/veypi/vhtml" target="_blank" class="link-arrow">→</a>
-          </li>
-          <li class="link-item">
-            <div class="link-icon">📖</div>
-            <div class="link-info">
-              <h4>{{ $t('about.links.changelog.title') }}</h4>
-              <p>{{ $t('about.links.changelog.desc') }}</p>
-            </div>
-            <a href="https://github.com/veypi/vhtml/releases" target="_blank" class="link-arrow">→</a>
-          </li>
-          <li class="link-item">
-            <div class="link-icon">🐛</div>
-            <div class="link-info">
-              <h4>{{ $t('about.links.issues.title') }}</h4>
-              <p>{{ $t('about.links.issues.desc') }}</p>
-            </div>
-            <a href="https://github.com/veypi/vhtml/issues" target="_blank" class="link-arrow">→</a>
-          </li>
-        </ul>
-      </div>
-
-      <!-- 开源协议 -->
-      <div class="about-section">
-        <h2>{{ $t('about.license.title') }}</h2>
-        <p>{{ $t('about.license.desc') }}</p>
-        <div class="license-box">{{ $t('about.license.text') }}</div>
+  <!-- 设计理念 -->
+  <section class="section">
+    <div class="container-sm">
+      <h2 class="section-title">{{ $t('about.philosophy.heading') }}</h2>
+      <div class="card philosophy-text">
+        <p>{{ $t('about.philosophy.p1') }}</p>
+        <p>{{ $t('about.philosophy.p2') }}</p>
       </div>
     </div>
-  </body>
-  <script setup>
-    // 关于页面数据
-    console.log('关于页面已加载');
-  </script>
-  <script>
-    console.log('vhtml 关于页面');
-  </script>
+  </section>
+
+  <!-- 版本信息 -->
+  <section class="section" style="background: var(--bg-color-secondary);">
+    <div class="container-sm">
+      <h2 class="section-title">{{ $t('about.stats.heading') }}</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-value">v0.8.3</div>
+          <div class="stat-label">{{ $t('about.stats.version') }}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">&lt;100KB</div>
+          <div class="stat-label">{{ $t('about.stats.size') }}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">2024</div>
+          <div class="stat-label">{{ $t('about.stats.firstRelease') }}</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value">Apache 2.0</div>
+          <div class="stat-label">{{ $t('about.stats.license') }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 维护者 -->
+  <section class="section">
+    <div class="container-sm">
+      <h2 class="section-title">{{ $t('about.maintainer.heading') }}</h2>
+      <div class="maintainer-card">
+        <div class="avatar">V</div>
+        <div class="maintainer-info">
+          <h3>{{ $t('about.maintainer.name') }}</h3>
+          <p>{{ $t('about.maintainer.bio') }}</p>
+          <div class="maintainer-links">
+            <a href="https://github.com/veypi" target="_blank">GitHub</a>
+            <a href="mailto:veypi@qq.com">Email</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 相关链接 -->
+  <section class="section" style="background: var(--bg-color-secondary);">
+    <div class="container-sm">
+      <h2 class="section-title">{{ $t('about.links.heading') }}</h2>
+      <div class="card">
+        <div class="link-item">
+          <div class="link-icon">📦</div>
+          <div class="link-info">
+            <h4>{{ $t('about.links.npm.title') }}</h4>
+            <p>{{ $t('about.links.npm.desc') }}</p>
+          </div>
+          <a href="https://www.npmjs.com/package/@veypi/vhtml" target="_blank" class="link-arrow">→</a>
+        </div>
+        <div class="link-item">
+          <div class="link-icon">🐙</div>
+          <div class="link-info">
+            <h4>{{ $t('about.links.github.title') }}</h4>
+            <p>{{ $t('about.links.github.desc') }}</p>
+          </div>
+          <a href="https://github.com/veypi/vhtml" target="_blank" class="link-arrow">→</a>
+        </div>
+        <div class="link-item">
+          <div class="link-icon">📋</div>
+          <div class="link-info">
+            <h4>{{ $t('about.links.changelog.title') }}</h4>
+            <p>{{ $t('about.links.changelog.desc') }}</p>
+          </div>
+          <a href="https://github.com/veypi/vhtml/releases" target="_blank" class="link-arrow">→</a>
+        </div>
+        <div class="link-item">
+          <div class="link-icon">🐛</div>
+          <div class="link-info">
+            <h4>{{ $t('about.links.issues.title') }}</h4>
+            <p>{{ $t('about.links.issues.desc') }}</p>
+          </div>
+          <a href="https://github.com/veypi/vhtml/issues" target="_blank" class="link-arrow">→</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 协议 -->
+  <section class="section">
+    <div class="container-sm">
+      <h2 class="section-title">{{ $t('about.license.heading') }}</h2>
+      <p style="color:var(--text-color-secondary);margin-bottom:var(--space-6);">{{ $t('about.license.desc') }}</p>
+      <div class="license-block">
+Apache License<br/>
+Version 2.0, January 2004<br/>
+http://www.apache.org/licenses/<br/>
+<br/>
+Licensed under the Apache License, Version 2.0.
+You may obtain a copy of the License at:<br/>
+http://www.apache.org/licenses/LICENSE-2.0
+      </div>
+    </div>
+  </section>
+</body>
+<script setup>
+</script>
+
 </html>

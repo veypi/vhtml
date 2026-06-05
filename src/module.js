@@ -1,5 +1,5 @@
 /*
- * env.js — 模块上下文与环境配置
+ * module.js — 模块上下文与环境配置
  * Copyright (C) 2024 veypi <i@veypi.com>
  *
  * 管理模块级 scoped 上下文、运行时创建、env.js 配置加载。
@@ -148,6 +148,8 @@ export class ModuleContextManager {
   constructor() {
     this.modMap = new Map()
     this.wrappers = []
+    this._aliasMap = new Map()
+    this._globalAliases = {}
     this.sharedLocale = Wrap({
       locale: localStorage.getItem('i18n_locale') || 'zh-CN',
       fallback: 'en-US',
@@ -176,6 +178,8 @@ export class ModuleContextManager {
   clear() {
     this.modMap.clear()
     this.wrappers = []
+    this._aliasMap.clear()
+    this._globalAliases = {}
   }
 
   async getModule(scoped = '') {
@@ -198,9 +202,41 @@ export class ModuleContextManager {
     return mod
   }
 
+  addAlias(prefixa, url_prefixb, is_global = false) {
+    if (!/^[a-zA-Z]+$/.test(prefixa)) {
+      throw new Error(`addAlias: prefixa must contain only English letters, got "${prefixa}"`)
+    }
+    if (typeof url_prefixb !== 'string' || !url_prefixb) {
+      throw new Error(`addAlias: url_prefixb must be a non-empty string, got "${url_prefixb}"`)
+    }
+    if (!/^(\/|https?:\/\/)/.test(url_prefixb)) {
+      throw new Error(`addAlias: url_prefixb must start with / or https://, got "${url_prefixb}"`)
+    }
+    if (is_global) {
+      this._globalAliases[prefixa] = url_prefixb
+      return
+    }
+    if (!this._loadingMod) {
+      console.warn('addAlias: no module is currently loading, alias ignored')
+      return
+    }
+    const scoped = this._loadingMod.scoped
+    if (!this._aliasMap.has(scoped)) {
+      this._aliasMap.set(scoped, {})
+    }
+    this._aliasMap.get(scoped)[prefixa] = url_prefixb
+  }
+
+  getAliases(scoped) {
+    const scopedAliases = this._aliasMap.get(scoped) || null
+    if (!scopedAliases) return this._globalAliases || null
+    return { ...this._globalAliases, ...scopedAliases }
+  }
+
   async loadEnvConfig(mod) {
-    const base = mod.scoped && /^https?:\/\//.test(mod.scoped) ? mod.scoped : `${window.location.origin}${mod.scoped}`
+    const base = mod.scoped && /^https?:\/\//.test(mod.scoped) ? mod.scoped : `${window.location.origin}${mod.scoped || ''}`
     const envUrl = `${base}/env.js`
+    this._loadingMod = mod
     try {
       const envModule = await import(envUrl)
       if (typeof envModule.default === 'function') {
@@ -208,6 +244,8 @@ export class ModuleContextManager {
       }
     } catch (error) {
       console.warn(`error loading ${envUrl}: ${error}`)
+    } finally {
+      this._loadingMod = null
     }
   }
 }

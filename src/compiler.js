@@ -8,7 +8,7 @@
 
 import { Wrap, Watch, Cancel, DataID } from './reactive.js'
 import { Run } from './sandbox.js'
-import { resolveScope } from './env.js'
+import moduleContextManager, { resolveScope } from './module.js'
 import utils from './utils.js'
 import { runMountedHandler } from './lifecycle.js'
 import { isRelativeHref } from './url.js'
@@ -52,6 +52,9 @@ function normalizePath(path, minDepth = 0) {
 }
 
 function anchorPrefix(runtime) {
+  // 显式设为空字符串 = 根路径，不加前缀
+  if (runtime?.$mod?.url_prefix === '') return ''
+  // undefined/null = 未设置，fallback 到 scope
   return runtime?.$mod?.url_prefix || resolveScope(runtime)
 }
 
@@ -639,6 +642,20 @@ export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
 
 // ---- 根编译入口 ----
 
+function resolveComponentUrl(nodeName, runtime) {
+  const mod = runtime?.$mod
+  const parts = nodeName.split('-')
+  const firstSegment = parts[0]
+  const aliases = mod?.scoped ? moduleContextManager.getAliases(mod.scoped) : null
+  if (aliases?.[firstSegment]) {
+    const aliasBase = aliases[firstSegment]
+    const rest = parts.slice(1).join('/')
+    const path = rest ? `${aliasBase}/${rest}` : aliasBase
+    return '@' + path
+  }
+  return '/' + parts.join('/')
+}
+
 export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
   if (runtime instanceof HTMLElement) {
     throw new Error('runtime error')
@@ -693,7 +710,7 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
   }
 
   if (nodeName.indexOf('-') !== -1) {
-    let url = '/' + nodeName.split('-').join('/')
+    let url = resolveComponentUrl(nodeName, activeRuntime)
     let singleMode = dom.hasAttribute('single')
     ctx?.parseRef?.(url, dom, scopedData, activeRuntime, null, singleMode)
     metaOf(dom).parsed = true
@@ -701,29 +718,39 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
   }
 
   if (dom.getAttribute(':vsrc')) {
-    let code = dom.getAttribute(':vsrc')
-    dom.removeAttribute(':vsrc')
-    let attrs = Array.from(dom.attributes).map(a => ({ name: a.name, value: a.value }))
-    let oldChilds = Array.from(dom.childNodes)
-    watch(runtimeScope, () => {
-      metaOf(dom).parsed = false
-      dom.setAttribute('vparsing', '')
-      let vsrc = Run(code, scopedData, activeRuntime)
-      if (!vsrc) return
-      Array.from(dom.attributes).forEach(a => dom.removeAttribute(a.name))
-      dom.innerHTML = ''
-      attrs.forEach(a => dom.setAttribute(a.name, a.value))
-      oldChilds.forEach(c => dom.appendChild(c.cloneNode(true)))
-      ctx?.parseRef?.(vsrc, dom, scopedData, activeRuntime, null, false)
-      metaOf(dom).parsed = true
-    })
+    if (activeRuntime?.__unsafe) {
+      console.warn('unsafe mode: :vsrc is blocked')
+      dom.removeAttribute(':vsrc')
+    } else {
+      let code = dom.getAttribute(':vsrc')
+      dom.removeAttribute(':vsrc')
+      let attrs = Array.from(dom.attributes).map(a => ({ name: a.name, value: a.value }))
+      let oldChilds = Array.from(dom.childNodes)
+      watch(runtimeScope, () => {
+        metaOf(dom).parsed = false
+        dom.setAttribute('vparsing', '')
+        let vsrc = Run(code, scopedData, activeRuntime)
+        if (!vsrc) return
+        Array.from(dom.attributes).forEach(a => dom.removeAttribute(a.name))
+        dom.innerHTML = ''
+        attrs.forEach(a => dom.setAttribute(a.name, a.value))
+        oldChilds.forEach(c => dom.appendChild(c.cloneNode(true)))
+        ctx?.parseRef?.(vsrc, dom, scopedData, activeRuntime, null, false)
+        metaOf(dom).parsed = true
+      })
+    }
     return
   }
 
   if (dom.getAttribute('vsrc')) {
-    let singleMode = dom.hasAttribute('single')
-    ctx?.parseRef?.(dom.getAttribute('vsrc'), dom, scopedData, activeRuntime, null, singleMode)
-    metaOf(dom).parsed = true
+    if (activeRuntime?.__unsafe) {
+      console.warn('unsafe mode: vsrc is blocked')
+      dom.removeAttribute('vsrc')
+    } else {
+      let singleMode = dom.hasAttribute('single')
+      ctx?.parseRef?.(dom.getAttribute('vsrc'), dom, scopedData, activeRuntime, null, singleMode)
+      metaOf(dom).parsed = true
+    }
     return
   }
 
