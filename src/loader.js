@@ -8,6 +8,7 @@
 
 import vcss from './vcss.js'
 import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch } from './module.js'
+import { prepareStaticUrlAttrs } from './compiler-attrs.js'
 
 function normalizeFetchUrl(url, scoped = '') {
   if (!url || url === '/') return resolveScopedUrl('/', scoped)
@@ -161,19 +162,15 @@ class TemplateParser {
     })
   }
 
-  async parse(text, mod, url, ignoreScoped = false, unsafe = false) {
+  async parse(text, mod, url, unsafe = false) {
     const doc = new DOMParser().parseFromString(text, 'text/html')
-    if (doc.body.hasAttribute('scoped') && !ignoreScoped) {
-      throw new Error('HTTP error! status: 404')
-    }
     const descriptor = this.createDescriptor(text, mod, url, getModulePath(mod), doc)
     this.processStyles(descriptor)
     this.processBody(descriptor)
     this.processScripts(descriptor)
     this.syncRefOwnerId(descriptor.body, url)
-    if (!ignoreScoped) {
-      await this.resourceLoader.loadHeads(descriptor.heads, mod, descriptor, unsafe)
-    }
+    prepareStaticUrlAttrs(descriptor.body, mod)
+    await this.resourceLoader.loadHeads(descriptor.heads, mod, descriptor, unsafe)
     return descriptor
   }
 
@@ -227,30 +224,24 @@ class TemplateLoader {
     return response.text()
   }
 
-  async parseUI(text, runtime, url, ignoreScoped = false, unsafe = false) {
+  async parseUI(text, runtime, url, unsafe = false) {
     const descriptorUrl = url?.endsWith('.html') ? url.slice(0, -5) : (url || '#inline')
     const descriptorModule = await this.moduleManager.getModule(getModulePath(runtime))
-    return this.parser.parse(text, descriptorModule, descriptorUrl, ignoreScoped, unsafe)
+    return this.parser.parse(text, descriptorModule, descriptorUrl, unsafe)
   }
 
-  async fetchUI(url, runtime = {}, ignoreScoped = false, unsafe = false) {
+  async fetchUI(url, runtime = {}, unsafe = false) {
     const fetchUrl = normalizeFetchUrl(url, getModulePath(runtime))
     if (this.cache.templates.has(fetchUrl)) return this.cache.templates.get(fetchUrl)
     if (this.cache.pending.has(fetchUrl)) return this.cache.pending.get(fetchUrl)
-    const pending = this.doFetchUI(fetchUrl, ignoreScoped, unsafe)
+    const pending = this.doFetchUI(fetchUrl, unsafe)
     this.cache.pending.set(fetchUrl, pending)
     return pending.finally(() => this.cache.pending.delete(fetchUrl))
   }
 
-  async doFetchUI(fetchUrl, ignoreScoped = false, unsafe = false) {
+  async doFetchUI(fetchUrl, unsafe = false) {
     try {
-      let params = {}
-      if (!ignoreScoped) {
-        params = { headers: { 'X-No-Fallback': 1 } }
-      } else {
-        params = { headers: { 'accept': 'text/html' } }
-      }
-      const response = await fetch(fetchUrl, params)
+      const response = await fetch(fetchUrl, { headers: { 'X-No-Fallback': 1 } })
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const scopedHeaders = this.readScopedHeaders(response)
       const responseScoped = normalizeScoped(scopedHeaders.scoped || '')
@@ -259,7 +250,7 @@ class TemplateLoader {
       mergeModulePatch(descriptorModule, scopedHeaders)
       const text = await response.text()
       const descriptorUrl = fetchUrl.endsWith('.html') ? fetchUrl.slice(0, -5) : fetchUrl
-      const descriptor = await this.parser.parse(text, descriptorModule, descriptorUrl, ignoreScoped, unsafe)
+      const descriptor = await this.parser.parse(text, descriptorModule, descriptorUrl, unsafe)
       this.cache.templates.set(fetchUrl, descriptor)
       return descriptor
     } catch (error) {

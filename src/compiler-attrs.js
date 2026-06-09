@@ -43,24 +43,97 @@ function anchorPrefix(runtime) {
 function resolveScopedUrl(rawUrl, runtime, scoped) {
   if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
   if (rawUrl.startsWith('@')) return rawUrl.slice(1)
+  if (/^https?:\/\//.test(rawUrl)) return rawUrl
+  if (rawUrl.startsWith('//')) return rawUrl
   scoped = scoped || runtime?.$mod?.scoped
   if (scoped && isRelativeHref(rawUrl)) {
     const minDepth = scoped.split('/').filter(s => s).length
+    if (rawUrl.startsWith('/') && (rawUrl === scoped || rawUrl.startsWith(`${scoped}/`))) {
+      return normalizePath(rawUrl, minDepth)
+    }
     return normalizePath(scoped + rawUrl, minDepth)
   }
   return rawUrl
 }
 
-function resolveSrcset(srcset, runtime) {
+function componentResourceBase(dom) {
+  const owner = dom?.getAttribute?.('vrefof') || dom?.closest?.('[vref]')?.getAttribute?.('vref') || ''
+  if (!owner || owner.startsWith('#')) return ''
+  return owner
+}
+
+function resolveStaticResourceUrl(rawUrl, dom, runtime) {
+  if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
+  if (rawUrl.startsWith('@')) return rawUrl.slice(1)
+  if (/^https?:\/\//.test(rawUrl)) return rawUrl
+  if (rawUrl.startsWith('//')) return rawUrl
+
+  if (rawUrl.startsWith('/')) return resolveScopedUrl(rawUrl, runtime)
+  const base = componentResourceBase(dom)
+  if (!base || !isRelativeHref(rawUrl)) return rawUrl
+  try {
+    const resolved = new URL(rawUrl, new URL(base, window.location.origin))
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`
+  } catch (error) {
+    return rawUrl
+  }
+}
+
+function resolveDynamicResourceUrl(rawUrl, dom, runtime) {
+  if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
+  if (rawUrl.startsWith('@')) return rawUrl.slice(1)
+  if (/^https?:\/\//.test(rawUrl)) return rawUrl
+  if (rawUrl.startsWith('//')) return rawUrl
+  if (rawUrl.startsWith('/')) return resolveScopedUrl(rawUrl, runtime)
+  return resolveStaticResourceUrl(rawUrl, dom, runtime)
+}
+
+function resolveStaticUrlAttr(rawUrl, dom, attrName, runtime) {
+  if (attrName === 'href' && dom.nodeName === 'A') {
+    return resolveScopedUrl(rawUrl, runtime, anchorPrefix(runtime))
+  }
+  return resolveStaticResourceUrl(rawUrl, dom, runtime)
+}
+
+function resolveDynamicUrlAttr(rawUrl, dom, attrName, runtime) {
+  if (attrName === 'href' && dom.nodeName === 'A') {
+    return resolveScopedUrl(rawUrl, runtime, anchorPrefix(runtime))
+  }
+  return resolveDynamicResourceUrl(rawUrl, dom, runtime)
+}
+
+function resolveSrcset(srcset, dom, runtime, resolver = resolveStaticResourceUrl) {
   if (!srcset || typeof srcset !== 'string') return srcset
   return srcset.split(',').map(entry => {
     const trimmed = entry.trim()
     const parts = trimmed.split(/\s+/)
     if (parts.length > 0 && isRelativeHref(parts[0])) {
-      parts[0] = resolveScopedUrl(parts[0], runtime)
+      parts[0] = resolver(parts[0], dom, runtime)
     }
     return parts.join(' ')
   }).join(', ')
+}
+
+function prepareUrlAttrs(dom, runtime) {
+  if (!dom || dom.nodeType !== 1) return
+  URL_ATTRS.forEach(attrName => {
+    if (dom.hasAttribute(`:${attrName}`)) {
+      dom.removeAttribute(attrName)
+      return
+    }
+    if (!dom.hasAttribute(attrName)) return
+    const rawValue = dom.getAttribute(attrName)
+    const resolved = attrName === 'srcset'
+      ? resolveSrcset(rawValue, dom, runtime)
+      : resolveStaticUrlAttr(rawValue, dom, attrName, runtime)
+    dom.setAttribute(attrName, resolved)
+  })
+}
+
+export function prepareStaticUrlAttrs(root, runtime) {
+  if (!root) return
+  if (root.nodeType === 1) prepareUrlAttrs(root, runtime)
+  root.querySelectorAll?.('*')?.forEach(node => prepareUrlAttrs(node, runtime))
 }
 
 function syncAnchorActive(dom) {
@@ -77,24 +150,20 @@ function syncAnchorActive(dom) {
   scope?.addCleanup(off)
 }
 
-export function compileAttr(dom, name, value, data, runtime, ctx, dynamicUrlAttrs) {
+export function compileAttr(dom, name, value, data, runtime, ctx) {
   const scope = instanceOf(dom)?.scope
   if (name.startsWith(':')) {
     const attrName = name.slice(1)
     if (attrName === 'class' || attrName === 'style') {
       handleStyle(dom, attrName, value, data, runtime)
     } else {
-      if (URL_ATTRS.has(attrName)) {
-        dynamicUrlAttrs?.add(attrName)
-      }
       watch(scope, () => {
         let res = value ? Run(value, data, runtime) : data[attrName]
         if (URL_ATTRS.has(attrName) && res) {
           if (attrName === 'srcset') {
-            res = resolveSrcset(res, runtime)
+            res = resolveSrcset(res, dom, runtime, resolveDynamicResourceUrl)
           } else {
-            const prefix = attrName === 'href' && dom.nodeName === 'A' ? anchorPrefix(runtime) : undefined
-            res = resolveScopedUrl(res, runtime, prefix)
+            res = resolveDynamicUrlAttr(res, dom, attrName, runtime)
           }
         }
         utils.SetAttr(dom, attrName, res)
@@ -274,24 +343,9 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
 }
 
 export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
-  const dynamicUrlAttrs = new Set()
-
   Array.from(dom.attributes).forEach(attr => {
-    if (compileAttr(dom, attr.name, attr.value, data, runtime, ctx, dynamicUrlAttrs)) {
+    if (compileAttr(dom, attr.name, attr.value, data, runtime, ctx)) {
       dom.removeAttribute(attr.name)
-    }
-  })
-
-  Array.from(dom.attributes).forEach(attr => {
-    if (URL_ATTRS.has(attr.name) && !dynamicUrlAttrs.has(attr.name)) {
-      let resolved
-      if (attr.name === 'srcset') {
-        resolved = resolveSrcset(attr.value, runtime)
-      } else {
-        const prefix = attr.name === 'href' && dom.nodeName === 'A' ? anchorPrefix(runtime) : undefined
-        resolved = resolveScopedUrl(attr.value, runtime, prefix)
-      }
-      dom.setAttribute(attr.name, resolved)
     }
   })
 
