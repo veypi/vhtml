@@ -666,10 +666,10 @@ class RouterView {
   resolveCacheKey(route, matchedRoute) {
     const config = route.cacheKey
     if (config === false) return null
-    if (config === undefined || config === true) return matchedRoute.fullPath
+    if (config === undefined || config === true) return matchedRoute.fullPath.split('#')[0]
     if (typeof config === 'string') return config
     if (typeof config === 'function') return config(matchedRoute)
-    return matchedRoute.fullPath
+    return matchedRoute.fullPath.split('#')[0]
   }
 
   async #navigateTo(matchedRoute, mode = 'push') {
