@@ -3,10 +3,10 @@
   "version": "0.8.3",
   "description": "vhtml is a lightweight JavaScript library for parsing and manipulating HTML content with ease.",
   "type": "module",
-  "module": "./dist/vhtml.js",
+  "module": "./dist/vhtml.min.js",
   "exports": {
     ".": {
-      "import": "./dist/vhtml.js"
+      "import": "./dist/vhtml.min.js"
     }
   },
   "files": [

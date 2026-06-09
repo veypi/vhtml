@@ -12,12 +12,8 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/index.js'),
       name: 'vhtml',
-      fileName: (format) => {
-        if (format === 'es') return 'vhtml.js';
-        if (format === 'umd') return 'vhtml.min.js';
-        return `vhtml.${format}.js`;
-      },
-      formats: ['es', 'umd']
+      fileName: () => 'vhtml.min.js',
+      formats: ['es']
     },
     rollupOptions: {
       external: [],
