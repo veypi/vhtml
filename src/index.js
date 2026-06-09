@@ -2,23 +2,32 @@
  * vhtml — 框架入口
  * Copyright (C) 2024 veypi <i@veypi.com>
  *
- * Vhtml 类管理框架生命周期：全局样式、MutationObserver、vdelay、
- * ctx 组装、页面挂载与销毁。
+ * VHTML 类管理框架生命周期：全局样式、MutationObserver、vdelay、
+ * ctx 组装、DOM 编译与销毁。
  */
 
 import { createRenderContext } from './renderer.js'
 import { templateLoader } from './loader.js'
 import { disposeRuntimeSubtree } from './component-instance.js'
+import { createRuntimeContext } from './module.js'
+import { EnsureWrap } from './reactive.js'
 
-class Vhtml {
+class VHTML {
   static _globalStyled = false
 
-  constructor(options = {}) {
-    const target = options.target || document.body
+  constructor(target, scoped = '', options = {}) {
+    if (target && typeof target === 'object' && !(target instanceof Element)) {
+      options = target
+      target = options.target
+      scoped = options.scoped || ''
+    }
     this._el = typeof target === 'string'
       ? document.getElementById(target) || document.querySelector(target)
       : target
 
+    this._scoped = scoped || ''
+    this._data = EnsureWrap(options.data || {})
+    this._runtime = null
     this._mounted = false
     this._ctx = null
     this._observer = null
@@ -27,6 +36,7 @@ class Vhtml {
     this._moSuspended = false
     this._moPendingAdded = []
     this._moPendingRemoved = []
+    this.ready = options.autoMount === false ? Promise.resolve(this) : this.mount()
   }
 
   // ===================================================================
@@ -39,7 +49,12 @@ class Vhtml {
       return this
     }
 
-    Vhtml._injectGlobalStyles()
+    if (!this._el) {
+      console.error('vhtml: target element not found')
+      return this
+    }
+
+    VHTML._injectGlobalStyles()
     this._startObserver()
 
     this._ctx = createRenderContext({
@@ -48,13 +63,10 @@ class Vhtml {
       resumeMO: this._resumeMO.bind(this),
     })
 
-    if (!this._el) {
-      console.error('vhtml: target element not found')
-      return this
-    }
-
-    const mainParser = await templateLoader.fetchUI(window.location.pathname, {}, true)
-    await this._ctx.parseRef('root', this._el, {}, mainParser.mod || {}, mainParser, true)
+    const mod = await templateLoader.getModule(this._scoped)
+    this._runtime = createRuntimeContext(null, mod)
+    this._ctx.ensureBoundary(this._el, this._data, this._runtime)
+    this._ctx.compileNode(this._el, this._data, this._runtime, this._ctx)
 
     this._mounted = true
     return this
@@ -81,7 +93,10 @@ class Vhtml {
    */
   parseDom(dom, data = {}, runtime = {}) {
     if (!this._ctx) return
-    this._ctx.compileNode(dom, data, runtime, this._ctx)
+    data = EnsureWrap(data)
+    const activeRuntime = runtime?.$mod || runtime?.$sys ? runtime : this._runtime
+    this._ctx.ensureBoundary(dom, data, activeRuntime)
+    this._ctx.compileNode(dom, data, activeRuntime, this._ctx)
   }
 
   /**
@@ -89,6 +104,7 @@ class Vhtml {
    */
   async parseRaw(dom, data = {}, runtime = {}, code = '') {
     if (!this._ctx) return
+    data = EnsureWrap(data)
     return this._ctx.parseRaw(dom, data, runtime, code)
   }
 
@@ -97,6 +113,7 @@ class Vhtml {
    */
   async parseRef(vsrc, dom, data = {}, runtime = {}, target = null, singleMode = false) {
     if (!this._ctx) return
+    data = EnsureWrap(data)
     return this._ctx.parseRef(vsrc, dom, data, runtime, target, singleMode)
   }
 
@@ -105,8 +122,8 @@ class Vhtml {
   // ===================================================================
 
   static _injectGlobalStyles() {
-    if (Vhtml._globalStyled) return
-    Vhtml._globalStyled = true
+    if (VHTML._globalStyled) return
+    VHTML._globalStyled = true
     const style = document.createElement('style')
     style.innerHTML = `
       [vref] { display: block; }
@@ -224,8 +241,6 @@ class Vhtml {
   }
 }
 
-export default Vhtml
+export default VHTML
 
-// 自动启动（直接 <script> 引入时）
-window.$vhtml = new Vhtml()
-window.$vhtml.mount()
+window.VHTML = VHTML

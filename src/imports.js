@@ -99,12 +99,19 @@ export async function parseImports(code, data = {}, runtime = {}, src = '', unsa
 
   const importRegex = /^[\s/]*import\s+([\w{},\s]+)\s+from\s+['"]([^'"]+)['"][;\s]*$/gm
   while ((match = importRegex.exec(code)) !== null) {
-    codeCopy = codeCopy.replace(match[0], '')
+    const modulePath = match[2]
     if (match[0].trim().startsWith('//')) {
+      codeCopy = codeCopy.replace(match[0], '')
       continue
     }
+    if (/\.min\.js$/.test(modulePath) || modulePath.startsWith('http')) {
+      console.warn(`外部库请使用 <script> 标签加载，无法通过 import 导入: ${modulePath}`)
+      codeCopy = codeCopy.replace(match[0], '')
+      continue
+    }
+    codeCopy = codeCopy.replace(match[0], '')
     try {
-      const moduleUrl = toAbsoluteModuleUrl(match[2], scoped, normalizedSrc)
+      const moduleUrl = toAbsoluteModuleUrl(modulePath, scoped, normalizedSrc)
       const binding = parseImportBindings(match[1], match[0])
       const module = await import(moduleUrl)
       await injectImportedModule(binding, module, data)

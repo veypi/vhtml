@@ -5,7 +5,7 @@
  * 结构指令和根节点分发。属性/事件编译在 compiler-attrs.js。
  */
 
-import { Wrap, DataID } from './reactive.js'
+import { Wrap, DataID, EnsureWrap } from './reactive.js'
 import { Run } from './sandbox.js'
 import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
@@ -50,6 +50,7 @@ export function ensureStructuralBoundary(dom, data, runtime) {
     instance.scope = new ComponentScope(dom)
   }
   if (data !== undefined) {
+    data = EnsureWrap(data)
     instance.data = data
   }
   if (!instance.runtime) {
@@ -329,6 +330,7 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
   if (runtime instanceof HTMLElement) {
     throw new Error('runtime error')
   }
+  scopedData = EnsureWrap(scopedData)
   const inst = instanceOf(dom)
   const nodeScopeData = getNodeScope(dom)
   const runtimeScope = scope || inst?.scope || nodeScopeData?.scope

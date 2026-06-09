@@ -17,7 +17,10 @@ vhtml 是一个轻量级的浏览器端响应式前端框架，基于 HTML5 标�
 ## 安装
 
 ```html
-<script src="https://ivect.ai/vhtml/vhtml.min.js"></script>
+<script type="module">
+  import VHTML from "https://ivect.ai/vhtml/vhtml.min.js"
+  window.$vhtml = new VHTML(document.body, '/')
+</script>
 ```
 
 ## 快速开始

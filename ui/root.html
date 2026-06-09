@@ -6,11 +6,14 @@
   <meta name="description" content="vhtml - 基于真实 DOM 的轻量级响应式前端框架。零编译，零虚拟 DOM，导入即用。">
   <title>vhtml</title>
   <link rel="stylesheet" href="{{.scoped}}/assets/global.css">
-  <script type="module" key='vhtml' src="{{.scoped}}/vhtml.min.js"></script>
 </head>
 
 <body>
   <vrouter></vrouter>
 </body>
+<script type="module">
+  import VHTML from "{{.scoped}}/vhtml.min.js"
+  window.$vhtml = new VHTML(document.body, "{{.scoped}}")
+</script>
 
 </html>

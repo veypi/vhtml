@@ -100,6 +100,19 @@ export const DataID = Symbol("DataID")
 const DataBind = Symbol("bind")
 const rootObj = Symbol("root")
 
+export function IsWrapped(data) {
+  return Boolean(data && typeof data === 'object' && data[isProxy])
+}
+
+export function EnsureWrap(data, root = undefined) {
+  if (!data || typeof data !== 'object') return data
+  if (IsWrapped(data)) {
+    if (root) SetDataRoot(data, root)
+    return data
+  }
+  return Wrap(data, root)
+}
+
 export function SetDataRoot(data, root) {
   data[rootObj] = root
 }

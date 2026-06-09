@@ -6,7 +6,7 @@
  * 合并原 context.js，消除 createRuntimeEnv 零价值包装。
  */
 
-import { Wrap, Watch } from './reactive.js'
+import { Wrap, Watch, EnsureWrap } from './reactive.js'
 import EventBus from './vbus.js'
 import I18n from './i18n.js'
 import vmessage from './vmessage.js'
@@ -65,7 +65,7 @@ export function createModuleContext(scoped, sharedLocale, initial = {}) {
   }
 
   lockProperties(mod, frameworkKeys)
-  return mod
+  return EnsureWrap(mod)
 }
 
 // ---- 系统/上下文运行时 ----
@@ -85,9 +85,10 @@ export function createSystemContext(parent = null, initial = {}) {
 
 export function createRuntimeContext(parent = null, mod = null, initialSys = {}) {
   const parentSys = parent?.$sys || null
+  const runtimeMod = mod || parent?.$mod || null
   return {
     $sys: createSystemContext(parentSys, initialSys),
-    $mod: mod || parent?.$mod || null,
+    $mod: EnsureWrap(runtimeMod),
   }
 }
 

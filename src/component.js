@@ -5,7 +5,7 @@
  * 组件解析、setup、挂载主流程。
  */
 
-import { Wrap } from './reactive.js'
+import { Wrap, EnsureWrap } from './reactive.js'
 import { Run, AsyncRun } from './sandbox.js'
 import utils from './utils.js'
 import { createRuntimeContext, resolveScope } from './module.js'
@@ -72,12 +72,14 @@ function createLocalRouter(rootRouter, scoped) {
 }
 
 export async function parseRaw(dom, data, runtime, code, ctx) {
+  data = EnsureWrap(data || {})
   const tmpId = `_${Math.random().toString(36).slice(2)}`
   const target = await templateLoader.parseUI(code, runtime || {}, tmpId)
-  ctx.parseRef(tmpId, dom, data || {}, { ...runtime }, target)
+  ctx.parseRef(tmpId, dom, data, { ...runtime }, target)
 }
 
 export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx) {
+  data = EnsureWrap(data || {})
   ctx = (optsOrCtx && typeof optsOrCtx === 'object' && optsOrCtx.compileNode) ? optsOrCtx : (ctx)
   const options = (optsOrCtx && typeof optsOrCtx === 'object' && !optsOrCtx.compileNode) ? optsOrCtx : {}
   const singleMode = options.single || (typeof optsOrCtx === 'boolean' ? optsOrCtx : false)
@@ -105,7 +107,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
 
   if (!target && vsrc) {
     if (!vsrc.endsWith('.html')) vsrc = `${vsrc}.html`
-    target = await templateLoader.fetchUI(vsrc, runtime, dom.hasAttribute('scoped'), isUnsafe)
+    target = await templateLoader.fetchUI(vsrc, runtime, isUnsafe)
     if (instanceOf(dom, false) !== instance) return
   }
 
