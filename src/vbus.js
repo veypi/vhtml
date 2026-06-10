@@ -7,9 +7,10 @@
 
 
 class EventBus {
-  constructor() {
+  constructor(broadcast = null) {
     // 存储事件监听器的对象
     this.events = {};
+    this.broadcast = typeof broadcast === 'function' ? broadcast : null;
   }
 
   /**
@@ -84,7 +85,7 @@ class EventBus {
    * @param {string} eventName - 事件名称
    * @param {...any} args - 传递给回调函数的参数
    */
-  emit(eventName, ...args) {
+  emitLocal(eventName, ...args) {
     if (!this.events[eventName]) {
       return;
     }
@@ -99,6 +100,20 @@ class EventBus {
         console.error(`事件 "${eventName}" 的监听器执行出错:`, error);
       }
     });
+  }
+
+  /**
+   * 触发事件。第三个参数为 true 时，广播到所有已加载模块的 $bus。
+   * @param {string} eventName - 事件名称
+   * @param {...any} args - 传递给回调函数的参数；最后一个 true 表示广播
+   */
+  emit(eventName, ...args) {
+    const broadcastAll = args.length >= 2 && args[args.length - 1] === true;
+    const payloadArgs = broadcastAll ? args.slice(0, -1) : args;
+    this.emitLocal(eventName, ...payloadArgs);
+    if (broadcastAll) {
+      this.broadcast?.(eventName, payloadArgs, this);
+    }
   }
 
   /**

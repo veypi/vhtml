@@ -31,12 +31,12 @@ function lockProperties(obj, keys) {
   keys.forEach(key => lockProperty(obj, key))
 }
 
-export function createModuleContext(scoped, sharedLocale, initial = {}) {
+export function createModuleContext(scoped, sharedLocale, initial = {}, broadcast = null) {
   const frameworkKeys = ['scoped',  '$bus', '$i18n', '$t', 'fetch', 'restrictedFetch']
 
   const mod = { ...initial }
   mod.scoped = scoped
-  mod.$bus = new EventBus()
+  mod.$bus = new EventBus(broadcast)
   mod.$i18n = new I18n(sharedLocale)
   mod.$t = (key, params = {}) => mod.$i18n.t(key, params)
   mod.fetch = (url, options) => {
@@ -194,13 +194,23 @@ export class ModuleContextManager {
   }
 
   async createModule(scoped, patch = {}) {
-    const mod = createModuleContext(scoped, this.sharedLocale)
+    const mod = createModuleContext(scoped, this.sharedLocale, {}, (eventName, args, sourceBus) => {
+      this.broadcastBusEvent(eventName, args, sourceBus)
+    })
     mergeModulePatch(mod, patch)
     await this.loadEnvConfig(mod)
     for (const wrapper of this.wrappers) {
       wrapper(scoped, mod)
     }
     return mod
+  }
+
+  broadcastBusEvent(eventName, args, sourceBus) {
+    for (const mod of this.modMap.values()) {
+      const bus = mod?.$bus
+      if (!bus || bus === sourceBus || typeof bus.emitLocal !== 'function') continue
+      bus.emitLocal(eventName, ...args)
+    }
   }
 
   addAlias(prefixa, url_prefixb, is_global = false) {
