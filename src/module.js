@@ -86,10 +86,18 @@ export function createSystemContext(parent = null, initial = {}) {
 export function createRuntimeContext(parent = null, mod = null, initialSys = {}) {
   const parentSys = parent?.$sys || null
   const runtimeMod = mod || parent?.$mod || null
-  return {
+  const runtime = {
     $sys: createSystemContext(parentSys, initialSys),
     $mod: EnsureWrap(runtimeMod),
   }
+  if (!Object.prototype.hasOwnProperty.call(initialSys || {}, '$router')) {
+    const inheritedRouter = parentSys?.$router
+    const routerView = inheritedRouter?.__routerView || inheritedRouter
+    if (routerView && typeof routerView.createRuntimeProxy === 'function') {
+      runtime.$sys.$router = routerView.createRuntimeProxy(runtime)
+    }
+  }
+  return runtime
 }
 
 // ---- Scoped 路径工具 ----
@@ -213,18 +221,18 @@ export class ModuleContextManager {
     }
   }
 
-  addAlias(prefixa, url_prefixb, is_global = false) {
+  addAlias(prefixa, baseUrl, is_global = false) {
     if (!/^[a-zA-Z]+$/.test(prefixa)) {
       throw new Error(`addAlias: prefixa must contain only English letters, got "${prefixa}"`)
     }
-    if (typeof url_prefixb !== 'string' || !url_prefixb) {
-      throw new Error(`addAlias: url_prefixb must be a non-empty string, got "${url_prefixb}"`)
+    if (typeof baseUrl !== 'string' || !baseUrl) {
+      throw new Error(`addAlias: baseUrl must be a non-empty string, got "${baseUrl}"`)
     }
-    if (!/^(\/|https?:\/\/)/.test(url_prefixb)) {
-      throw new Error(`addAlias: url_prefixb must start with / or https://, got "${url_prefixb}"`)
+    if (!/^(\/|https?:\/\/)/.test(baseUrl)) {
+      throw new Error(`addAlias: baseUrl must start with / or https://, got "${baseUrl}"`)
     }
     if (is_global) {
-      this._globalAliases[prefixa] = url_prefixb
+      this._globalAliases[prefixa] = baseUrl
       return
     }
     if (!this._loadingMod) {
@@ -235,7 +243,7 @@ export class ModuleContextManager {
     if (!this._aliasMap.has(scoped)) {
       this._aliasMap.set(scoped, {})
     }
-    this._aliasMap.get(scoped)[prefixa] = url_prefixb
+    this._aliasMap.get(scoped)[prefixa] = baseUrl
   }
 
   getAliases(scoped) {

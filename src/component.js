@@ -8,7 +8,7 @@
 import { Wrap, EnsureWrap } from './reactive.js'
 import { Run, AsyncRun } from './sandbox.js'
 import utils from './utils.js'
-import { createRuntimeContext, resolveScope } from './module.js'
+import { createRuntimeContext } from './module.js'
 import { parseImports } from './imports.js'
 import { registerScriptLifecycle } from './lifecycle.js'
 import { templateLoader } from './loader.js'
@@ -41,35 +41,6 @@ export { createSlotContents, parseSlots } from './slots.js'
 // ===================================================================
 // 组件解析/挂载 (原 component.js)
 // ===================================================================
-
-function createLocalRouter(rootRouter, scoped) {
-  if (!scoped || !rootRouter) return rootRouter
-
-  const isExternal = (p) => /^https?:\/\//.test(p)
-
-  const resolve = (to) => {
-    if (typeof to === 'string' && !isExternal(to) && !to.startsWith(scoped)) {
-      return scoped + (to.startsWith('/') ? to : '/' + to)
-    }
-    if (to?.path && !isExternal(to.path) && !to.path.startsWith(scoped)) {
-      return { ...to, path: scoped + (to.path.startsWith('/') ? to.path : '/' + to.path) }
-    }
-    return to
-  }
-
-  return {
-    push(to) { return rootRouter.push(resolve(to)) },
-    replace(to) { return rootRouter.replace(resolve(to)) },
-    go(n) { return rootRouter.go(n) },
-    back() { return rootRouter.back() },
-    forward() { return rootRouter.forward() },
-    onChange(listener) { return rootRouter.onChange(listener) },
-    get current() { return rootRouter.current },
-    get params() { return rootRouter.params },
-    get query() { return rootRouter.query },
-    get history() { return rootRouter.history },
-  }
-}
 
 export async function parseRaw(dom, data, runtime, code, ctx) {
   data = EnsureWrap(data || {})
@@ -112,10 +83,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   }
 
   const mod = target?.mod || runtime?.$mod || null
-  const rootRouter = runtime?.$sys?.$router || null
-  const url_prefix = mod?.url_prefix ?? resolveScope(mod)
-  const runtimeRouter = createLocalRouter(rootRouter, url_prefix)
-  const componentRuntime = createRuntimeContext(runtime || null, mod, { $router: runtimeRouter })
+  const componentRuntime = createRuntimeContext(runtime || null, mod)
   if (isUnsafe) componentRuntime.__unsafe = true
   const warnedBuiltinEmitEvents = new Set()
   componentRuntime.$sys.$emit = (evt, ...args) => {

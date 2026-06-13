@@ -4,27 +4,17 @@ function hasProtocol(href) {
   return protocolPattern.test(href)
 }
 
-function isHttpProtocol(href) {
-  return href.startsWith('http://') || href.startsWith('https://')
-}
-
 export function isRelativeHref(href) {
   return !hasProtocol(href) && !href.startsWith('//')
 }
 
-export function isRouterNavigableHref(href) {
+export function isRouterNavigableHref(href, baseHref = window.location.href, origin = window.location.origin) {
+  if (href?.startsWith?.('@')) href = href.slice(1)
   if (!href || href.startsWith('#')) {
     return false
   }
   if (!isRelativeHref(href)) {
-    if (!isHttpProtocol(href)) {
-      return false
-    }
-    try {
-      return new URL(href, window.location.href).origin === window.location.origin
-    } catch (error) {
-      return false
-    }
+    return false
   }
   return true
 }

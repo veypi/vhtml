@@ -11,6 +11,7 @@ import { templateLoader } from './loader.js'
 import { disposeRuntimeSubtree } from './component-instance.js'
 import { createRuntimeContext } from './module.js'
 import { EnsureWrap } from './reactive.js'
+import { createMemoryHistory, registerRouterHistory } from './router.js'
 
 class VHTML {
   static _globalStyled = false
@@ -242,5 +243,8 @@ class VHTML {
 }
 
 export default VHTML
+export { createMemoryHistory, registerRouterHistory }
 
+VHTML.createMemoryHistory = createMemoryHistory
+VHTML.registerRouterHistory = registerRouterHistory
 window.VHTML = VHTML

@@ -4,12 +4,20 @@
 
 import { Wrap } from './reactive.js'
 import { Run } from './sandbox.js'
-import moduleContextManager, { resolveScope } from './module.js'
+import moduleContextManager from './module.js'
 import utils from './utils.js'
 import { runMountedHandler } from './lifecycle.js'
 import { isRelativeHref } from './url.js'
 import { instanceOf } from './component-instance.js'
 import { watch } from './runtime-watch.js'
+import {
+  bindAnchorRouter,
+  setRouterParamsSource,
+  setRouterPrefixSource,
+  setRouterRoutesSource,
+  syncRouterAnchor,
+} from './router.js'
+import { debug as logDebug } from './debug.js'
 
 function ensureRefPool(data) {
   if (!data || typeof data !== 'object') return null
@@ -19,7 +27,9 @@ function ensureRefPool(data) {
   return data.$refs
 }
 
-const URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'data', 'action', 'formaction'])
+const RESOURCE_URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'data', 'action', 'formaction'])
+const ANCHOR_ROUTER_TARGET_ATTR = 'data-vhtml-router-href'
+const anchorRouteTargets = new WeakMap()
 
 function normalizePath(path, minDepth = 0) {
   const segments = path.split('/').filter(s => s !== '')
@@ -35,9 +45,15 @@ function normalizePath(path, minDepth = 0) {
   return '/' + result.join('/')
 }
 
-function anchorPrefix(runtime) {
-  if (runtime?.$mod?.url_prefix === '') return ''
-  return runtime?.$mod?.url_prefix || resolveScope(runtime)
+function runtimeScoped(runtime) {
+  return runtime?.$mod?.scoped ?? runtime?.scoped
+}
+
+function debugAnchor(_runtime, router, message, detail = undefined) {
+  logDebug('anchor', message, detail, {
+    modulePath: router?.modulePath || '',
+    routerPrefix: router?.router_prefix || '',
+  })
 }
 
 function resolveScopedUrl(rawUrl, runtime, scoped) {
@@ -45,59 +61,100 @@ function resolveScopedUrl(rawUrl, runtime, scoped) {
   if (rawUrl.startsWith('@')) return rawUrl.slice(1)
   if (/^https?:\/\//.test(rawUrl)) return rawUrl
   if (rawUrl.startsWith('//')) return rawUrl
-  scoped = scoped || runtime?.$mod?.scoped
+  if (scoped === undefined) scoped = runtimeScoped(runtime)
   if (scoped && isRelativeHref(rawUrl)) {
     const minDepth = scoped.split('/').filter(s => s).length
     if (rawUrl.startsWith('/') && (rawUrl === scoped || rawUrl.startsWith(`${scoped}/`))) {
       return normalizePath(rawUrl, minDepth)
     }
-    return normalizePath(scoped + rawUrl, minDepth)
+    return normalizePath(scoped + (rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`), minDepth)
   }
   return rawUrl
 }
 
-function componentResourceBase(dom) {
-  const owner = dom?.getAttribute?.('vrefof') || dom?.closest?.('[vref]')?.getAttribute?.('vref') || ''
-  if (!owner || owner.startsWith('#')) return ''
-  return owner
+function isAnchorHref(dom, attrName) {
+  return attrName === 'href' && dom.nodeName === 'A'
 }
 
-function resolveStaticResourceUrl(rawUrl, dom, runtime) {
-  if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
-  if (rawUrl.startsWith('@')) return rawUrl.slice(1)
-  if (/^https?:\/\//.test(rawUrl)) return rawUrl
-  if (rawUrl.startsWith('//')) return rawUrl
+function isRouterRoutesBinding(dom, attrName) {
+  return attrName === 'routes' && dom.nodeName === 'VROUTER'
+}
 
-  if (rawUrl.startsWith('/')) return resolveScopedUrl(rawUrl, runtime)
-  const base = componentResourceBase(dom)
-  if (!base || !isRelativeHref(rawUrl)) return rawUrl
-  try {
-    const resolved = new URL(rawUrl, new URL(base, window.location.origin))
-    return `${resolved.pathname}${resolved.search}${resolved.hash}`
-  } catch (error) {
-    return rawUrl
+function isRouterPrefixBinding(dom, attrName) {
+  return attrName === 'prefix' && dom.nodeName === 'VROUTER'
+}
+
+function isRouterParamsBinding(dom, attrName) {
+  return attrName === 'params' && dom.nodeName === 'VROUTER'
+}
+
+function isRouteEscapedHref(rawUrl) {
+  return typeof rawUrl === 'string' && rawUrl.startsWith('@')
+}
+
+function stripRouteEscape(rawUrl) {
+  if (!isRouteEscapedHref(rawUrl)) return rawUrl
+  return rawUrl.slice(1) || '/'
+}
+
+function rememberAnchorRouteTarget(dom, rawUrl, persist = false) {
+  if (!dom || dom.nodeName !== 'A' || typeof rawUrl !== 'string') return
+  anchorRouteTargets.set(dom, rawUrl)
+  if (persist && isRouteEscapedHref(rawUrl)) {
+    dom.setAttribute(ANCHOR_ROUTER_TARGET_ATTR, rawUrl)
+  } else if (!persist) {
+    dom.removeAttribute(ANCHOR_ROUTER_TARGET_ATTR)
   }
 }
 
-function resolveDynamicResourceUrl(rawUrl, dom, runtime) {
-  if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
-  if (rawUrl.startsWith('@')) return rawUrl.slice(1)
-  if (/^https?:\/\//.test(rawUrl)) return rawUrl
-  if (rawUrl.startsWith('//')) return rawUrl
-  if (rawUrl.startsWith('/')) return resolveScopedUrl(rawUrl, runtime)
-  return resolveStaticResourceUrl(rawUrl, dom, runtime)
+function readAnchorRouteTarget(dom) {
+  const persisted = dom.getAttribute(ANCHOR_ROUTER_TARGET_ATTR)
+  if (persisted) {
+    dom.removeAttribute(ANCHOR_ROUTER_TARGET_ATTR)
+    anchorRouteTargets.set(dom, persisted)
+    return persisted
+  }
+  return anchorRouteTargets.get(dom) || dom.getAttribute('href') || ''
+}
+
+function resolveAnchorHref(rawUrl, runtime, dom, options = {}) {
+  rememberAnchorRouteTarget(dom, rawUrl, options.persistTarget)
+  const router = runtime?.$sys?.$router
+  const resolved = (!router || typeof router.resolveHref !== 'function')
+    ? stripRouteEscape(rawUrl)
+    : router.resolveHref(rawUrl)
+  debugAnchor(runtime, router, 'anchor href resolved', {
+    phase: options.phase || 'unknown',
+    rawUrl,
+    resolved,
+    persistTarget: options.persistTarget === true,
+    hasRouter: !!router,
+    routerPrefix: router?.router_prefix || '',
+    currentFullPath: router?.current?.fullPath || '',
+    currentPath: router?.current?.path || '',
+    text: dom?.textContent?.trim?.().slice(0, 80) || '',
+  })
+  return resolved
+}
+
+function resolveStaticResourceUrl(rawUrl, _dom, runtime) {
+  return resolveScopedUrl(rawUrl, runtime)
+}
+
+function resolveDynamicResourceUrl(rawUrl, _dom, runtime) {
+  return resolveScopedUrl(rawUrl, runtime)
 }
 
 function resolveStaticUrlAttr(rawUrl, dom, attrName, runtime) {
-  if (attrName === 'href' && dom.nodeName === 'A') {
-    return resolveScopedUrl(rawUrl, runtime, anchorPrefix(runtime))
+  if (isAnchorHref(dom, attrName)) {
+    return resolveAnchorHref(rawUrl, runtime, dom, { persistTarget: true, phase: 'static-url-attr' })
   }
   return resolveStaticResourceUrl(rawUrl, dom, runtime)
 }
 
 function resolveDynamicUrlAttr(rawUrl, dom, attrName, runtime) {
-  if (attrName === 'href' && dom.nodeName === 'A') {
-    return resolveScopedUrl(rawUrl, runtime, anchorPrefix(runtime))
+  if (isAnchorHref(dom, attrName)) {
+    return resolveAnchorHref(rawUrl, runtime, dom, { phase: 'dynamic-url-attr' })
   }
   return resolveDynamicResourceUrl(rawUrl, dom, runtime)
 }
@@ -116,7 +173,7 @@ function resolveSrcset(srcset, dom, runtime, resolver = resolveStaticResourceUrl
 
 function prepareUrlAttrs(dom, runtime) {
   if (!dom || dom.nodeType !== 1) return
-  URL_ATTRS.forEach(attrName => {
+  RESOURCE_URL_ATTRS.forEach(attrName => {
     if (dom.hasAttribute(`:${attrName}`)) {
       dom.removeAttribute(attrName)
       return
@@ -137,15 +194,49 @@ export function prepareStaticUrlAttrs(root, runtime) {
 }
 
 function syncAnchorActive(dom) {
-  const scope = instanceOf(dom)?.scope
-  const router = instanceOf(dom)?.runtime?.$sys?.$router
-  if (!router) return
-  const syncActive = (to) => {
-    const url = to?.fullPath
-    if (dom.getAttribute('href') === url) dom.setAttribute('active', '')
-    else dom.removeAttribute('active')
+  const inst = instanceOf(dom)
+  const scope = inst?.scope
+  const runtime = inst?.runtime
+  const router = runtime?.$sys?.$router
+  const hrefBefore = dom.getAttribute('href')
+  const persistedBefore = dom.getAttribute(ANCHOR_ROUTER_TARGET_ATTR)
+  const rememberedBefore = anchorRouteTargets.get(dom) || ''
+  const target = readAnchorRouteTarget(dom)
+  rememberAnchorRouteTarget(dom, target)
+  debugAnchor(runtime, router, 'anchor first compile', {
+    hrefBefore,
+    persistedBefore: persistedBefore || '',
+    rememberedBefore,
+    target,
+    hasRouter: !!router,
+    routerPrefix: router?.router_prefix || '',
+    currentFullPath: router?.current?.fullPath || '',
+    currentPath: router?.current?.path || '',
+    component: inst?.vsrc || '',
+    text: dom.textContent?.trim?.().slice(0, 80) || '',
+  })
+  if (!router) {
+    const currentHref = stripRouteEscape(target)
+    if (currentHref !== dom.getAttribute('href')) dom.setAttribute('href', currentHref)
+    debugAnchor(runtime, router, 'anchor first compile skipped: no router', {
+      target,
+      hrefAfter: dom.getAttribute('href') || '',
+    })
+    return
   }
-  syncActive(router.current)
+  const currentHref = router.resolveHref?.(target) || stripRouteEscape(target)
+  if (currentHref !== dom.getAttribute('href')) dom.setAttribute('href', currentHref)
+  const getTarget = () => anchorRouteTargets.get(dom) || dom.getAttribute('href')
+  const unbind = bindAnchorRouter(dom, router, getTarget)
+  scope?.addCleanup(unbind)
+  const syncActive = () => syncRouterAnchor(dom, router)
+  syncActive()
+  debugAnchor(runtime, router, 'anchor first compile synced', {
+    target: getTarget(),
+    resolvedHref: dom.getAttribute('href') || '',
+    currentFullPath: router.current?.fullPath || '',
+    active: dom.hasAttribute('active'),
+  })
   const off = router.onChange?.(syncActive)
   scope?.addCleanup(off)
 }
@@ -154,12 +245,27 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
   const scope = instanceOf(dom)?.scope
   if (name.startsWith(':')) {
     const attrName = name.slice(1)
-    if (attrName === 'class' || attrName === 'style') {
+    if (isRouterRoutesBinding(dom, attrName)) {
+      watch(scope, () => {
+        const res = value ? Run(value, data, runtime) : data[attrName]
+        setRouterRoutesSource(dom, res)
+      })
+    } else if (isRouterPrefixBinding(dom, attrName)) {
+      watch(scope, () => {
+        const res = value ? Run(value, data, runtime) : data[attrName]
+        setRouterPrefixSource(dom, res)
+      })
+    } else if (isRouterParamsBinding(dom, attrName)) {
+      watch(scope, () => {
+        const res = value ? Run(value, data, runtime) : data[attrName]
+        setRouterParamsSource(dom, res)
+      })
+    } else if (attrName === 'class' || attrName === 'style') {
       handleStyle(dom, attrName, value, data, runtime)
     } else {
       watch(scope, () => {
         let res = value ? Run(value, data, runtime) : data[attrName]
-        if (URL_ATTRS.has(attrName) && res) {
+        if (RESOURCE_URL_ATTRS.has(attrName) && res) {
           if (attrName === 'srcset') {
             res = resolveSrcset(res, dom, runtime, resolveDynamicResourceUrl)
           } else {
@@ -167,6 +273,10 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
           }
         }
         utils.SetAttr(dom, attrName, res)
+        if (isAnchorHref(dom, attrName)) {
+          const router = instanceOf(dom)?.runtime?.$sys?.$router
+          syncRouterAnchor(dom, router)
+        }
       })
     }
     return true
