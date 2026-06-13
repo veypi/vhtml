@@ -123,6 +123,31 @@ function moveItemBefore(itemStart, itemEnd, refNode) {
   insertBefore(nodes, refNode)
 }
 
+function readVforKeySpec(dom) {
+  const dynamicKey = dom.getAttribute(':key')
+  const staticKey = dom.getAttribute('key')
+  if (dynamicKey !== null) dom.removeAttribute(':key')
+  if (staticKey !== null) dom.removeAttribute('key')
+  return { dynamicKey, staticKey }
+}
+
+function normalizeVforIndex(key) {
+  return key === '0' ? 0 : (Number(key) || key)
+}
+
+function stringifyCacheKey(prefix, value) {
+  if (value === null || value === undefined) return ''
+  return `${prefix}:${String(value)}`
+}
+
+function dedupeCacheKey(cacheKey, seen) {
+  const count = seen[cacheKey] || 0
+  seen[cacheKey] = count + 1
+  if (count === 0) return cacheKey
+  console.warn('duplicate v-for key:', cacheKey)
+  return `${cacheKey}#${count}`
+}
+
 export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   dom.removeAttribute('v-for')
   const matches = vforRegex.exec(vfortxt)
@@ -131,9 +156,10 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     return
   }
   const valueName = matches[1] || matches[3]
-  const keyName = matches[2]
+  const indexName = matches[2]
   const listExpr = matches[4]
 
+  const keySpec = readVforKeySpec(dom)
   const sourceNodes = getSourceNodes(dom)
 
   const vforStart = document.createComment('~vfor')
@@ -159,12 +185,35 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
 
     const keep = new Set()
     const order = []
+    const seen = Object.create(null)
+
+    const createItemData = (key, value) => {
+      const itemData = Wrap({ [valueName]: value }, data)
+      if (indexName) itemData[indexName] = normalizeVforIndex(key)
+      return itemData
+    }
+
+    const resolveCacheKey = (key, value, itemData) => {
+      let cacheKey = stringifyCacheKey('data', value?.[DataID])
+      if (!cacheKey && keySpec.dynamicKey !== null) {
+        itemData = itemData || createItemData(key, value)
+        cacheKey = stringifyCacheKey('key', Run(keySpec.dynamicKey, itemData, runtime))
+      }
+      if (!cacheKey && keySpec.staticKey !== null) {
+        cacheKey = stringifyCacheKey('key', keySpec.staticKey)
+      }
+      return cacheKey || `unkeyed:${key}`
+    }
 
     Object.keys(items).forEach(key => {
       const value = items[key]
-      const ck = value?.[DataID] || `${key}.${value}`
+      let itemData = null
+      if (!value?.[DataID] && keySpec.dynamicKey !== null) {
+        itemData = createItemData(key, value)
+      }
+      const ck = dedupeCacheKey(resolveCacheKey(key, value, itemData), seen)
       keep.add(ck)
-      order.push({ key, value, ck })
+      order.push({ key, value, ck, itemData })
     })
 
     // 移除过期条目
@@ -175,17 +224,19 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
       }
     })
 
-    // 创建新条目 & 更新已有条目
-    order.forEach(({ key, value, ck }) => {
+    // 从后往前放置条目，已在正确相邻位置的 DOM range 不会被移动
+    let refNode = vforEnd
+    for (let i = order.length - 1; i >= 0; i--) {
+      const { key, value, ck } = order[i]
+      let { itemData } = order[i]
       let entry = cache[ck]
       if (!entry) {
         const itemStart = document.createComment('~vitem')
         const itemEnd = document.createComment('~/vitem')
-        insertBefore([itemStart, itemEnd], vforEnd)
+        insertBefore([itemStart, itemEnd], refNode)
 
         const clones = sourceNodes.map(n => n.cloneNode(true))
-        const itemData = Wrap({ [valueName]: value }, data)
-        if (keyName) itemData[keyName] = key === '0' ? 0 : (Number(key) || key)
+        itemData = itemData || createItemData(key, value)
 
         // 将 clone 插入 item 范围，再处理 v-if/v-else 链
         insertBefore(clones, itemEnd)
@@ -202,18 +253,15 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
 
         entry = { startMark: itemStart, endMark: itemEnd, data: itemData }
         cache[ck] = entry
-        return
-      }
-
-      // 更新已有条目的数据
-      if (entry.data) {
+      } else if (entry.data) {
+        // 更新已有条目的数据
         entry.data[valueName] = value
-        if (keyName) entry.data[keyName] = key === '0' ? 0 : (Number(key) || key)
+        if (indexName) entry.data[indexName] = normalizeVforIndex(key)
       }
 
-      // 将整个 item 范围移到 vforEnd 之前
-      moveItemBefore(entry.startMark, entry.endMark, vforEnd)
-    })
+      moveItemBefore(entry.startMark, entry.endMark, refNode)
+      refNode = entry.startMark
+    }
   })
 }
 
