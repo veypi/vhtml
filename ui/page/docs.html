@@ -439,13 +439,13 @@
 &lt;script setup&gt;
   label = 'Click'
   handleClick = () => {
-    $emit('click')
+    $emit('press')
   }
 &lt;/script&gt;
 &lt;/html&gt;</code></pre>
         <h2>{{ $t('docs.content.components.use') }}</h2>
         <p>{{ $t('docs.content.components.useDesc') }}</p>
-        <pre><code>&lt;local-my-button :label="'提交'" @click="onSubmit"&gt;&lt;/local-my-button&gt;</code></pre>
+        <pre><code>&lt;local-my-button :label="'提交'" @press="onSubmit"&gt;&lt;/local-my-button&gt;</code></pre>
         <h2>{{ $t('docs.content.components.refs') }}</h2>
         <p>{{ $t('docs.content.components.refsDesc') }}</p>
         <pre><code>&lt;local-panel ref="panel"&gt;&lt;/local-panel&gt;

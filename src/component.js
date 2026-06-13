@@ -117,8 +117,13 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   const runtimeRouter = createLocalRouter(rootRouter, url_prefix)
   const componentRuntime = createRuntimeContext(runtime || null, mod, { $router: runtimeRouter })
   if (isUnsafe) componentRuntime.__unsafe = true
+  const warnedBuiltinEmitEvents = new Set()
   componentRuntime.$sys.$emit = (evt, ...args) => {
     evt = evt.toLowerCase()
+    if (utils.EventsList.indexOf(evt) !== -1 && !warnedBuiltinEmitEvents.has(evt)) {
+      warnedBuiltinEmitEvents.add(evt)
+      console.warn(`[vhtml] $emit("${evt}") 使用了 DOM 内置事件名，父组件的 @${evt} 会被当作原生 DOM 事件监听，组件自定义事件不会触发。请改用非内置事件名。`)
+    }
     const events = instanceOf(dom, false)?.events
     if (!events) return
     const callback = events[evt]
