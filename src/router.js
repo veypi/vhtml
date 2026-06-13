@@ -303,6 +303,8 @@ class Page {
       this.instance.host = this.dom
       const layoutInst = instanceOf(this.layoutDom, false)
       if (layoutInst) attachChildInstance(instanceOf(this.node), layoutInst)
+      const contentInst = instanceOf(this.dom, false)
+      if (layoutInst && contentInst) attachChildInstance(layoutInst, contentInst)
       return
     }
     if (this.dom && !this.dom.isConnected) {
