@@ -20,9 +20,15 @@
 - **删除 `$ctx`**：移除 `createCtxContext`、DOM `$ctx` getter、sandbox 中 `$ctx` 链。`createRuntimeContext` 仅返回 `{ $sys, $mod }`。
 - **Object.defineProperty 写保护**：`$mod` 框架 key 通过 `writable: false` 锁定，替代 Proxy 封装层。
 - **删除 `!` 前缀**：属性编译中移除已废弃的 `!` 前缀判断。
-- **`url_prefix` 空字符串语义统一**：`parseRef` 与 `anchorPrefix` 行为一致，`''` 表示根路径无前缀，`undefined` 回退到 scope。
+- **`router_prefix` 空字符串语义统一**：RouterView 路由前缀统一使用 `router_prefix`，静态资源不读取路由前缀。
+- **静态资源 scoped 解析统一**：资源 URL 预处理和动态绑定统一按 `$mod.scoped` 加前缀，保留 `@`、`http(s)` 和 `//` 逃逸规则。
+- **RouterView 绝对路径坐标系**：routes 表、`$router` 和 `<a>` 统一标准化为可见绝对路径后再匹配；`@/path` 跳过路由路径标准化，`http(s)` 链接保持原样。
+- **RouterView 调试日志**：通过浏览器端 `localStorage.debug` 输出路由前缀、routes 加载、跳转匹配、history 回放和页面组件加载路径。
+- **RouterView routes schema 前缀**：routes 模块支持 `path_prefix` / `component_prefix`；`path_prefix` 默认 vrouter 所在 `$mod.scoped`，`vrouter[prefix]` / `:prefix` 只写入 `$router.router_prefix` 并覆盖导航前缀。
+- **`vrouter[:params]` 固定参数**：RouterView 支持注入固定 `$router.params`，页面、路由守卫 `to.params` 和 `component(path, params)` 动态组件路径函数同步可见，动态路由参数同名时覆盖固定参数。
+- **RouterView 纯 path 导航**：移除 `{ name }` 导航和 routes 的 `name` / `description` 字段处理，路由匹配统一基于 path。
 - **404 占位组件视觉增强**：从 1em 红色圆点改为可见错误块，日志级别从 warn 提升到 error。
-- **`addAlias` 参数校验**：`url_prefixb` 必须以 `/` 或 `https://` 开头，防止路径拼接错误。
+- **`addAlias` 参数校验**：`baseUrl` 必须以 `/` 或 `https://` 开头，防止路径拼接错误。
 
 ### 修复
 - **页面实例树泄漏**：`Page.deactive` 不再仅运行生命周期，同时将页面内容实例从父实例树断开（保留子树），防止 `runRuntimeTreeLifecycle` 遍历到旧页面实例导致多次激活。
@@ -43,14 +49,14 @@
 - **i18n scan --autoremove**：`v-i18n scan` 新增 `--autoremove` 标志，默认关闭；开启后自动清理无用、空值和缺失的翻译键，未开启时显示警告及截断的键名列表。
 
 ### 变更
-- **统一 URL 属性解析**：`compileAHref()` 和 `compileImgSrc()` 合并为统一的 `URL_ATTRS` 处理逻辑，新增 `normalizePath()` 解析 scoped URL 中的 `..` 和 `.` 段。
+- **拆分资源 URL 与路由 href**：静态资源按 `$mod.scoped` 解析，`<a>` 跳转按所属 RouterView 的 `router_prefix` 解析。
 - **srcset 属性支持**：新增 `resolveSrcset()` 处理 `<img srcset>` 属性的 URL 解析。
-- **router scope 集中化**：将 scope 前缀操作从 `parseUrlString` 和 `RouterView normalizeRouteTarget` 中移除，通过 `createLocalRouter` 代理统一处理 scoped 路由路径，修复 hash 在导航中的传播。
+- **router prefix 集中化**：RouterView 统一处理路由前缀，组件通过 `$sys` 继承所属 `$router`。
 
 ### 修复
 - **router push/replace 同步匹配**：`push()` 和 `replace()` 方法在导航前同步匹配路由，确保路径在导航前已正确解析。
 - **RouterView 重复挂载**：`getOrCreateView` 仅挂载新创建的视图，不再每次访问都重新挂载。
-- **router modulePath 回退**：当 `url_prefix` 不存在时回退到 `scoped` 路径。
+- **router modulePath 回退**：当 `router_prefix` 不存在时回退到 `scoped` 路径。
 - **i18n 响应式代理**：i18n 消息使用 reactive proxy 包装，支持变更检测。
 - **异步操作空值安全**：`parseRef()` 和 `setupRef()` 在异步操作后增加空值检查，防止已销毁组件崩溃。
 - **CLI app 初始化简化**：移除 `vigo.New()` 中未使用的 init 函数参数。

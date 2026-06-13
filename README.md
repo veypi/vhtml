@@ -154,11 +154,6 @@ $data → $mod → $sys → expose → execArgs → window
 ### 路由
 
 ```html
-<nav>
-  <a href="/home">首页</a>
-  <a href="/about">关于</a>
-  <a href="/user/123">用户详情</a>
-</nav>
 <vrouter></vrouter>
 
 <script setup>
@@ -166,6 +161,62 @@ $data → $mod → $sys → expose → execArgs → window
   goBack = () => $router.back()
   userId = $router.params.id
 </script>
+```
+
+`<vrouter></vrouter>` 默认使用浏览器路由，读取 `window.location` 并写入 `window.history`。路由页面或布局内的 `<a>` 会绑定到最近的 RouterView：
+
+```html
+<a href="/home">首页</a>
+<a href="/about">关于</a>
+```
+
+局部面板可以使用内置虚拟路由，不改变浏览器地址，也不会更新全局 `document.title`：
+
+```html
+<vrouter history="memory" initial="/list" routes="/panel_routes.js"></vrouter>
+<vrouter history="memory" prefix="/panel" initial="/list" routes="/panel_routes.js"></vrouter>
+```
+
+`routes` 可以是路由文件地址，也可以用 `:routes` 直接绑定路由表或路由模块对象：
+
+```html
+<vrouter :routes="routes"></vrouter>
+<vrouter :routes="{ routes, path_prefix: '/panel', component_prefix: '/panel-ui', beforeEnter }"></vrouter>
+<vrouter :routes="routes" :params="{ app_id: appId }"></vrouter>
+
+<script setup>
+  appId = 'aic'
+  routes = [
+    { path: '/', component: '/page/home.html' },
+    { path: '/list', component: '/page/list.html' },
+  ]
+</script>
+```
+
+`:params` 用来给所属 RouterView 注入固定 `$router.params`，页面、路由守卫里的 `to.params`、以及 `component(path, params)` 动态组件路径函数都能读取；实际 path 匹配出来的动态参数优先级更高，同名时会覆盖固定参数。
+
+routes 模块对象支持 `{ routes, path_prefix, component_prefix, beforeEnter, afterEnter }`。`path_prefix` 在注册 routes 时加到每个 `route.path` 前面，默认是 vrouter 所在 `$mod.scoped`，显式设为 `''` 表示不加路径前缀。`component_prefix` 在注册 routes 时加到 `route.component` 前面，默认不加。
+
+`vrouter[prefix]` / `vrouter[:prefix]` 只写入 `$router.router_prefix`，用于覆盖导航前缀，不参与 routes 注册。导航标准化优先级是 `$router.router_prefix > 发起方 $mod.router_prefix > 发起方 $mod.scoped`。
+
+静态资源的预处理和运行时动态绑定使用同一套规则：`/assets/logo.svg` 会解析为 `$mod.scoped + /assets/logo.svg`；`@/assets/logo.svg` 会解析为 `/assets/logo.svg`；`http://`、`https://` 和 `//` 地址保持原样。
+
+RouterView 内部统一使用 `/` 开头的绝对路径。routes 表按 `path_prefix` 标准化；`$router.push()`、`$router.replace()` 和 `<a href>` 按导航前缀优先级标准化成最终可见路径，再进行匹配、active 标记和 history 写入。`@` 前缀表示跳过路由路径标准化，去掉 `@` 后直接作为绝对路径；`http://`、`https://` 链接保持原样，不被 RouterView 拦截。
+
+路由调试通过浏览器端 `localStorage.debug` 开启。开启后会输出 prefix、routes 加载、push/replace 匹配、history 回放、a 标签拦截和页面组件加载路径。
+
+虚拟路由会向子孙运行时注入 `location` 和 `history`，组件中直接访问 `location`/`history` 会优先命中所属 vrouter；不在虚拟 vrouter 内时会继续穿透到 `window.location`/`window.history`。
+
+也可以注册命名虚拟路由，让多个 RouterView 共享同一套内存历史：
+
+```js
+import { createMemoryHistory, registerRouterHistory } from '@veypi/vhtml'
+
+registerRouterHistory('panelA', createMemoryHistory('/list'))
+```
+
+```html
+<vrouter history="panelA" routes="/panel_routes.js"></vrouter>
 ```
 
 ### 数据请求

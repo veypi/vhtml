@@ -41,7 +41,7 @@ $data → $mod → $sys → expose → execArgs → window
 | `fetch(url, options)` | scoped fetch，相对路径自动加 scoped 前缀 |
 | `restrictedFetch` | unsafe 模式专用受限 fetch |
 
-后端可通过 `vhtml-*` 响应头注入自定义配置到 `$mod`（如 `vhtml-debug` → `$mod.debug`）。
+后端可通过 `vhtml-*` 响应头注入自定义配置到 `$mod`（如 `vhtml-app` → `$mod.app`）。
 
 ### `$sys`
 
@@ -122,7 +122,7 @@ export default { routes, beforeEnter, afterEnter }         // 对象
 export default ({ $mod, router }) => ({ routes, ... })     // 工厂
 ```
 
-路由字段：`path`(必填)、`component`(必填)、`layout`、`name`、`meta`、`children`、`cacheKey`、`error_redirect`。
+路由字段：`path`(必填)、`component`(必填)、`layout`、`meta`、`children`、`cacheKey`、`error_redirect`。
 
 ### scoped 语义
 
@@ -229,7 +229,23 @@ projected content 使用调用方 runtime（`$data`/`$sys`/`$mod`），fallback 
 
 ## router 设计
 
-`vrouter` 是特殊组件。`RouteMatcher` 负责路径匹配，`RouterView` 负责页面渲染与缓存，`NavigationRuntime` 负责全局地址广播。
+`vrouter` 是特殊组件。`RouteMatcher` 负责路径匹配，`RouterView` 负责页面渲染与缓存，history adapter 负责浏览器或虚拟地址栈。
+
+默认 `<vrouter></vrouter>` 使用 `window.location` 和 `window.history`。`<vrouter history="memory" initial="/list"></vrouter>` 创建独立虚拟地址栈，不改浏览器地址和全局 `document.title`。`<vrouter history="panelA"></vrouter>` 使用通过 `registerRouterHistory` 注册的命名 history。
+
+`routes` 可以是路由模块地址，也可以通过 `:routes` 直接绑定路由表数组或 `{ routes, path_prefix, component_prefix, beforeEnter, afterEnter }` 对象。`path_prefix` 在注册 routes 时加到每个 `route.path` 前面，默认是 vrouter 所在 `$mod.scoped`，显式设为 `''` 表示不加路径前缀；`component_prefix` 在注册 routes 时加到 `route.component` 前面，默认不加。
+
+`vrouter[:params]` 用来注入固定 `$router.params`，页面运行时、路由守卫 `to.params` 和 `component(path, params)` 动态组件路径函数都能读取。固定参数不参与 URL 标准化或路由匹配；匹配得到的动态参数优先级更高，同名时覆盖固定参数。
+
+`vrouter[prefix]` / `vrouter[:prefix]` 只写入 `$router.router_prefix`，用于覆盖导航前缀，不参与 routes 注册。导航标准化优先级是 `$router.router_prefix > 发起方 $mod.router_prefix > 发起方 $mod.scoped`。
+
+静态资源的预处理和运行时动态绑定使用同一套 `$mod.scoped` 前缀规则；`@`、`http://`、`https://` 和 `//` 地址不加 scoped 前缀。
+
+RouterView 内部统一使用 `/` 开头的绝对路径。routes 表按 `path_prefix` 标准化；`$router.push()`、`$router.replace()` 和 `<a href>` 按导航前缀优先级标准化成最终可见路径，再进行匹配、active 标记和 history 写入。`@/path` 跳过路由路径标准化，去掉 `@` 后直接作为绝对路径；`http://`、`https://` 链接保持原样，不被 RouterView 拦截。
+
+虚拟 RouterView 通过 `$sys` 向子孙运行时注入裸变量 `location` 和 `history`。组件中访问 `location`/`history` 时先命中所属 vrouter 的虚拟变量；不在虚拟 vrouter 内时，沙盒继续穿透到 `window.location`/`window.history`。
+
+`<a>` 在编译时绑定最近的 RouterView，全局 click 拦截只处理已经绑定 RouterView 的链接。
 
 每页 `Page` 有 `mount/deactive/active/destroy` 生命周期，layout 通过 vslot outlet 承载 page。
 

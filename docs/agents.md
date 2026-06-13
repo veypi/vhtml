@@ -101,7 +101,7 @@ Default entries:
 | `$t(key, params)` | translation shorthand |
 | `fetch(url, options)` | scoped fetch — relative URLs auto-prepend the scoped prefix |
 
-Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as custom keys on `$mod`.
+Backend response headers prefixed `vhtml-` (e.g. `vhtml-app`) are injected as custom keys on `$mod`.
 
 ### `$sys`
 
@@ -119,7 +119,6 @@ Nearest ancestor `<vrouter>` view, local to the current router subtree.
 
 ```js
 $router.push('/path')
-$router.push({ name: 'home', params: { id: 1 } })
 $router.replace('/path')
 $router.back()
 $router.forward()
@@ -266,7 +265,7 @@ Supported export forms:
 ```js
 // 1. array
 export default [
-  { path: '/', component: '/page/index.html', name: 'home' },
+  { path: '/', component: '/page/index.html' },
   { path: '/user/:id', component: '/page/user.html' },
   { path: '*', component: '/page/404.html' },
 ]
@@ -274,17 +273,20 @@ export default [
 // 2. object
 export default {
   routes: [...],
+  path_prefix: '/admin',
+  component_prefix: '/admin-ui',
   beforeEnter: async (to, from, next) => { ... },
   afterEnter: (to, from) => { ... },
 }
 
 // 3. factory (recommended when $mod capabilities are needed)
 export default ({ $mod, router }) => ({
+  path_prefix: $mod.scoped,
+  component_prefix: '/admin-ui',
   routes: [
     {
       path: '/',
       component: '/page/index.html',
-      name: 'home',
       layout: 'default',
     },
     {
@@ -317,9 +319,8 @@ Route record fields:
 | field | description |
 |-------|-------------|
 | `path` | required. supports `:param`, `:id?` (optional), `*rest` (wildcard), `*` (catch-all) |
-| `component` | required. HTML path or function `(path, params) => url` |
+| `component` | required. HTML path or function `(path, params) => url`; `params` includes fixed `vrouter[:params]` values plus matched route params |
 | `layout` | layout name, resolved to `/layout/{name}.html` |
-| `name` | named route for `$router.push({ name: 'home' })` |
 | `meta` | arbitrary metadata |
 | `children` | nested routes, child paths are relative to the parent |
 | `cacheKey` | string (shared instance), `false` (no cache), default (path-based) |
@@ -335,12 +336,33 @@ Behavior notes:
 
 ```html
 <vrouter></vrouter>
+<vrouter history="memory" initial="/list"></vrouter>
+<vrouter history="memory" prefix="/panel" initial="/list"></vrouter>
+<vrouter history="panelA"></vrouter>
 <vrouter routes="/admin_routes.js"></vrouter>
+<vrouter :routes="routes"></vrouter>
+<vrouter :routes="{ routes, path_prefix: '/panel', component_prefix: '/panel-ui', beforeEnter }"></vrouter>
+<vrouter :routes="routes" :params="{ app_id: appId }"></vrouter>
 ```
 
 - Without `routes`, defaults to current scoped `routes.js`.
+- `routes` may be a module URL, or `:routes` may bind an array / route-module object directly.
+- Route-module objects may provide `path_prefix` and `component_prefix`; `path_prefix` defaults to the vrouter runtime `$mod.scoped`, while `component_prefix` defaults to empty.
+- `:params` injects fixed values into `$router.params`, guard `to.params`, and route `component(path, params)` functions; matched path params override fixed params with the same key.
 - Multiple `<vrouter>` instances on the same page are allowed.
-- Anchor clicks are intercepted: `<a href="/agents">Agents</a>`, with automatic `active` attribute when the path matches.
+- `history` defaults to browser routing (`window.location` + `window.history`).
+- `history="memory"` creates an isolated virtual history, using `initial` as its first path.
+- Any other `history` value resolves a named history registered with `registerRouterHistory(name, history)`.
+- Router `prefix` / `:prefix` writes `$router.router_prefix` and only overrides `$router` / `<a>` navigation prefix.
+- Navigation prefix priority is `$router.router_prefix > initiating component $mod.router_prefix > initiating component $mod.scoped`.
+- Route registration prefixes are controlled by the route-module `path_prefix` and `component_prefix`, not by Router `prefix`.
+- Static resource preprocessing and dynamic URL bindings use the same `$mod.scoped` prefix rules; `@`, `http://`, `https://`, and `//` bypass scoped prefixing.
+- RouterView normalizes route records with `path_prefix`; `$router.push()` / `replace()` and `<a href>` use navigation prefix priority before matching, active marking, and history writes.
+- `@/path` skips router path normalization and resolves directly to `/path`; `http://` and `https://` links stay unchanged and are not intercepted by RouterView.
+- Router debugging is enabled by browser-side `localStorage.debug`.
+- Virtual routers inject bare `location` and `history` into `$sys`; outside a virtual router those names fall through to `window.location` and `window.history`.
+- Virtual histories do not update global `document.title`.
+- Anchor clicks are intercepted only when the `<a>` is compiled under a RouterView runtime, with automatic `active` attribute when the path matches.
 
 ## Built-in Runtime APIs
 
