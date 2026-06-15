@@ -18,7 +18,7 @@ import (
 	"github.com/veypi/vigo/logv"
 )
 
-var version = "v0.8.3"
+var version = "v0.9.0"
 
 // 全局配置参数
 var globalOpts = struct {

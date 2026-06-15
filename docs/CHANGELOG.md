@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.9.0] - 2026-06-15
+
+### 新增
+- **vbus 跨模块事件广播**：新增 `$mod.$bus` 事件总线，支持模块间松散耦合通信，`$bus.emit()` / `$bus.on()` / `$bus.off()` API。
+- **虚拟路由**：RouterView 重构为基于 history 栈的路由管理，统一路径解析逻辑，支持浏览器前进/后退与编程式导航的无缝衔接。
+- **RouterView 调试日志**：通过 `localStorage.debug` 控制路由调试日志输出，包含路由前缀、routes 加载、跳转匹配、history 回放和页面组件加载路径。
+- **$emit 内置事件名警告**：当组件 `$emit` 使用内置 DOM 事件名（如 `click`、`submit` 等）时输出控制台警告，防止与原生事件冲突。
+
+### 变更
+- **ES-only 构建输出**：构建产物切换为 ES module only，`package.json` entry 指向 `dist/vhtml.min.js`，移除 CommonJS 兼容。
+- **VHTML 初始化 API 重写**：`Vhtml` 类重构初始化流程和响应式集成，`mount()` / `destroy()` 生命周期更清晰。
+- **编译器资源 URL 解析重写**：静态资源 URL 统一按组件相对路径解析，`src`、`srcset`、`href` 等属性处理一致。
+- **v-for key 解析改进**：优化列表渲染的 key 解析和 DOM 协调逻辑，减少不必要的 DOM 操作。
+- **核心模块拆分**：compiler 和 component 从 core 中拆分为独立模块，职责更清晰。
+
+### 修复
+- **sandbox window 属性安全访问**：sandbox 模式下安全访问 `window` 属性并正确绑定方法，防止非法访问。
+- **RouterView 缓存 key**：缓存 key 排除 hash fragment，避免 hash 变化导致不必要的视图重建。
+- **页面 content instance**：修复页面渲染中 content instance 未正确附加到 layout 的问题。
+
 ## [0.8.3] - 2026-06-06
 
 ### 新增
