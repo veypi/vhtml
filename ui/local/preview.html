@@ -239,6 +239,24 @@
     }
   }
 
+  /* 全屏模式 */
+  .preview-container:fullscreen {
+    display: flex;
+    flex-direction: column;
+    border-radius: 0;
+    box-shadow: none;
+    background: #1e1e1e;
+  }
+
+  .preview-container:fullscreen .preview-body {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .preview-container:fullscreen .code-panel {
+    min-height: 0;
+  }
+
   /* 嵌入模式样式 */
   .preview-page.embedded {
     padding: 0;
@@ -320,6 +338,21 @@
             <polyline points="9 3 9 21 15 21"></polyline>
           </svg>
         </button>
+        <!-- 全屏按钮 -->
+        <button class="icon-btn" @click="toggleFullscreen" :title="isFullscreen ? '退出全屏' : '全屏'">
+          <svg v-if="!isFullscreen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 8 4 4 8 4"></polyline>
+            <polyline points="20 16 20 20 16 20"></polyline>
+            <line x1="4" y1="4" x2="9" y2="9"></line>
+            <line x1="20" y1="20" x2="15" y2="15"></line>
+          </svg>
+        </button>
       </div>
 
       <!-- 预览主体 -->
@@ -391,6 +424,19 @@
       $message.error($t('preview.copyError'));
     });
   };
+
+  // 全屏切换
+  isFullscreen = false;
+
+  toggleFullscreen = () => {
+    const container = $node.querySelector('.preview-container');
+    if (!container) return;
+    if (isFullscreen) {
+      document.exitFullscreen();
+    } else {
+      container.requestFullscreen();
+    }
+  };
 </script>
 <script>
   $watch(() => code, async () => {
@@ -398,6 +444,12 @@
     dom.innerHTML = ''
     await $vhtml.parseRaw(dom, {}, {}, code)
   })
+
+  /* 监听全屏变化同步状态 */
+  const _onFsChange = () => {
+    isFullscreen = !!document.fullscreenElement;
+  };
+  document.addEventListener('fullscreenchange', _onFsChange);
 </script>
 
 </html>
