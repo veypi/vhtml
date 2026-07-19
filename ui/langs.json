@@ -211,6 +211,10 @@
     "ecosystem.heading": "生态系统",
     "ecosystem.subtitle": "探索 vhtml 生态的工具、插件和社区资源。",
     "ecosystem.tools.heading": "核心工具",
+    "ecosystem.tools.vhtmlui.title": "vhtml-ui",
+    "ecosystem.tools.vhtmlui.desc": "vhtml 官方 UI 组件库，提供按钮、表单、对话框等预置组件。",
+    "ecosystem.tools.vhtmlui.status": "稳定",
+
     "ecosystem.tools.cli.title": "create-vhtml",
     "ecosystem.tools.cli.desc": "项目脚手架工具，快速创建 vhtml 项目模板。",
     "ecosystem.tools.cli.status": "稳定",
@@ -492,6 +496,10 @@
     "ecosystem.heading": "Ecosystem",
     "ecosystem.subtitle": "Explore tools, plugins, and community resources in the vhtml ecosystem.",
     "ecosystem.tools.heading": "Core Tools",
+    "ecosystem.tools.vhtmlui.title": "vhtml-ui",
+    "ecosystem.tools.vhtmlui.desc": "Official vhtml UI component library with buttons, forms, dialogs and more.",
+    "ecosystem.tools.vhtmlui.status": "Stable",
+
     "ecosystem.tools.cli.title": "create-vhtml",
     "ecosystem.tools.cli.desc": "Project scaffolding tool to quickly create vhtml project templates.",
     "ecosystem.tools.cli.status": "Stable",
