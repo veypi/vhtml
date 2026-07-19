@@ -106,7 +106,8 @@ class VHTML {
   async parseRaw(dom, data = {}, runtime = {}, code = '') {
     if (!this._ctx) return
     data = EnsureWrap(data)
-    return this._ctx.parseRaw(dom, data, runtime, code)
+    const activeRuntime = runtime?.$mod || runtime?.$sys || runtime?.scoped !== undefined ? runtime : this._runtime
+    return this._ctx.parseRaw(dom, data, activeRuntime, code)
   }
 
   /**

@@ -45,8 +45,11 @@ export { createSlotContents, parseSlots } from './slots.js'
 export async function parseRaw(dom, data, runtime, code, ctx) {
   data = EnsureWrap(data || {})
   const tmpId = `_${Math.random().toString(36).slice(2)}`
-  const target = await templateLoader.parseUI(code, runtime || {}, tmpId)
-  ctx.parseRef(tmpId, dom, data, { ...runtime }, target)
+  const activeRuntime = (runtime?.$mod || runtime?.$sys || runtime?.scoped !== undefined)
+    ? runtime
+    : instanceOf(dom)?.runtime || runtime || {}
+  const target = await templateLoader.parseUI(code, activeRuntime, tmpId)
+  ctx.parseRef(tmpId, dom, data, activeRuntime, target)
 }
 
 export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx) {

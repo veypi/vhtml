@@ -194,13 +194,16 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     }
 
     const resolveCacheKey = (key, value, itemData) => {
-      let cacheKey = stringifyCacheKey('data', value?.[DataID])
-      if (!cacheKey && keySpec.dynamicKey !== null) {
+      let cacheKey = ''
+      if (keySpec.dynamicKey !== null) {
         itemData = itemData || createItemData(key, value)
         cacheKey = stringifyCacheKey('key', Run(keySpec.dynamicKey, itemData, runtime))
       }
       if (!cacheKey && keySpec.staticKey !== null) {
         cacheKey = stringifyCacheKey('key', keySpec.staticKey)
+      }
+      if (!cacheKey) {
+        cacheKey = stringifyCacheKey('data', value?.[DataID])
       }
       return cacheKey || `unkeyed:${key}`
     }
@@ -208,7 +211,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     Object.keys(items).forEach(key => {
       const value = items[key]
       let itemData = null
-      if (!value?.[DataID] && keySpec.dynamicKey !== null) {
+      if (keySpec.dynamicKey !== null) {
         itemData = createItemData(key, value)
       }
       const ck = dedupeCacheKey(resolveCacheKey(key, value, itemData), seen)
