@@ -94,21 +94,21 @@ Module-scoped context, shared by all components under the same `scoped` prefix. 
 Default entries:
 
 | key | description |
-|-----|-------------|
+| ----- | ------------- |
 | `scoped` | module path prefix, e.g. `/page` (root module is `""`) |
 | `$bus` | module-level EventBus |
 | `$i18n` | I18n instance |
 | `$t(key, params)` | translation shorthand |
 | `fetch(url, options)` | scoped fetch — relative URLs auto-prepend the scoped prefix |
 
-Backend response headers prefixed `vhtml-` (e.g. `vhtml-app`) are injected as custom keys on `$mod`.
+Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as custom keys on `$mod`.
 
 ### `$sys`
 
 System variable pool, inherited via `Object.create(parent.$sys)`.
 
 | key | description |
-|-----|-------------|
+| ----- | ------------- |
 | `$router` | proxy to the nearest ancestor `<vrouter>` |
 | `$emit` | `$emit('event', ...args)` to emit custom events to the parent |
 | `$message` | global toast / dialog API |
@@ -166,7 +166,7 @@ v-i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 ## Script Types
 
 | type | when it runs |
-|------|-------------|
+| ------ | ------------- |
 | `<script setup>` | once when instance is created |
 | `<script>` | once after initial mount |
 | `<script active>` | each time the instance becomes active (cached page re-entry) |
@@ -191,15 +191,15 @@ Script-only helpers:
 <div v-show="loading">Loading...</div>          <!-- toggle display -->
 <div v-if="loading">Loading...</div>            <!-- conditional -->
 <div v-else>No data</div>
-<div v-for="item in items">{{ item.name }}</div> <!-- list -->
-<div v-for="(item, idx) in items">...</div>
-<div v-for="item in items" v-if="item.active">{{ item.name }}</div>  <!-- v-for first, then v-if -->
+<div :key='item.id' v-for="item in items">{{ item.name }}</div> <!-- list -->
+<div :key='idx' v-for="(item, idx) in items">...</div>
+<div :key='item.id' v-for="item in items" v-if="item.active">{{ item.name }}</div>  <!-- v-for first, then v-if -->
 <div vsrc="/local/card.html"></div>             <!-- static component -->
 <div :vsrc="currentComponent"></div>            <!-- dynamic component -->
 <div v-html="htmlContent"></div>                <!-- raw HTML -->
 
 <!-- <template> unwraps its children; v-for on <template> enables multi-root lists -->
-<template v-for="item in items">
+<template :key='item.id' v-for="item in items">
   <div>{{ item.a }}</div>
   <div>{{ item.b }}</div>
 </template>
@@ -273,16 +273,12 @@ export default [
 // 2. object
 export default {
   routes: [...],
-  path_prefix: '/admin',
-  component_prefix: '/admin-ui',
   beforeEnter: async (to, from, next) => { ... },
   afterEnter: (to, from) => { ... },
 }
 
 // 3. factory (recommended when $mod capabilities are needed)
 export default ({ $mod, router }) => ({
-  path_prefix: $mod.scoped,
-  component_prefix: '/admin-ui',
   routes: [
     {
       path: '/',
@@ -317,7 +313,7 @@ export default ({ $mod, router }) => ({
 Route record fields:
 
 | field | description |
-|-------|-------------|
+| ------- | ------------- |
 | `path` | required. supports `:param`, `:id?` (optional), `*rest` (wildcard), `*` (catch-all) |
 | `component` | required. HTML path or function `(path, params) => url`; `params` includes fixed `vrouter[:params]` values plus matched route params |
 | `layout` | layout name, resolved to `/layout/{name}.html` |
@@ -389,7 +385,7 @@ $message.prompt('Name', 'default').then(value => { ... })
     <input v:value="keyword" placeholder="Search" />
     <div v-if="loading">Loading...</div>
     <div v-else>
-      <div v-for="item in filteredList" class="card">
+      <div :key='item.id' v-for="item in filteredList" class="card">
         <h3>{{ item.name }}</h3>
         <button @click="remove(item.id)">Delete</button>
       </div>
@@ -424,7 +420,6 @@ $message.prompt('Name', 'default').then(value => { ... })
 - Use `$data` for local state, `$mod` for module-wide services, `$sys` for system capabilities.
 - Put route config and guards in `routes.js`, not `env.js`.
 - Avoid Vue/React terminology and patterns.
-
 
 ## Quick Checklist
 

@@ -196,7 +196,6 @@ export class ModuleContextManager {
     let mod = this.modMap.get(normalizedScoped)
     if (!mod) {
       mod = await this.createModule(normalizedScoped)
-      this.modMap.set(normalizedScoped, mod)
     }
     return mod
   }
@@ -206,11 +205,56 @@ export class ModuleContextManager {
       this.broadcastBusEvent(eventName, args, sourceBus)
     })
     mergeModulePatch(mod, patch)
+    // 提前注册到 modMap，防止子模块 env.js 通过 loadModule
+    // 反向引用当前模块时陷入重复创建
+    this.modMap.set(scoped, mod)
     await this.loadEnvConfig(mod)
     for (const wrapper of this.wrappers) {
       wrapper(scoped, mod)
     }
     return mod
+  }
+
+  /**
+   * 在 env.js 中预加载子模块，等待其 env.js 执行完毕后返回。
+   * 只能在 env.js 加载期间调用（即 _loadingMod 存在时）。
+   *
+   * @param {string} subPath - 子模块路径，以 / 开头视为绝对路径，
+   *   否则基于当前 scoped 解析为子路径
+   * @returns {Promise<object>} 目标模块的 $mod 对象
+   *
+   * @example
+   * // 在 scoped="/xxA" 的 env.js 中：
+   * export default async ($mod, manager) => {
+   *   await manager.loadModule('xxB')       // 加载 /xxA/xxB 的 env.js
+   *   await manager.loadModule('/global')   // 加载 /global 的 env.js
+   *   // 此时 xxB 和 global 模块的 env.js 已执行完毕
+   * }
+   */
+  async loadModule(subPath) {
+    if (!this._loadingMod) {
+      throw new Error('loadModule can only be called during env.js loading')
+    }
+    if (!subPath || typeof subPath !== 'string') {
+      throw new Error('loadModule: subPath must be a non-empty string')
+    }
+    const savedLoadingMod = this._loadingMod
+    const currentScoped = savedLoadingMod.scoped || ''
+
+    let targetScoped
+    if (subPath.startsWith('/')) {
+      targetScoped = normalizeScoped(subPath)
+    } else {
+      targetScoped = normalizeScoped(currentScoped ? `${currentScoped}/${subPath}` : `/${subPath}`)
+    }
+
+    try {
+      return await this.getModule(targetScoped)
+    } finally {
+      // 确保子模块 env.js 加载完毕后恢复 _loadingMod，
+      // 否则当前 env.js 后续的 addAlias 等调用会丢失模块关联
+      this._loadingMod = savedLoadingMod
+    }
   }
 
   broadcastBusEvent(eventName, args, sourceBus) {
