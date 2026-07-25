@@ -964,6 +964,7 @@ class RouterView {
   #routeComponentPrefix = ''
   #fixedParams = {}
   #modulePath = ''
+  #pendingNavId = 0
 
   constructor() {
     this.instance = createInstance(null, null, 'router-view')
@@ -1336,6 +1337,7 @@ class RouterView {
 
   async #navigateTo(matchedRoute, mode = 'push', options = {}) {
     if (!matchedRoute) return
+    const navId = ++this.#pendingNavId
     const { route, params, query } = matchedRoute
     const mergedParams = this.mergeParams(params || {})
     if (route.redirect) {
@@ -1363,6 +1365,7 @@ class RouterView {
       const result = await this.#beforeEnter(to, this.current, (next) => {
         if (next) { shouldContinue = false; this.push(next, options) }
       })
+      if (navId !== this.#pendingNavId) return
       if (result === false || !shouldContinue) {
         this.#debug('beforeEnter blocked navigation', {
           target: matchedRouteDebugInfo(matchedRoute),
@@ -1432,6 +1435,7 @@ class RouterView {
     try {
       mountResult = await page.mount(this.runtime, to.layout, existingLayout || null)
     } catch (error) {
+      if (navId !== this.#pendingNavId) return
       this.#warn('mount page failed', {
         matched: matchedRouteDebugInfo(matchedRoute),
         htmlPath: page.htmlPath,
@@ -1442,6 +1446,13 @@ class RouterView {
       if (cacheKey) this.#pageCache.delete(cacheKey)
       page.destroy()
       throw error
+    }
+
+    // 导航锁：若已有更新的导航触发，放弃当前导航
+    if (navId !== this.#pendingNavId) {
+      if (cacheKey) this.#pageCache.delete(cacheKey)
+      page.destroy({ preserveLayout: reuseLayout })
+      return
     }
 
     if (to.layout && page.layoutDom && !existingLayout) {

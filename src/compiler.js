@@ -5,7 +5,7 @@
  * 结构指令和根节点分发。属性/事件编译在 compiler-attrs.js。
  */
 
-import { Wrap, DataID, EnsureWrap } from './reactive.js'
+import { Wrap, DataID, EnsureWrap, Cancel } from './reactive.js'
 import { Run } from './sandbox.js'
 import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
@@ -59,7 +59,7 @@ export function ensureStructuralBoundary(dom, data, runtime) {
   return instance
 }
 
-export function compileTextNode(dom, data, runtime, scope) {
+export function compileTextNode(dom, data, runtime, scope, cleanups) {
   const runtimeScope = scope || instanceOf(dom)?.scope
   const txt = dom.nodeValue.trim()
   if (!txt) return
@@ -75,13 +75,14 @@ export function compileTextNode(dom, data, runtime, scope) {
       const partIndex = parts.length - 1
       start = -1
       nextStart = match.index + 2
-      watch(runtimeScope, () => {
+      const id = watch(runtimeScope, () => {
         let value = Run(expr, data, runtime)
         if (typeof value === 'function') value = value()
         else if (typeof value === 'object' && value) value = JSON.stringify(value)
         parts[partIndex] = value
         dom.nodeValue = parts.join('').trim()
       })
+      if (cleanups) cleanups.push(() => Cancel(id))
     }
   }
   parts.push(txt.slice(nextStart))
@@ -100,6 +101,10 @@ function clearVforRange(startMark, endMark) {
 
 function removeVforItem(entry) {
   if (!entry) return
+  if (entry.textCleanups) {
+    entry.textCleanups.forEach(fn => fn())
+    entry.textCleanups = null
+  }
   let n = entry.startMark.nextSibling
   while (n && n !== entry.endMark) {
     const next = n.nextSibling
@@ -243,6 +248,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
 
         // 将 clone 插入 item 范围，再处理 v-if/v-else 链
         insertBefore(clones, itemEnd)
+        const textCleanups = []
         const remaining = compileVif(clones, itemData, runtime, ctx)
         remaining.forEach(n => {
           if (n.nodeType === 1) {
@@ -250,11 +256,11 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
             ensureStructuralBoundary(n, itemData, runtime)
             compileNode(n, itemData, runtime, ctx)
           } else if (n.nodeType === 3) {
-            compileTextNode(n, itemData, runtime, parentScope)
+            compileTextNode(n, itemData, runtime, parentScope, textCleanups)
           }
         })
 
-        entry = { startMark: itemStart, endMark: itemEnd, data: itemData }
+        entry = { startMark: itemStart, endMark: itemEnd, data: itemData, textCleanups }
         cache[ck] = entry
       } else if (entry.data) {
         // 更新已有条目的数据
@@ -279,7 +285,11 @@ export function compileVif(nodes, data, runtime, ctx) {
     const ifExpr = `[${conds.map(c => c === '' ? 'true' : `Boolean(${c})`).join(',')}].indexOf(true)`
     let activeIndex = -1
 
+    let branchTextCleanups = []
+
     function clearContent() {
+      branchTextCleanups.forEach(fn => fn())
+      branchTextCleanups = []
       let n = startMark.nextSibling
       while (n && n !== endMark) {
         const next = n.nextSibling
@@ -304,7 +314,7 @@ export function compileVif(nodes, data, runtime, ctx) {
           ensureStructuralBoundary(n, data, runtime)
           compileNode(n, data, runtime, ctx)
         } else if (n.nodeType === 3) {
-          compileTextNode(n, data, runtime, instanceOf(startMark.parentNode)?.scope)
+          compileTextNode(n, data, runtime, instanceOf(startMark.parentNode)?.scope, branchTextCleanups)
         }
       })
     }

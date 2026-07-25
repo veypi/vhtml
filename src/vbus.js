@@ -103,17 +103,20 @@ class EventBus {
   }
 
   /**
-   * 触发事件。第三个参数为 true 时，广播到所有已加载模块的 $bus。
-   * @param {string} eventName - 事件名称
-   * @param {...any} args - 传递给回调函数的参数；最后一个 true 表示广播
+   * 触发事件。
+   * 事件名以 '@.' 开头时，去掉前缀后跨模块广播（仅其他模块收到，本地不触发）。
+   * 普通事件名仅触发本地监听器。
+   * @param {string} eventName - 事件名称，'@.xxx' 表示跨模块广播 xxx
+   * @param {...any} args - 传递给回调函数的参数
    */
   emit(eventName, ...args) {
-    const broadcastAll = args.length >= 2 && args[args.length - 1] === true;
-    const payloadArgs = broadcastAll ? args.slice(0, -1) : args;
-    this.emitLocal(eventName, ...payloadArgs);
-    if (broadcastAll) {
-      this.broadcast?.(eventName, payloadArgs, this);
+    if (typeof eventName === 'string' && eventName.startsWith('@.')) {
+      const realName = eventName.slice(2)
+      if (!realName) return
+      this.broadcast?.(realName, args, this)
+      return
     }
+    this.emitLocal(eventName, ...args)
   }
 
   /**

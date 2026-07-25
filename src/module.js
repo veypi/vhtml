@@ -56,8 +56,8 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
       } else if (/^https?:\/\//.test(url)) {
         throw new Error(`fetch: external URL blocked in unsafe mode: ${url}`)
       } else if (!url.startsWith('/')) {
-        resolvedUrl = `${scoped}/${url}`
-      } else if (scoped && !url.startsWith(scoped)) {
+        resolvedUrl = scoped ? `${scoped}/${url}` : `/${url}`
+      } else if (scoped && !url.startsWith(scoped + '/') && url !== scoped) {
         throw new Error(`fetch: cross-scope request blocked: ${url} (scoped: ${scoped})`)
       }
     }

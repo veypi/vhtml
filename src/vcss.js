@@ -315,9 +315,30 @@ class CSSParser {
    * @param {string} animationValue 
    * @returns {string}
    */
+  /**
+   * 按括号外的逗号切分（避免 cubic-bezier(0.1, 0.7, 1.0, 0.1) 被错误切分）
+   */
+  splitOutsideParens(value) {
+    const parts = [];
+    let depth = 0;
+    let current = '';
+    for (const char of value) {
+      if (char === '(') depth++;
+      else if (char === ')') depth--;
+      else if (char === ',' && depth === 0) {
+        parts.push(current.trim());
+        current = '';
+        continue;
+      }
+      current += char;
+    }
+    if (current.trim()) parts.push(current.trim());
+    return parts;
+  }
+
   processAnimationValue(animationValue) {
-    // animation 可能包含多个动画，用逗号分隔
-    const animations = animationValue.split(',').map(anim => anim.trim());
+    // animation 可能包含多个动画，用括号外的逗号分隔
+    const animations = this.splitOutsideParens(animationValue);
 
     return animations.map(animation => {
       const parts = animation.split(/\s+/);
@@ -466,7 +487,7 @@ class CSSParser {
     let tag = selectorPart.trim()
     if (/^body(?:$|[:\[ ])/.test(tag)) {
       return this.scopeBody + tag.slice(4)
-    } else if (/^:root(?:$:[$:\[ ])/.test(tag)) {
+    } else if (/^:root(?:$|[:\[ ])/.test(tag)) {
       return this.scopeBody + tag.slice(5)
     } else {
       return tag + this.scopeAttribute;
