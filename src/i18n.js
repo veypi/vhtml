@@ -71,7 +71,8 @@ class I18n {
     if (typeof str !== 'string') return key
 
     Object.keys(replaceVars).forEach(k => {
-      str = str.replace(new RegExp(`{{?${k}}}?`, 'g'), replaceVars[k])
+      const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      str = str.replace(new RegExp(`{{?${escaped}}}?`, 'g'), replaceVars[k])
     })
 
     return str

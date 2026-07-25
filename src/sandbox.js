@@ -111,6 +111,25 @@ Object.assign(globalExpose, {
 })
 
 // ============================================================
+// 构造函数安全包装（阻止 .constructor → Function 逃逸链）
+// ============================================================
+
+const safeFunctionCache = new WeakMap()
+
+function safeFunction(fn) {
+  let safe = safeFunctionCache.get(fn)
+  if (safe) return safe
+  safe = new Proxy(fn, {
+    get(target, key, receiver) {
+      if (key === 'constructor' || key === '__proto__') return undefined
+      return Reflect.get(target, key, receiver)
+    },
+  })
+  safeFunctionCache.set(fn, safe)
+  return safe
+}
+
+// ============================================================
 // 沙盒 Proxy 创建
 // ============================================================
 
@@ -135,6 +154,9 @@ export function createScopeProxy(data, runtime = {}, execArgs = {}, options = {}
   return new Proxy(data, {
     has(_target, _key) { return true },
     get(target, key, receiver) {
+      // 阻止原型链逃逸：constructor / __proto__
+      if (key === 'constructor' || key === '__proto__') return undefined
+
       if (key === '$data') return data
       if (key === '$sys')  return runtimeSys
       if (key === '$mod')  return runtimeMod
@@ -148,7 +170,12 @@ export function createScopeProxy(data, runtime = {}, execArgs = {}, options = {}
 
       if (runtimeSys && key in runtimeSys) return runtimeSys[key]
 
-      if (key in fallback) return fallback[key]
+      if (key in fallback) {
+        const value = fallback[key]
+        // 包装暴露的构造函数，阻止 Object.constructor → Function 逃逸链
+        if (typeof value === 'function') return safeFunction(value)
+        return value
+      }
 
       if (!unsafe) return windowValue(key)
 

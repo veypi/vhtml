@@ -40,6 +40,7 @@ const EventsList = [
   'beforeunload',
   'resize',
   'scroll',
+  'scrollend',
 
   // 表单事件
   'submit',
@@ -48,6 +49,9 @@ const EventsList = [
   'change',
   'focus',
   'blur',
+  'focusin',
+  'focusout',
+  'beforeinput',
 
   // 键盘事件
   'keydown',
@@ -65,6 +69,19 @@ const EventsList = [
   'mouseout',
   'mouseenter',
   'mouseleave',
+  'wheel',
+
+  // 指针事件
+  'pointerdown',
+  'pointermove',
+  'pointerup',
+  'pointercancel',
+  'pointerover',
+  'pointerout',
+  'pointerenter',
+  'pointerleave',
+  'gotpointercapture',
+  'lostpointercapture',
 
   // 触摸事件
   'touchstart',
@@ -93,6 +110,9 @@ const EventsList = [
 
   // 过渡事件
   'transitionend',
+  'transitionrun',
+  'transitionstart',
+  'transitioncancel',
 
   // 文件操作事件
   'abort',
@@ -248,14 +268,11 @@ function SetAttr(dom, key, value) {
     'frameborder': 'frameBorder',
     'contenteditable': 'contentEditable',
     'spellcheck': 'spellcheck',
-    'innerhtml': 'innerHTML',
-    'innertext': 'innerText',
     'autocapitalize': 'autocapitalize',
   };
 
   // 需要使用 DOM 属性设置的属性
   const domProperties = new Set([
-    'innerHTML', 'innerText', 'outerHTML', 'textContent',
     'value', 'checked', 'selected', 'disabled', 'readOnly',
     'maxLength', 'minLength', 'htmlFor',
     'tabIndex', 'scrollTop', 'scrollLeft', 'scrollWidth', 'scrollHeight',

@@ -56,8 +56,21 @@ function debugAnchor(_runtime, router, message, detail = undefined) {
   })
 }
 
+const DANGEROUS_URL_RE = /^\s*(javascript|vbscript)\s*:/i
+const DANGEROUS_DATA_URL_RE = /^\s*data\s*:\s*text\/html/i
+
+function sanitizeUrl(url) {
+  if (typeof url !== 'string') return url
+  if (DANGEROUS_URL_RE.test(url) || DANGEROUS_DATA_URL_RE.test(url)) {
+    console.warn(`[vhtml] blocked dangerous URL: ${url}`)
+    return 'about:blank'
+  }
+  return url
+}
+
 function resolveScopedUrl(rawUrl, runtime, scoped) {
   if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
+  rawUrl = sanitizeUrl(rawUrl)
   if (rawUrl.startsWith('@')) return rawUrl.slice(1)
   if (/^https?:\/\//.test(rawUrl)) return rawUrl
   if (rawUrl.startsWith('//')) return rawUrl
@@ -345,9 +358,9 @@ export function handleStyle(dom, attrName, value, data, runtime) {
         }
       } else if (typeof oldValue === 'string') {
         oldValue.split(';').forEach(segment => {
-          const parts = segment.split(':')
-          if (parts.length !== 2) return
-          const styleKey = parts[0].trim()
+          const idx = segment.indexOf(':')
+          if (idx === -1) return
+          const styleKey = segment.slice(0, idx).trim()
           if (styleKey.startsWith('--')) dom.style.removeProperty(styleKey)
           else dom.style[styleKey] = ''
         })
@@ -360,10 +373,10 @@ export function handleStyle(dom, attrName, value, data, runtime) {
       }
     } else if (typeof res === 'string') {
       res.split(';').forEach(segment => {
-        const parts = segment.split(':')
-        if (parts.length !== 2) return
-        const styleKey = parts[0].trim()
-        const styleValue = parts[1].trim()
+        const idx = segment.indexOf(':')
+        if (idx === -1) return
+        const styleKey = segment.slice(0, idx).trim()
+        const styleValue = segment.slice(idx + 1).trim()
         if (styleKey.startsWith('--')) dom.style.setProperty(styleKey, styleValue)
         else dom.style[styleKey] = styleValue
       })
@@ -422,22 +435,38 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
       if (isNaN(delay)) delay = 1000
       func = (event) => {
         if (typeof delayedTimer === 'number') {
-          scope?.clearTimeout(delayedTimer) || clearTimeout(delayedTimer)
+          if (scope) scope.clearTimeout(delayedTimer)
+          else clearTimeout(delayedTimer)
         }
-        delayedTimer = scope?.setTimeout(() => {
-          const cb = Run(value, data, runtime, { $event: event })
-          if (typeof cb === 'function') cb(event)
-        }, delay) || setTimeout(() => {
-          const cb = Run(value, data, runtime, { $event: event })
-          if (typeof cb === 'function') cb(event)
-        }, delay)
+        if (scope) {
+          delayedTimer = scope.setTimeout(() => {
+            const cb = Run(value, data, runtime, { $event: event })
+            if (typeof cb === 'function') cb(event)
+          }, delay)
+        } else {
+          delayedTimer = setTimeout(() => {
+            const cb = Run(value, data, runtime, { $event: event })
+            if (typeof cb === 'function') cb(event)
+          }, delay)
+        }
       }
     }
     evtMap[modifier] = true
   })
+  const KEY_ALIASES = {
+    space: ' ',
+    esc: 'escape',
+    up: 'arrowup',
+    down: 'arrowdown',
+    left: 'arrowleft',
+    right: 'arrowright',
+    del: 'delete',
+    ins: 'insert',
+  }
   const listener = (event) => {
     if (actionName.length > 1 && (evt === 'keydown' || evt === 'keyup' || evt === 'keypress')) {
-      const keyName = actionName[1]
+      const rawKeyName = actionName[1]
+      const keyName = KEY_ALIASES[rawKeyName] || rawKeyName
       if (keyName !== event.key?.toLowerCase()) return
     }
     if (evtMap.self && event.currentTarget !== event.target) return
