@@ -34,9 +34,13 @@ function resolveSlotOwner(dom) {
 function createSlotBindingData(dom, outletData, sourceData) {
   const bindValue = dom.getAttribute('vbind')
   if (!bindValue) return { data: sourceData, cleanup: null }
-  const slotData = Wrap({})
-  SetDataRoot(slotData, sourceData)
   const bindAttrs = bindValue.split(',').map(item => item.trim()).filter(Boolean)
+  // vbind 属性必须先落为本地 key（Wrap 的 set 会穿透 root 链，
+  // 否则 watcher 同步 outlet 值时会误写入投影方的 sourceData）
+  const local = {}
+  bindAttrs.forEach(attr => { local[attr] = outletData[attr] })
+  const slotData = Wrap(local)
+  SetDataRoot(slotData, sourceData)
   const scope = instanceOf(dom)?.scope
   const watcherIds = []
   bindAttrs.forEach(attr => {
@@ -44,7 +48,6 @@ function createSlotBindingData(dom, outletData, sourceData) {
       slotData[attr] = value
     }, { deep: true })
     watcherIds.push(watcherId)
-    slotData[attr] = outletData[attr]
   })
   return { data: slotData, cleanup: () => watcherIds.forEach(id => Cancel(id)) }
 }

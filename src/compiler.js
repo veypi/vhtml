@@ -193,9 +193,11 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     const seen = Object.create(null)
 
     const createItemData = (key, value) => {
-      const itemData = Wrap({ [valueName]: value }, data)
-      if (indexName) itemData[indexName] = normalizeVforIndex(key)
-      return itemData
+      // 迭代变量与索引都必须是本地 key（Wrap 的 set 会穿透 root 链，
+      // 先占位再 Wrap 可防止 indexName 与 root 同名时被误写入 root）
+      const local = { [valueName]: value }
+      if (indexName) local[indexName] = normalizeVforIndex(key)
+      return Wrap(local, data)
     }
 
     const resolveCacheKey = (key, value, itemData) => {

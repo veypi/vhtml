@@ -64,6 +64,18 @@ function stripRouterEscape(to) {
   return to.slice(1) || '/'
 }
 
+// 路由配置中的 redirect/next 允许返回字符串或 {path, params, query, hash} 对象，
+// 统一拆成 (path, data) 供 push/replace 使用
+function splitRouteTarget(target) {
+  if (target && typeof target === 'object') {
+    return {
+      path: target.path,
+      data: { params: target.params, query: target.query, hash: target.hash },
+    }
+  }
+  return { path: target, data: null }
+}
+
 function hasPathPrefix(path, prefix) {
   return !!(path && prefix && (path === prefix || path.startsWith(`${prefix}/`)))
 }
@@ -1086,12 +1098,14 @@ class RouterView {
     return new Proxy(Object.create(null), {
       get(_target, key) {
         if (key === '__routerView') return router
-        if (key === 'push') return (to) => router.push(to, { runtime })
-        if (key === 'replace') return (to) => router.replace(to, { runtime })
-        if (key === 'matchTo') return (to, options = {}) => router.matchTo(to, { ...options, runtime: options.runtime || runtime })
-        if (key === 'matchRoute') return (to, options = {}) => router.matchRoute(to, { ...options, runtime: options.runtime || runtime })
-        if (key === 'normalizeRouteTarget') return (to, options = {}) => router.normalizeRouteTarget(to, { ...options, runtime: options.runtime || runtime })
-        if (key === 'resolveHref') return (to, options = {}) => router.resolveHref(to, { ...options, runtime: options.runtime || runtime })
+        if (key === 'push') return (to, data, options = {}) => router.push(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
+        if (key === 'replace') return (to, data, options = {}) => router.replace(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
+        if (key === 'matchTo') return (to, data, options = {}) => router.matchTo(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
+        if (key === 'matchRoute') return (to, data, options = {}) => router.matchRoute(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
+        if (key === 'normalizeRouteTarget') return (to, data, options = {}) => router.normalizeRouteTarget(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
+        if (key === 'resolveHref') return (to, data, options = {}) => router.resolveHref(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
+        if (key === 'setQuery') return (patch, options = {}) => router.setQuery(patch, { ...options, runtime: options.runtime || runtime })
+        if (key === 'setParams') return (patch, options = {}) => router.setParams(patch, { ...options, runtime: options.runtime || runtime })
         const value = router[key]
         return typeof value === 'function' ? value.bind(router) : value
       },
@@ -1241,50 +1255,45 @@ class RouterView {
     this.activePage = null
   }
 
-  normalizeRouteTarget(to, options = {}) {
-    let path, query = {}, params = {}, hash = ''
+  /**
+   * 规范化路由目标。
+   * to: 路径字符串（支持 @ 前缀跳过 prefix、?query、#hash 简写）
+   * data: { params, query, hash }；path 含 :key/*key 占位符时用 params 填充生成最终路径
+   */
+  normalizeRouteTarget(to, data = null, options = {}) {
+    if (typeof to !== 'string') return null
     let bypassRouterPrefix = false
-    if (typeof to === 'string') {
-      if (hasRouterEscape(to)) {
-        bypassRouterPrefix = true
-        to = stripRouterEscape(to)
-      }
-      to = normalizeRouteInputPath(to)
-      if (isHttpUrl(to) && options.allowHttpUrl !== true) return null
-      const parsed = parseUrlString(to, this.#nav)
-      if (!parsed) return null
-      path = parsed.path; query = { ...parsed.query }; hash = parsed.hash
-    } else if (to && typeof to === 'object') {
-      if (to.path) {
-        let targetPath = to.path
-        if (hasRouterEscape(targetPath)) {
-          bypassRouterPrefix = true
-          targetPath = stripRouterEscape(targetPath)
-        }
-        targetPath = normalizeRouteInputPath(targetPath)
-        if (isHttpUrl(targetPath) && options.allowHttpUrl !== true) return null
-        const parsed = parseUrlString(targetPath, this.#nav)
-        if (!parsed) return null
-        path = parsed.path; query = { ...parsed.query, ...(to.query || {}) }
-        hash = to.hash || parsed.hash; params = to.params || {}
-      } else return null
-    } else return null
+    if (hasRouterEscape(to)) {
+      bypassRouterPrefix = true
+      to = stripRouterEscape(to)
+    }
+    to = normalizeRouteInputPath(to)
+    if (isHttpUrl(to) && options.allowHttpUrl !== true) return null
+    const parsed = parseUrlString(to, this.#nav)
+    if (!parsed) return null
+    let path = parsed.path
+    const query = { ...parsed.query, ...(data?.query || {}) }
+    const params = { ...(data?.params || {}) }
+    const hash = data?.hash || parsed.hash
+    if (/[:*]/.test(path) && data?.params) {
+      path = this.#fillRouteTemplate(path, params)
+      // 必填段/通配段未被 params 填充完整：目标非法（可选段标记 ? 会被 URL 解析
+      // 当作 query 分隔符，字符串模板无法表达"移除可选段"，请直接写最终路径）
+      if (/\/:[A-Za-z_]/.test(path) || /\*[A-Za-z_]/.test(path)) return null
+    }
     const navigationPrefix = options.navigationPrefix === undefined
       ? this.resolveNavigationPrefix(options.runtime || this.runtime)
       : options.navigationPrefix
-    if (path) {
-      path = this.normalizeRouterPath(path, {
-        prefix: navigationPrefix,
-        bypassRouterPrefix,
-        preserveTargetPath: options.preserveTargetPath,
-      })
-      return { path, query, params, hash, bypassRouterPrefix, navigationPrefix }
-    }
+    path = this.normalizeRouterPath(path, {
+      prefix: navigationPrefix,
+      bypassRouterPrefix,
+      preserveTargetPath: options.preserveTargetPath,
+    })
     return { path, query, params, hash, bypassRouterPrefix, navigationPrefix }
   }
 
-  matchRoute(to, options = {}) {
-    const routeInfo = this.normalizeRouteTarget(to, options)
+  matchRoute(to, data = null, options = {}) {
+    const routeInfo = this.normalizeRouteTarget(to, data, options)
     if (!routeInfo) return null
     const { path, query, params, hash, bypassRouterPrefix } = routeInfo
     for (const route of this.#stringRoutes) {
@@ -1301,8 +1310,8 @@ class RouterView {
     return null
   }
 
-  matchTo(to, options = {}) {
-    const matchResult = this.matchRoute(to, options)
+  matchTo(to, data = null, options = {}) {
+    const matchResult = this.matchRoute(to, data, options)
     if (!matchResult) return null
     const { route, params, query, path, hash } = matchResult
     let search = ''
@@ -1317,9 +1326,9 @@ class RouterView {
     }
   }
 
-  resolveHref(to, options = {}) {
+  resolveHref(to, data = null, options = {}) {
     if (typeof to === 'string' && isHttpUrl(stripRouterEscape(to))) return stripRouterEscape(to)
-    return this.matchTo(to, options)?.fullPath || stripRouterEscape(to)
+    return this.matchTo(to, data, options)?.fullPath || stripRouterEscape(to)
   }
 
   isNavigableHref(href) {
@@ -1346,7 +1355,8 @@ class RouterView {
         from: matchedRouteDebugInfo(matchedRoute),
         redirectTarget,
       })
-      this.push(redirectTarget, options)
+      const { path: redirectPath, data: redirectData } = splitRouteTarget(redirectTarget)
+      this.push(redirectPath, redirectData, options)
       return
     }
     if (this.activePage && this.current?.fullPath === matchedRoute.fullPath) {
@@ -1363,7 +1373,11 @@ class RouterView {
     if (this.#beforeEnter) {
       let shouldContinue = true
       const result = await this.#beforeEnter(to, this.current, (next) => {
-        if (next) { shouldContinue = false; this.push(next, options) }
+        if (next) {
+          shouldContinue = false
+          const { path: nextPath, data: nextData } = splitRouteTarget(next)
+          this.push(nextPath, nextData, options)
+        }
       })
       if (navId !== this.#pendingNavId) return
       if (result === false || !shouldContinue) {
@@ -1462,19 +1476,28 @@ class RouterView {
     if (mountResult?.redirect) {
       if (cacheKey) this.#pageCache.delete(cacheKey)
       page.destroy()
-      this.replace(mountResult.redirect, options)
+      const { path: redirectPath, data: redirectData } = splitRouteTarget(mountResult.redirect)
+      this.replace(redirectPath, redirectData, options)
       return
     }
     this.activePage = page
     if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)
   }
 
-  async push(to, options = {}) {
-    const matchedRoute = this.matchTo(to, options)
+  /**
+   * 导航到目标路径。
+   * to: 路径字符串（如 '/aa/123?b_id=x#s'，支持 @ 前缀跳过 prefix）
+   * data: { params, query, hash }；path 含 :key 占位符时用 params 填充，
+   *       无占位符时 params 作为附加数据合并进匹配结果
+   * options: { runtime, navigationPrefix, bypassRouterPrefix, preserveTargetPath, allowHttpUrl, commit }
+   */
+  async push(to, data = null, options = {}) {
+    const matchedRoute = this.matchTo(to, data, options)
     if (!matchedRoute) {
       this.#warn('push skipped: no route matched', this.debugContext({
         target: to,
-        normalized: this.normalizeRouteTarget(to, options),
+        data,
+        normalized: this.normalizeRouteTarget(to, data, options),
         navigationPrefix: this.resolveNavigationPrefixInfo(options.runtime || this.runtime),
       }))
       return
@@ -1482,22 +1505,25 @@ class RouterView {
     if (isCatchAllRoute(matchedRoute.route)) {
       this.#warn('push matched catch-all route', this.debugContext({
         target: to,
+        data,
         matched: matchedRouteDebugInfo(matchedRoute),
       }))
     } else {
       this.#debug('push matched', {
         target: to,
+        data,
         matched: matchedRouteDebugInfo(matchedRoute),
       })
     }
     await this.#navigateTo(matchedRoute, 'push', options)
   }
-  async replace(to, options = {}) {
-    const matchedRoute = this.matchTo(to, options)
+  async replace(to, data = null, options = {}) {
+    const matchedRoute = this.matchTo(to, data, options)
     if (!matchedRoute) {
       this.#warn('replace skipped: no route matched', this.debugContext({
         target: to,
-        normalized: this.normalizeRouteTarget(to, options),
+        data,
+        normalized: this.normalizeRouteTarget(to, data, options),
         navigationPrefix: this.resolveNavigationPrefixInfo(options.runtime || this.runtime),
       }))
       return
@@ -1505,16 +1531,115 @@ class RouterView {
     if (isCatchAllRoute(matchedRoute.route)) {
       this.#warn('replace matched catch-all route', this.debugContext({
         target: to,
+        data,
         matched: matchedRouteDebugInfo(matchedRoute),
       }))
     } else {
       this.#debug('replace matched', {
         target: to,
+        data,
         matched: matchedRouteDebugInfo(matchedRoute),
       })
     }
     await this.#navigateTo(matchedRoute, 'replace', options)
   }
+
+  /**
+   * 合并/替换当前路由的 query 并导航，path/params/hash 保持不变。
+   * patch 中值为 null/undefined 的 key 会被删除。
+   * options: { mode: 'replace'(默认)|'push', merge: true(默认)|false, silent: false(默认)|true }
+   * silent=true 时只同步 URL 与 current（响应式），不重新挂载页面。
+   */
+  setQuery(patch = {}, options = {}) {
+    const mode = options.mode === 'push' ? 'push' : 'replace'
+    const query = options.merge === false ? {} : { ...(this.current.query || {}) }
+    Object.entries(patch || {}).forEach(([key, value]) => {
+      if (value === null || value === undefined) delete query[key]
+      else query[key] = value
+    })
+    const target = { path: this.current.path, query, hash: this.current.hash }
+    if (options.silent === true) return this.#syncLocation(target, mode, options)
+    return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+  }
+
+  /**
+   * 合并/替换当前路由的 params 并导航，query/hash 保持不变。
+   * 用当前路由模板（如 /aa/:a_id）重新填充生成新 path，值原样填入（不编码）。
+   * patch 值为 null/undefined 时：可选段 /:key? 整段移除；必填段保留模板原文。
+   * options: 同 setQuery。
+   */
+  setParams(patch = {}, options = {}) {
+    const mode = options.mode === 'push' ? 'push' : 'replace'
+    const template = this.current.matched?.[0]?.path
+    if (!template || !/[:*]/.test(template)) {
+      this.#warn('setParams skipped: current route has no param template', this.debugContext({
+        patch,
+        currentPath: this.current.path,
+        routePath: template || '',
+      }))
+      return
+    }
+    const source = options.merge === false
+      ? { ...(patch || {}) }
+      : { ...(this.current.params || {}), ...(patch || {}) }
+    const target = {
+      path: this.#fillRouteTemplate(template, source),
+      query: { ...(this.current.query || {}) },
+      hash: this.current.hash,
+    }
+    if (options.silent === true) return this.#syncLocation(target, mode, options)
+    return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+  }
+
+  // 用 params 反向填充路由模板生成 path，替换顺序与 RouteMatcher.pathToRegexp 一致
+  #fillRouteTemplate(template, params) {
+    let path = template
+    path = path.replace(/\/:([^(/?]+)\?/g, (match, key) => {
+      const value = params[key]
+      if (value === null || value === undefined || value === '') return ''
+      return `/${value}`
+    })
+    path = path.replace(/\/\*(\w+)\?/g, (match, key) => {
+      const value = params[key]
+      if (value === null || value === undefined || value === '') return ''
+      return `/${value}`
+    })
+    path = path.replace(/\*(\w+)/g, (match, key) => {
+      const value = params[key]
+      if (value === null || value === undefined) return match
+      return `${value}`
+    })
+    path = path.replace(/:([^(/?]+)/g, (match, key) => {
+      const value = params[key]
+      if (value === null || value === undefined) return match
+      return `${value}`
+    })
+    return normalizePathname(path)
+  }
+
+  // 仅同步 URL 与 current（silent 模式），不触发守卫与页面挂载流程
+  #syncLocation(target, mode, options = {}) {
+    const matchedRoute = this.matchTo(target.path, { query: target.query, hash: target.hash }, options)
+    if (!matchedRoute) {
+      this.#warn('sync location skipped: no route matched', this.debugContext({
+        target,
+        normalized: this.normalizeRouteTarget(target.path, { query: target.query, hash: target.hash }, options),
+      }))
+      return
+    }
+    if (this.activePage && this.current?.fullPath === matchedRoute.fullPath) {
+      this.#debug('sync location skipped: already active', matchedRouteDebugInfo(matchedRoute))
+      return
+    }
+    this.#debug('sync location (silent)', {
+      target,
+      mode,
+      matched: matchedRouteDebugInfo(matchedRoute),
+    })
+    this.#setRouterPath(matchedRoute, mode, options)
+    if (this.activePage) this.activePage.matchedRoute = matchedRoute
+  }
+
   go(n) { this.#nav.go(n) }
   back() { this.#nav.back() }
   forward() { this.#nav.forward() }
@@ -1617,12 +1742,12 @@ class RouterView {
       preserveTargetPath: event?.committed === true,
       allowHttpUrl: event?.committed === true,
     }
-    const matchedRoute = this.matchTo(target, normalizeOptions)
+    const matchedRoute = this.matchTo(target, null, normalizeOptions)
     if (!matchedRoute) {
       this.#debug('history navigation skipped: no route matched', this.debugContext({
         event,
         target,
-        normalized: this.normalizeRouteTarget(target, normalizeOptions),
+        normalized: this.normalizeRouteTarget(target, null, normalizeOptions),
       }))
       return
     }

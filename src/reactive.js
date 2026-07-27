@@ -213,6 +213,13 @@ export function Wrap(data, root = undefined) {
       return value
     },
     set(target, key, newValue, receiver) {
+      const root = target[rootObj]
+      // 与 get/has 对称：本地没有且 root 链上有的 key，穿透写入持有者，
+      // 避免写入本地后遮蔽 root 同名属性（如 v-for 作用域内修改组件状态）
+      if (typeof key !== 'symbol' && root && !Reflect.has(target, key) && key in root) {
+        root[key] = newValue
+        return true
+      }
       const oldValue = Reflect.get(target, key, receiver)
       if (oldValue === newValue) return true
       else if (stopChecking) return Reflect.set(target, key, newValue, receiver)
