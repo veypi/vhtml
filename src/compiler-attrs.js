@@ -275,6 +275,28 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
       })
     } else if (attrName === 'class' || attrName === 'style') {
       handleStyle(dom, attrName, value, data, runtime)
+    } else if (attrName === 'ref') {
+      // :ref="expr" 动态 ref：表达式求值为名称挂到 $refs[name]，
+      // 名称变化时迁移挂载（旧 key 置 null），组件销毁时清理
+      const refPool = ensureRefPool(data)
+      if (refPool) {
+        let currentName = null
+        const unmountRef = () => {
+          if (currentName && refPool[currentName] === dom) refPool[currentName] = null
+          currentName = null
+        }
+        watch(scope, () => {
+          const res = value ? Run(value, data, runtime) : data[attrName]
+          const nextName = res === null || res === undefined ? '' : String(res).trim()
+          if (nextName === (currentName || '')) return
+          unmountRef()
+          if (nextName) {
+            refPool[nextName] = dom
+            currentName = nextName
+          }
+        })
+        scope?.addCleanup(unmountRef)
+      }
     } else {
       watch(scope, () => {
         let res = value ? Run(value, data, runtime) : data[attrName]
