@@ -1,26 +1,13 @@
 ---
-name: vhtml-frontend
-description: Use this guide when creating or modifying vhtml frontend code, including pages, reusable HTML components, layouts, routes, slots, bindings, scoped module env setup, router behavior, API integration, i18n setup and translation usage, and component communication. Read the full guide whenever a task involves vhtml-specific syntax or runtime concepts such as script setup, $data/$sys/$mod/$router, $t/$i18n, env.js, routes.js, vrouter, refs, lifecycle hooks, or real-DOM component composition.
+name: vhtml
+description: vhtml browser-only HTML component framework user manual — components, script setup, bindings, props, URL prefix rules, ESM import, slots, refs, env.js, routes.js, vrouter, $data/$sys/$mod/$router, $t/$i18n, $bus, $message, lifecycle scripts. Read this guide whenever a task involves vhtml pages, components, routing, i18n, or module-scoped concepts.
 ---
 
 # vhtml Frontend Guide
 
-## What vhtml is
-
-`vhtml` is a browser-only HTML component runtime.
-
-- No SSR
-- No hydration
-- No virtual DOM
-- Real DOM is the source of truth
-- One `.html` file can be a full page or a reusable component
-- `vrouter` is optional; without it, vhtml is just an HTML component framework
-
-Use vhtml patterns, not Vue/React patterns.
+`vhtml` is a browser-only HTML component runtime: no SSR, no hydration, no virtual DOM — the real DOM is the source of truth. One `.html` file is a full page or a reusable component. `vrouter` is optional. Use vhtml patterns, not Vue/React patterns.
 
 ## File Layout
-
-Typical module layout:
 
 ```txt
 ui/
@@ -33,7 +20,7 @@ ui/
   local/      # reusable local components
 ```
 
-## Component Mapping
+## Components
 
 Custom tags map to HTML files by kebab path:
 
@@ -42,17 +29,12 @@ Custom tags map to HTML files by kebab path:
 <agent-list></agent-list>     → /agent/list.html
 ```
 
-## Component File Shape
-
-Recommended structure:
+Component file shape:
 
 ```html
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta name="description" content="Counter" />
-    <title>Counter</title>
-  </head>
+  <head><title>Counter</title></head>
   <style>
     body { display: flex; gap: 12px; align-items: center; }
   </style>
@@ -67,31 +49,52 @@ Recommended structure:
 </html>
 ```
 
-`<script setup>` declaration rules:
+### Styles
 
-- `a = xxx` or `save = () => {}` declares reactive state or public methods on `$data`. They are accessible from template bindings, other scripts, refs, and parent imperative calls.
-- `const`, `let`, and `function` declare local helpers only. They stay private to setup and are NOT registered on `$data`.
-- Do not abuse bare `=` for short-lived locals. Use `const` or `let`.
+Component styles are automatically scoped to the component's DOM subtree; `@keyframes` names are isolated per component.
+
+```css
+.title { ... }          /* matches only elements compiled by this component (scope-attributed) */
+body { ... }            /* the component host node itself (body / :root → host) */
+body .title { ... }     /* ALL descendant elements, scope attribute not required — style piercing */
+```
+
+With a `body` / `:root` prefix, descendant selectors are no longer scope-restricted — they also match runtime-created elements (`document.createElement`, third-party library DOM) that carry no scope attribute. Plain selectors only match component-compiled elements.
+
+### Props
+
+Attributes on a component tag map to the child's `$data` keys (auto camelCase ↔ kebab-case):
+
+```html
+<user-card name="Tom" :age="userAge" v:score="score" disabled></user-card>
+```
+
+| form | behavior |
+| ---- | -------- |
+| `name="Tom"` | static value, assigned once |
+| `:age="userAge"` | one-way binding from parent |
+| `v:score="score"` | two-way binding |
+| `disabled` (bare) | boolean `true` when the key exists in child `$data` |
+
+### `$data` Declaration Rules (`<script setup>`)
+
+- Bare assignment (`count = 0`, `save = () => {}`) and ESM imports register on `$data` — public, accessible from template bindings, refs, and parent imperative calls.
+- `const` / `let` / `var` / `function` stay private to setup.
+- Do not use bare `=` for short-lived locals; use `const` or `let`.
 
 ## Runtime Model
 
-When an expression uses a bare identifier without an explicit prefix, resolution follows this fixed order:
+Bare identifier resolution order:
 
 ```text
-$data → $mod → $sys → expose → execArgs → window
+$data → own data keys → $mod keys → $sys keys → builtins (framework globals, v-for iteration vars) → window
 ```
 
-Use explicit prefixes (`$data.xxx`, `$mod.xxx`, `$sys.xxx`) when the source matters for readability or to avoid shadowing.
-
-### `$data`
-
-Private state of the current component instance. Only bare assignments from `<script setup>` (e.g. `count = 0`, `save = () => {}`) and props are mapped into `$data`. `const`/`let`/`function` locals stay private and do not appear on `$data`.
+Use explicit prefixes (`$data.xxx`, `$mod.xxx`, `$sys.xxx`) when the source matters or to avoid shadowing.
 
 ### `$mod`
 
-Module-scoped context, shared by all components under the same `scoped` prefix. Not inherited through parent components.
-
-Default entries:
+Module-scoped context shared by all components under the same `scoped` prefix. Not inherited through parent components.
 
 | key | description |
 | ----- | ------------- |
@@ -99,118 +102,123 @@ Default entries:
 | `$bus` | module-level EventBus |
 | `$i18n` | I18n instance |
 | `$t(key, params)` | translation shorthand |
-| `fetch(url, options)` | scoped fetch — relative URLs auto-prepend the scoped prefix |
+| `fetch(url, options)` | scoped fetch — relative and `/`-prefixed URLs auto-prepend `scoped` |
+| `restrictedFetch` | replaces `fetch` in `unsafe` mode — throws on http(s) URLs and cross-scoped paths |
 
 Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as custom keys on `$mod`.
 
 ### `$sys`
 
-System variable pool, inherited via `Object.create(parent.$sys)`.
+System variable pool, inherited from ancestor components via prototype chain.
 
 | key | description |
 | ----- | ------------- |
 | `$router` | proxy to the nearest ancestor `<vrouter>` |
-| `$emit` | `$emit('event', ...args)` to emit custom events to the parent |
+| `$emit(name, ...args)` | emit custom event to the parent's `@name` handler |
 | `$message` | global toast / dialog API |
 
 ### `$router`
 
 Nearest ancestor `<vrouter>` view, local to the current router subtree.
 
-```js
-$router.push('/path')
-$router.replace('/path')
-$router.back()
-$router.forward()
-$router.go(-1)
-$router.current      // { path, fullPath, params, query, ... }
-$router.params
-$router.query
-```
+| API | description |
+| --- | --- |
+| `push(to, data?)` / `replace(to, data?)` | navigate; `data: { params, query, hash }` |
+| `back()` / `forward()` / `go(n)` | history navigation |
+| `current` | `{ path, fullPath, params, query, hash, meta, layout }` |
+| `params` / `query` | shortcuts to `current.params` / `current.query` |
+| `setQuery(patch, opts?)` / `setParams(patch, opts?)` | merge/replace then navigate; `opts: { mode: 'replace' \| 'push', merge }` |
+| `onChange(fn)` | subscribe to route changes, returns unsubscribe function |
+| `addRoute(route)` / `addRoutes(routes)` / `resetRoutes()` | runtime route management |
 
-## i18n
+## URL Prefix Rules
 
-`$i18n` and `$t` live on `$mod`, so translations are module-scoped by default.
+Relative URLs inside a component (template and scripts) are auto-prefixed with `$mod.scoped`:
+
+| scenario | behavior |
+| -------- | -------- |
+| Script `fetch('data/x.json')` | auto-prefixed (bare `fetch` handled same as `$mod.fetch`) |
+| Script `fetch('/abs/x.json')` | **also prefixed** — never prepend `$mod.scoped` yourself (double prefix → 404) |
+| Template `<img src="x.png">`, `:src` binding | auto-prefixed |
+| **Runtime-created elements** (`document.createElement('img')`, third-party library / engine DOM) | **NOT prefixed** — use full path: `$mod.scoped + '/x.png'` or full URL |
+| `http://`, `https://`, `//`, `@/` | passthrough, no prefix |
+
+Rules:
+
+1. Inside component code, always write **relative paths** for fetch; the runtime handles prefixing.
+2. For images / media / iframe src passed to engines or third-party libraries, build absolute paths with `$mod.scoped`.
+3. Bare `fetch()` in the browser console has no prefix — check the network panel for actual URLs; don't infer component behavior from console fetches.
+
+`@/path` strips `@` and bypasses **all** prefixes (scoped, router, component). `javascript:` / `vbscript:` / `data:text/html` URLs are replaced with `about:blank`.
+
+## ESM Import in `<script setup>`
+
+Static imports are supported; relative paths resolve against the component's own URL:
 
 ```html
-<title>{{ $t('page.title') }}</title>
-<button>{{ $t('common.save') }}</button>
+<script setup>
+  import PPT from './ppt.js'   // resolves to <component-dir>/ppt.js
+  ready = false
+  init = async (opts) => { const p = new PPT($refs.host, opts) }
+</script>
 ```
 
-`langs.json` shape:
+- Imported bindings register on `$data` (public, template-accessible).
+- `/xxx` paths get `scoped` prepended; `@/xxx` strips `@`; `.js` is auto-appended.
+- `.min.js` and `http://` imports are rejected with a warning — load external libraries via `<script>` tags instead.
+- `await import('path')` dynamic imports are supported.
+- In `unsafe` mode, all import statements are stripped.
 
-```json
-{
-  "zh-CN": { "common.save": "保存" },
-  "en-US": { "common.save": "Save" }
-}
+## Bindings
+
+```html
+<div>{{ title }}</div>                               <!-- text interpolation -->
+<img :src="avatarUrl" :title="name" />               <!-- dynamic attribute (auto URL prefix) -->
+<div :class="{ active: isActive }"></div>            <!-- string / object / array all supported -->
+<div :style="{ color: 'red' }"></div>
+<button @click="save()">Save</button>
+<button @click.stop.prevent="remove(id)">Delete</button>
+<input v:value="value" />                            <!-- two-way binding -->
+<div v-show="loading">Loading...</div>
+<div v-if="a">A</div>
+<div v-else-if="b">B</div>
+<div v-else>C</div>
+<div :key='item.id' v-for="item in items">{{ item.name }}</div>
+<div :key='idx' v-for="(item, idx) in items">...</div>
+<template :key='item.id' v-for="item in items">      <!-- multi-root list -->
+  <div>{{ item.a }}</div>
+  <div>{{ item.b }}</div>
+</template>
+<div vsrc="/local/card.html"></div>                  <!-- static component -->
+<div :vsrc="currentComponent"></div>                 <!-- dynamic component -->
+<div v-html="htmlContent"></div>                     <!-- raw HTML, <div> only -->
+<div no-vhtml>{{ raw }}</div>                        <!-- skip compilation -->
 ```
 
-Load once per module in `env.js`:
-
-```js
-export default async ($mod) => {
-  $mod.$i18n.load(await $mod.fetch('/langs.json').then(r => r.json()))
-}
-```
-
-Useful APIs: `$t(key, { count, ...vars })`, `$i18n.setLocale(lang)`, `$i18n.getLocale()`, `$i18n.load(messages)`.
-
-i18n key scanning via CLI:
-
-```bash
-v-i18n scan                    # scan, clean up, report missing keys
-v-i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
-```
+- Text interpolation: function values are auto-invoked, object values are auto-`JSON.stringify`-ed.
+- Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
+- Special events: `@mounted` (node inserted into DOM), `@outerclick` (click outside the element).
+- `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
+- Always initialize list variables in `<script setup>`: `items = []`.
 
 ## Script Types
 
 | type | when it runs |
 | ------ | ------------- |
-| `<script setup>` | once when instance is created |
-| `<script>` | once after initial mount |
+| `<script setup>` | once at instance creation, before DOM compilation |
+| `<script>` | once after DOM compilation, before first activation |
 | `<script active>` | each time the instance becomes active (cached page re-entry) |
 | `<script deactive>` | when the instance goes inactive but stays alive |
 | `<script dispose>` | when the instance is destroyed (`v-if` removal, page unload) |
 
-Script-only helpers:
+Helpers available in all script types:
 
-- `$watch(() => expr, (val) => { ... })` — reactive effect, auto-cleaned on dispose
-- `$node` — the current host DOM element
-
-## Bindings
-
-```html
-<div>{{ title }}</div>                          <!-- text interpolation -->
-<img :src="avatarUrl" :title="name" />          <!-- dynamic attributes -->
-<div :class="{ active: isActive }"></div>       <!-- dynamic class -->
-<div :style="{ color: 'red' }"></div>           <!-- dynamic style -->
-<button @click="save()">Save</button>           <!-- event handler -->
-<button @click.stop="remove(id)">Delete</button>
-<input v:value="value" />                       <!-- two-way binding -->
-<div v-show="loading">Loading...</div>          <!-- toggle display -->
-<div v-if="loading">Loading...</div>            <!-- conditional -->
-<div v-else>No data</div>
-<div :key='item.id' v-for="item in items">{{ item.name }}</div> <!-- list -->
-<div :key='idx' v-for="(item, idx) in items">...</div>
-<div :key='item.id' v-for="item in items" v-if="item.active">{{ item.name }}</div>  <!-- v-for first, then v-if -->
-<div vsrc="/local/card.html"></div>             <!-- static component -->
-<div :vsrc="currentComponent"></div>            <!-- dynamic component -->
-<div v-html="htmlContent"></div>                <!-- raw HTML -->
-
-<!-- <template> unwraps its children; v-for on <template> enables multi-root lists -->
-<template :key='item.id' v-for="item in items">
-  <div>{{ item.a }}</div>
-  <div>{{ item.b }}</div>
-</template>
-```
-
-- Always initialize list variables in `<script setup>`: `items = []`.
-- `v-for` and `v-if` can coexist on the same node: `v-for` runs first to produce per-item clones, then `v-if` filters each clone.
+- `$node` — the current host DOM element.
+- `$watch(() => expr, (val) => { ... })` — reactive effect, auto-cleaned on dispose. In `<script setup>` registration is deferred ~50ms until the scope is ready; in other scripts it registers immediately.
 
 ## Refs and Parent-to-Child Calls
 
-`ref="xxx"` is auto-collected into `$data.$refs.xxx`.
+`ref="xxx"` is collected into `$data.$refs.xxx`:
 
 ```html
 <script setup>
@@ -219,40 +227,42 @@ Script-only helpers:
 <child-panel ref="panel"></child-panel>
 ```
 
-Host node public fields: `$data`, `$sys`, `$mod`. Prefer `props + $emit` for normal communication; use `$refs.xxx.$data` only for imperative parent calls.
+Host nodes expose `$data`, `$sys`, `$mod`. Prefer `props + $emit` for normal communication; use `$refs.xxx.$data` only for imperative parent-to-child calls.
 
 ## Slots
 
 ```html
 <!-- caller -->
 <card-shell>
-  <div vslot="header">Header</div>   <!-- projected: uses caller runtime -->
+  <div vslot="header">Header</div>   <!-- projected: caller runtime -->
   <div>Body</div>                    <!-- default slot -->
 </card-shell>
 
 <!-- card-shell.html -->
 <body>
   <header><vslot name="header"><span>Default</span></vslot></header>
-  <main><vslot></vslot></main>       <!-- fallback uses child runtime -->
+  <main><vslot></vslot></main>       <!-- fallback: child runtime -->
 </body>
 ```
 
-Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`). Fallback content runs in the child's own runtime.
+Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`); fallback content runs in the child's own runtime. `<vslot>` supports `:name` for dynamic slot names.
 
 ## `env.js`
 
-Initializes the module context. Loaded once per `scoped` prefix. Use for module-wide services, i18n setup, and configuration:
+Loaded once per `scoped` prefix. Use for module-wide services, i18n, config:
 
 ```js
 export default async ($mod, manager) => {
-  // module config
-  const config = await $mod.fetch('/config.json').then(r => r.json())
-  $mod.config = config
-
-  // i18n
+  $mod.config = await $mod.fetch('/config.json').then(r => r.json())
   $mod.$i18n.load(await $mod.fetch('/langs.json').then(r => r.json()))
+
+  await manager.loadModule('/shared')          // preload a sub-module and wait for its env.js
+  manager.addAlias('ui-kit', '/lib/ui-kit')    // <ui-kit-button> → /lib/ui-kit/button.html
 }
 ```
+
+- `manager.loadModule(subPath)` — preload a sub-module's `env.js`; `/`-prefixed = absolute, otherwise relative to the current scoped.
+- `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias; `baseUrl` must start with `/` or `https://`.
 
 Do NOT use `env.js` for route guards, per-page state, or component-local data.
 
@@ -260,44 +270,31 @@ Do NOT use `env.js` for route guards, per-page state, or component-local data.
 
 Belongs to a `<vrouter>` view. Loaded from the current scoped module unless `vrouter` provides an explicit `routes` path.
 
-Supported export forms:
-
 ```js
 // 1. array
 export default [
   { path: '/', component: '/page/index.html' },
-  { path: '/user/:id', component: '/page/user.html' },
   { path: '*', component: '/page/404.html' },
 ]
 
-// 2. object
-export default {
-  routes: [...],
-  beforeEnter: async (to, from, next) => { ... },
-  afterEnter: (to, from) => { ... },
-}
-
-// 3. factory (recommended when $mod capabilities are needed)
+// 2. factory (recommended when $mod capabilities are needed)
 export default ({ $mod, router }) => ({
+  path_prefix: '/panel',        // default: $mod.scoped
+  component_prefix: '',         // default: ''
   routes: [
-    {
-      path: '/',
-      component: '/page/index.html',
-      layout: 'default',
-    },
+    { path: '/', component: '/page/index.html', layout: 'default' },
+    { path: '/user/:id', component: '/page/user.html', meta: { auth: true } },
     {
       path: '/admin',
       component: '/page/admin.html',
       layout: 'admin',
-      meta: { auth: true },
-      children: [
-        { path: 'settings', component: '/page/admin_settings.html' },
-      ],
+      children: [{ path: 'settings', component: '/page/admin_settings.html' }],
     },
     {
       path: '/edit/:id',
       component: (path, params) => `/page/edit/${params.id}.html`,
-      error_redirect: '/404',
+      redirect: '/login',                          // string | { path, params, query, hash } | (matchedRoute) => target
+      error_redirect: '/404',                      // string | (matchedRoute, error) => target
     },
     { path: '*', component: '/page/404.html' },
   ],
@@ -307,6 +304,7 @@ export default ({ $mod, router }) => ({
       return false
     }
   },
+  afterEnter: (to, from) => { ... },
 })
 ```
 
@@ -314,19 +312,16 @@ Route record fields:
 
 | field | description |
 | ------- | ------------- |
-| `path` | required. supports `:param`, `:id?` (optional), `*rest` (wildcard), `*` (catch-all) |
-| `component` | required. HTML path or function `(path, params) => url`; `params` includes fixed `vrouter[:params]` values plus matched route params |
-| `layout` | layout name, resolved to `/layout/{name}.html` |
-| `meta` | arbitrary metadata |
-| `children` | nested routes, child paths are relative to the parent |
-| `cacheKey` | string (shared instance), `false` (no cache), default (path-based) |
-| `error_redirect` | fallback when component fails to load |
+| `path` | required. `:param`, `:param?`, `*rest`, `*` (catch-all, keep last for 404) |
+| `component` | required. HTML path or `(path, params) => url`; `params` includes fixed `:params` values plus matched route params |
+| `layout` | layout name → `/layout/{name}.html`; layouts should expose a default `<vslot>` for the page outlet |
+| `redirect` | string, `{ path, params, query, hash }`, or `(matchedRoute) => target` |
+| `error_redirect` | fallback when the component fails to load |
+| `meta` | arbitrary metadata, exposed on `$router.current.meta` |
+| `children` | nested routes; child paths relative to parent; children inherit parent layout/meta |
+| `cacheKey` | `false` (no cache) · string (shared instance) · `(matchedRoute) => key` · default: path-based |
 
-Behavior notes:
-
-- `beforeEnter` / `afterEnter` belong in `routes.js`, not `env.js`.
-- `path: '*'` should be last, used for 404.
-- Layouts should expose a default `<vslot>` for the router page outlet.
+`beforeEnter` / `afterEnter` belong in `routes.js`, not `env.js`.
 
 ## `vrouter`
 
@@ -341,51 +336,95 @@ Behavior notes:
 <vrouter :routes="routes" :params="{ app_id: appId }"></vrouter>
 ```
 
-- Without `routes`, defaults to current scoped `routes.js`.
-- `routes` may be a module URL, or `:routes` may bind an array / route-module object directly.
-- Route-module objects may provide `path_prefix` and `component_prefix`; `path_prefix` defaults to the vrouter runtime `$mod.scoped`, while `component_prefix` defaults to empty.
-- `:params` injects fixed values into `$router.params`, guard `to.params`, and route `component(path, params)` functions; matched path params override fixed params with the same key.
-- Multiple `<vrouter>` instances on the same page are allowed.
-- `history` defaults to browser routing (`window.location` + `window.history`).
-- `history="memory"` creates an isolated virtual history, using `initial` as its first path.
-- Any other `history` value resolves a named history registered with `registerRouterHistory(name, history)`.
-- Router `prefix` / `:prefix` writes `$router.router_prefix` and only overrides `$router` / `<a>` navigation prefix.
-- Navigation prefix priority is `$router.router_prefix > initiating component $mod.router_prefix > initiating component $mod.scoped`.
-- Route registration prefixes are controlled by the route-module `path_prefix` and `component_prefix`, not by Router `prefix`.
-- Static resource preprocessing and dynamic URL bindings use the same `$mod.scoped` prefix rules; `@`, `http://`, `https://`, and `//` bypass scoped prefixing.
-- RouterView normalizes route records with `path_prefix`; `$router.push()` / `replace()` and `<a href>` use navigation prefix priority before matching, active marking, and history writes.
-- `@/path` skips router path normalization and resolves directly to `/path`; `http://` and `https://` links stay unchanged and are not intercepted by RouterView.
-- Router debugging is enabled by browser-side `localStorage.debug`.
-- Virtual routers inject bare `location` and `history` into `$sys`; outside a virtual router those names fall through to `window.location` and `window.history`.
-- Virtual histories do not update global `document.title`.
-- Anchor clicks are intercepted only when the `<a>` is compiled under a RouterView runtime, with automatic `active` attribute when the path matches.
+- Without `routes`, loads the current scoped `routes.js`. `routes` may be a module URL, or `:routes` may bind an array / route-module object directly.
+- `:params` injects fixed values into `$router.params`, guard `to.params`, and `component(path, params)` functions; matched path params override same-key fixed params.
+- `history`: default = browser routing (`window.location` + `window.history`); `"memory"` = isolated virtual history starting at `initial`; any other value resolves a named history registered via `registerRouterHistory(name, history)`.
+- Multiple `<vrouter>` instances per page are allowed.
+- Navigation prefix priority: `$router.router_prefix` > initiating component `$mod.router_prefix` > initiating component `$mod.scoped`.
+- Route registration prefixes come from route-module `path_prefix` / `component_prefix`, not from `prefix`.
+- `@/path` bypasses router normalization and resolves to `/path`; `http(s)://` links are not intercepted.
+- `<a>` is intercepted only when compiled under a RouterView runtime, with automatic `active` attribute on path match.
+- Virtual routers inject bare `location` / `history` into `$sys`; outside a virtual router those names fall through to `window`. Virtual histories do not update `document.title`.
+- Debug logging: `localStorage.debug`.
 
-## Built-in Runtime APIs
+## `$bus`
+
+Module-level EventBus with wildcards:
+
+```js
+const off = $mod.$bus.on('user.updated', fn)   // returns unsubscribe function
+$mod.$bus.on('user.*', fn)                     // * = exactly one token
+$mod.$bus.on('order.>', fn)                    // > = zero or more trailing tokens (must be last)
+$mod.$bus.emit('user.updated', payload)
+$mod.$bus.emit('@.global.event', data)         // @. prefix: broadcast to other modules only, not local
+$mod.$bus.once('ready', fn)
+$mod.$bus.emitLocal('evt', data)               // local only, never broadcasts
+$mod.$bus.off('evt', fn)
+```
+
+## `$message`
 
 ```js
 $message.info('Notice')
 $message.success('Done')
+$message.warning('Careful')
 $message.error('Failed')
 $message.confirm('Delete?').then(() => { ... })
 $message.prompt('Name', 'default').then(value => { ... })
 ```
 
-## Full Example
+Toast options: `{ duration = 3000, showClose, onClose }` (`duration: 0` = no auto-close). Dialog options: `{ title, confirmText, cancelText }`.
+
+## i18n
+
+`$i18n` and `$t` live on `$mod` — translations are module-scoped by default.
+
+```html
+<title>{{ $t('page.title') }}</title>
+<button>{{ $t('common.save') }}</button>
+```
+
+`langs.json`:
+
+```json
+{ "zh-CN": { "common.save": "保存" }, "en-US": { "common.save": "Save" } }
+```
+
+| API | description |
+| --- | --- |
+| `$t(key, { count, ...vars })` | translate; `{{var}}` interpolation, `.zero` / `.one` / `.other` plural forms |
+| `$i18n.setLocale(lang)` / `getLocale()` | current locale, shared across modules in the page |
+| `$i18n.load(messages, merge = true)` | load translations; `merge: false` replaces |
+| `$i18n.d(date, opts?)` | `Intl.DateTimeFormat` |
+| `$i18n.n(num, opts?)` | `Intl.NumberFormat` |
+| `$i18n.c(num, currency, opts?)` | currency formatting |
+| `$i18n.rtf(value, unit, opts?)` | relative time ("3 days ago") |
+| `$i18n.has(key, locale?)` / `getLocales()` | key existence / loaded locale list |
+
+Key scanning via CLI:
+
+```bash
+v-i18n scan                    # scan, clean up, report missing keys
+v-i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
+```
+
+## Debug
+
+`localStorage.debug = 1` enables verbose logs (router navigation, module loading). Warnings and errors always print regardless.
+
+## Example
 
 ```html
 <!DOCTYPE html>
 <html>
   <head><title>Home</title></head>
-  <style>
-    body { padding: 20px; }
-    .card { border: 1px solid #ddd; padding: 16px; margin: 8px 0; }
-  </style>
+  <style>.card { border: 1px solid #ddd; padding: 16px; margin: 8px 0; }</style>
   <body>
     <h1>{{ $t('page.title') }}</h1>
     <input v:value="keyword" placeholder="Search" />
     <div v-if="loading">Loading...</div>
     <div v-else>
-      <div :key='item.id' v-for="item in filteredList" class="card">
+      <div :key='item.id' v-for="item in list" class="card">
         <h3>{{ item.name }}</h3>
         <button @click="remove(item.id)">Delete</button>
       </div>
@@ -396,9 +435,8 @@ $message.prompt('Name', 'default').then(value => { ... })
     list = []
     loading = true
 
-    const fetchList = async () => {
-      loading = true
-      const res = await fetch('/api/list')
+    const load = async () => {
+      const res = await fetch('/api/list')   // auto-prefixed with scoped
       list = await res.json()
       loading = false
     }
@@ -408,19 +446,7 @@ $message.prompt('Name', 'default').then(value => { ... })
       $message.success('Deleted')
     }
 
-    fetchList()
+    load()
   </script>
 </html>
 ```
-
-## Writing Rules
-
-- Prefer small, focused HTML components.
-- Explicitly initialize all template variables in `<script setup>`.
-- Use `$data` for local state, `$mod` for module-wide services, `$sys` for system capabilities.
-- Put route config and guards in `routes.js`, not `env.js`.
-- Avoid Vue/React terminology and patterns.
-
-## Quick Checklist
-
-Before writing code: local state → `$data`; module-wide service/config → `$mod`; system/runtime → `$sys`; route behavior → `routes.js`; router-local navigation → `$router`.
