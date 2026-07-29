@@ -173,14 +173,18 @@ export class ModuleContextManager {
     })
   }
 
-  addWrapper(wrapper) {
+  async addWrapper(wrapper) {
     if (typeof wrapper !== 'function') {
       console.warn('addWrapper: wrapper must be a function')
       return
     }
     this.wrappers.push(wrapper)
-    for (const [scoped, mod] of this.modMap.entries()) {
-      wrapper(scoped, mod)
+    // 对所有已注册模块（含创建中）立即触发。entry.applied 先占位再执行，
+    // 与 createModule 各阶段的去重检查配合，保证每个 wrapper 恰好执行一次
+    for (const [scoped, entry] of this.modMap.entries()) {
+      if (entry.applied.has(wrapper)) continue
+      entry.applied.add(wrapper)
+      await wrapper(scoped, entry.mod)
     }
   }
 
@@ -193,11 +197,11 @@ export class ModuleContextManager {
 
   async getModule(scoped = '') {
     const normalizedScoped = normalizeScoped(scoped || '')
-    let mod = this.modMap.get(normalizedScoped)
-    if (!mod) {
-      mod = await this.createModule(normalizedScoped)
+    let entry = this.modMap.get(normalizedScoped)
+    if (!entry) {
+      entry = await this.createModule(normalizedScoped)
     }
-    return mod
+    return entry.mod
   }
 
   async createModule(scoped, patch = {}) {
@@ -206,13 +210,26 @@ export class ModuleContextManager {
     })
     mergeModulePatch(mod, patch)
     // 提前注册到 modMap，防止子模块 env.js 通过 loadModule
-    // 反向引用当前模块时陷入重复创建
-    this.modMap.set(scoped, mod)
-    await this.loadEnvConfig(mod)
-    for (const wrapper of this.wrappers) {
-      wrapper(scoped, mod)
+    // 反向引用当前模块时陷入重复创建。
+    // applied 记录已执行的 wrapper：addWrapper 对创建中模块会立即触发，
+    // 此处各阶段执行前统一检查占位，保证每个 wrapper 恰好执行一次。
+    const entry = { mod, applied: new Set() }
+    this.modMap.set(scoped, entry)
+    // wrapper 先于 env.js 执行：wrapper 是模块的前置加工（注入配置/服务），
+    // env.js 的初始化逻辑可以依赖 wrapper 注入的内容
+    for (const wrapper of [...this.wrappers]) {
+      if (entry.applied.has(wrapper)) continue
+      entry.applied.add(wrapper)
+      await wrapper(scoped, mod)
     }
-    return mod
+    await this.loadEnvConfig(mod)
+    // env 期间新注册的 wrapper 可能已被 addWrapper 立即触发，此处仅兜底
+    for (const wrapper of this.wrappers) {
+      if (entry.applied.has(wrapper)) continue
+      entry.applied.add(wrapper)
+      await wrapper(scoped, mod)
+    }
+    return entry
   }
 
   /**
@@ -258,8 +275,8 @@ export class ModuleContextManager {
   }
 
   broadcastBusEvent(eventName, args, sourceBus) {
-    for (const mod of this.modMap.values()) {
-      const bus = mod?.$bus
+    for (const entry of this.modMap.values()) {
+      const bus = entry.mod?.$bus
       if (!bus || bus === sourceBus || typeof bus.emitLocal !== 'function') continue
       bus.emitLocal(eventName, ...args)
     }
