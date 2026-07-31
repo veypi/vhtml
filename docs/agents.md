@@ -319,7 +319,7 @@ Route record fields:
 | `error_redirect` | fallback when the component fails to load |
 | `meta` | arbitrary metadata, exposed on `$router.current.meta` |
 | `children` | nested routes; child paths relative to parent; children inherit parent layout/meta |
-| `cacheKey` | `false` (no cache) · string (shared instance) · `(matchedRoute) => key` · default: path-based |
+| `cacheKey` | `false` (no cache) · string (shared instance) · `(matchedRoute) => key` · default: path-based, query/hash excluded (query changes update router state, page DOM kept) |
 
 `beforeEnter` / `afterEnter` belong in `routes.js`, not `env.js`.
 

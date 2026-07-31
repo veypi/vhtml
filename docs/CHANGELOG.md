@@ -5,6 +5,11 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### 变更
+- **RouterView 默认缓存 key**：默认 `cacheKey` 由 `fullPath`（含 query）改为纯 `path`，query 变化只更新路由状态（`updateRouter`）而不再重挂页面 DOM；`cacheKey: false` / string / function 语义不变。
+
 ## [0.9.0] - 2026-06-15
 
 ### 新增
