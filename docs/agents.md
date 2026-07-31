@@ -207,8 +207,8 @@ Static imports are supported; relative paths resolve against the component's own
 | ------ | ------------- |
 | `<script setup>` | once at instance creation, before DOM compilation |
 | `<script>` | once after DOM compilation, before first activation |
-| `<script active>` | each time the instance becomes active (cached page re-entry) |
-| `<script deactive>` | when the instance goes inactive but stays alive |
+| `<script active>` | on entering live-in-page state: mount, cached route re-entry, browser tab visible again. Handler receives `$reason`: `'mount' \| 'route' \| 'visibility'` |
+| `<script deactive>` | on leaving live-in-page state but staying alive: route cached, tab hidden; also fired before `dispose` when disposed while active (`$reason: 'dispose'`) |
 | `<script dispose>` | when the instance is destroyed (`v-if` removal, page unload) |
 
 Helpers available in all script types:
@@ -407,6 +407,24 @@ Key scanning via CLI:
 v-i18n scan                    # scan, clean up, report missing keys
 v-i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 ```
+
+## Reactivity Contract & Pitfalls
+
+vhtml reactivity = Proxy dep-tracking + rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's evaluation are **never notified** (feedback-loop guard). These produce one silent dead-zone you must avoid:
+
+| pattern | result |
+| ------- | ------ |
+| `:key` = **index** + replace list items with **new objects** | **DOM freezes silently** (data updates, DOM never does — no warning). v-for reuses the cached item and its in-place data update happens inside watcher evaluation, so all downstream notifications are suppressed. |
+| `:key` = stable identity (id) | cached items stay; mutate their fields via the proxy path to update |
+| unkeyed list | cache key = item `DataID`; wholesale replacement destroys & rebuilds items (works, costs more) |
+| mutate nested object through held **raw reference** (`msg.text = x` after `const msg = {...}`) | **bypasses the proxy set trap — no update** (same as Vue's toRaw hazard). Always write via the proxy path: `d.list[i].text = x` |
+| top-level scalar `$data` prop written from timers/rAF | always re-renders dependents — use for animations/streaming content |
+
+Rules:
+
+1. `:key` must be a stable identity key; never use array indexes when list items are replaced wholesale.
+2. For streaming/animation (typewriter, count-up): drive from top-level scalar `$data` props, not nested object fields; lists should be append-only immutable records.
+3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — do state mutations from event handlers, timers, or rAF callbacks.
 
 ## Debug
 

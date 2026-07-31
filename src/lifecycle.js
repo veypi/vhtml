@@ -4,9 +4,12 @@
 import { Watch, Cancel } from './reactive.js'
 import { AsyncRun, Run } from './sandbox.js'
 
-function createScriptContext(dom, inst) {
+function createScriptContext(dom, inst, reason) {
   return {
     $node: dom,
+    // 生命周期触发原因：'mount' | 'route' | 'visibility' | 'dispose'，
+    // 仅 active/deactive 脚本有意义，其余脚本为 undefined
+    $reason: reason,
     $watch: (target, callback, options) => {
       const scope = inst?.scope
       const id = Watch(target, callback, options)
@@ -18,14 +21,14 @@ function createScriptContext(dom, inst) {
   }
 }
 
-export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}) {
+export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}, reason) {
   const runtimeData = inst?.data || data || {}
   const activeRuntime = inst?.runtime || runtime || {}
   if (activeRuntime.$sys) {
     activeRuntime.$sys.$router = inst?.runtime?.$sys?.$router || null
   }
   const options = inst?.unsafe ? { unsafe: true } : sandboxOptions
-  return AsyncRun(code, runtimeData, activeRuntime, createScriptContext(dom, inst), options)
+  return AsyncRun(code, runtimeData, activeRuntime, createScriptContext(dom, inst, reason), options)
     .catch((error) => {
       if (inst) inst._scriptError = { code: code.trim().slice(0, 200), message: error?.message || String(error) }
       console.error('Lifecycle script error', {
@@ -43,7 +46,7 @@ export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}) {
 export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime, sandboxOptions = {}) {
   const code = scriptNode.innerHTML
   const scope = inst?.scope
-  const run = () => runScript(code, dom, inst, data, inst?.runtime || runtime, sandboxOptions)
+  const run = (host, reason) => runScript(code, dom, inst, data, inst?.runtime || runtime, sandboxOptions, reason)
   if (scriptNode.hasAttribute('active')) {
     scope?.onActive(run)
     return

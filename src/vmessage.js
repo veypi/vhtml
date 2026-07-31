@@ -5,7 +5,7 @@
  * Distributed under terms of the MIT license.
  */
 
-const MESSAGE_STYLE_ID = 'vhtml-message-style'
+const MESSAGE_STYLE_ID = "vhtml-message-style";
 
 const MESSAGE_STYLE = `
   .vmsg-container {
@@ -206,333 +206,335 @@ const MESSAGE_STYLE = `
     background: #66b1ff;
     border-color: #66b1ff;
   }
-`
+`;
 
 class MessageRuntime {
   constructor() {
-    this.container = null
-    this.messageTimers = new WeakMap()
+    this.container = null;
+    this.messageTimers = new WeakMap();
   }
 
   ensureReady() {
-    if (typeof document === 'undefined') {
-      return false
+    if (typeof document === "undefined") {
+      return false;
     }
     if (!document.head || !document.body) {
-      return false
+      return false;
     }
-    this.ensureStyle()
-    this.ensureContainer()
-    return true
+    this.ensureStyle();
+    this.ensureContainer();
+    return true;
   }
 
   ensureStyle() {
     if (document.getElementById(MESSAGE_STYLE_ID)) {
-      return
+      return;
     }
-    const style = document.createElement('style')
-    style.id = MESSAGE_STYLE_ID
-    style.textContent = MESSAGE_STYLE
-    document.head.appendChild(style)
+    const style = document.createElement("style");
+    style.id = MESSAGE_STYLE_ID;
+    style.textContent = MESSAGE_STYLE;
+    document.head.appendChild(style);
   }
 
   ensureContainer() {
     if (this.container?.isConnected) {
-      return this.container
+      return this.container;
     }
-    this.container = document.createElement('div')
-    this.container.className = 'vmsg-container'
-    document.body.appendChild(this.container)
-    return this.container
+    this.container = document.createElement("div");
+    this.container.className = "vmsg-container";
+    document.body.appendChild(this.container);
+    return this.container;
   }
 
   queue(task) {
     if (this.ensureReady()) {
-      return task()
+      return task();
     }
     const run = () => {
-      window.removeEventListener('DOMContentLoaded', run)
-      task()
-    }
-    window.addEventListener('DOMContentLoaded', run, { once: true })
-    return null
+      window.removeEventListener("DOMContentLoaded", run);
+      task();
+    };
+    window.addEventListener("DOMContentLoaded", run, { once: true });
+    return null;
   }
 
   schedule(callback, delay) {
-    return window.setTimeout(callback, delay)
+    return window.setTimeout(callback, delay);
   }
 
   trackTimers(node, ids) {
     if (!node || ids.length === 0) {
-      return
+      return;
     }
-    this.messageTimers.set(node, ids)
+    this.messageTimers.set(node, ids);
   }
 
   clearTimers(node) {
-    const timers = this.messageTimers.get(node)
+    const timers = this.messageTimers.get(node);
     if (!timers) {
-      return
+      return;
     }
-    timers.forEach((id) => window.clearTimeout(id))
-    this.messageTimers.delete(node)
+    timers.forEach((id) => window.clearTimeout(id));
+    this.messageTimers.delete(node);
   }
 }
 
 class Message {
   constructor(runtime = new MessageRuntime()) {
-    this.runtime = runtime
+    this.runtime = runtime;
   }
 
   createMessage(type, content, options = {}) {
     return this.runtime.queue(() => {
-      const {
-        duration = 3000,
-        showClose = true,
-        onClose = null,
-      } = options
-      const container = this.runtime.ensureContainer()
-      const messageItem = document.createElement('div')
-      messageItem.className = `vmsg-item vmsg-${type}`
+      const { duration = 3000, showClose = true, onClose = null } = options;
+      const container = this.runtime.ensureContainer();
+      const messageItem = document.createElement("div");
+      messageItem.className = `vmsg-item vmsg-${type}`;
 
       const icons = {
-        success: '✓',
-        warning: '⚠',
-        error: '✕',
-        info: 'ℹ',
-      }
+        success: "✓",
+        warning: "⚠",
+        error: "✕",
+        info: "ℹ",
+      };
 
-      const icon = document.createElement('span')
-      icon.className = 'vmsg-icon'
-      icon.textContent = icons[type] || icons.info
+      const icon = document.createElement("span");
+      icon.className = "vmsg-icon";
+      icon.textContent = icons[type] || icons.info;
 
-      const contentEl = document.createElement('div')
-      contentEl.className = 'vmsg-content'
-      contentEl.textContent = content
+      const contentEl = document.createElement("div");
+      contentEl.className = "vmsg-content";
+      contentEl.textContent = content;
 
-      messageItem.appendChild(icon)
-      messageItem.appendChild(contentEl)
+      messageItem.appendChild(icon);
+      messageItem.appendChild(contentEl);
 
-      let closed = false
+      let closed = false;
       const close = () => {
         if (closed) {
-          return
+          return;
         }
-        closed = true
-        this.removeMessage(messageItem)
-        if (typeof onClose === 'function') {
-          onClose()
+        closed = true;
+        this.removeMessage(messageItem);
+        if (typeof onClose === "function") {
+          onClose();
         }
-      }
+      };
 
       if (showClose) {
-        const closeBtn = document.createElement('span')
-        closeBtn.className = 'vmsg-close'
-        closeBtn.innerHTML = '&times;'
-        closeBtn.addEventListener('click', close)
-        messageItem.appendChild(closeBtn)
+        const closeBtn = document.createElement("span");
+        closeBtn.className = "vmsg-close";
+        closeBtn.innerHTML = "&times;";
+        closeBtn.addEventListener("click", close);
+        messageItem.appendChild(closeBtn);
       }
 
-      container.appendChild(messageItem)
+      container.appendChild(messageItem);
 
       const showTimer = this.runtime.schedule(() => {
-        messageItem.classList.add('show')
-      }, 10)
-      const timers = [showTimer]
+        messageItem.classList.add("show");
+      }, 10);
+      const timers = [showTimer];
       if (duration > 0) {
-        timers.push(this.runtime.schedule(close, duration))
+        timers.push(this.runtime.schedule(close, duration));
       }
-      this.runtime.trackTimers(messageItem, timers)
-      return messageItem
-    })
+      this.runtime.trackTimers(messageItem, timers);
+      return messageItem;
+    });
   }
 
   removeMessage(messageItem) {
     if (!messageItem || !messageItem.parentNode) {
-      return
+      return;
     }
-    this.runtime.clearTimers(messageItem)
-    messageItem.classList.remove('show')
+    this.runtime.clearTimers(messageItem);
+    messageItem.classList.remove("show");
     const removeTimer = this.runtime.schedule(() => {
       if (messageItem.parentNode) {
-        messageItem.parentNode.removeChild(messageItem)
+        messageItem.parentNode.removeChild(messageItem);
       }
-    }, 300)
-    this.runtime.trackTimers(messageItem, [removeTimer])
+    }, 300);
+    this.runtime.trackTimers(messageItem, [removeTimer]);
+  }
+  copy(text) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(() => {
+      this.success("coped.");
+    });
   }
 
   success(content, options = {}) {
-    return this.createMessage('success', content, options)
+    return this.createMessage("success", content, options);
   }
 
   warning(content, options = {}) {
-    return this.createMessage('warning', content, options)
+    return this.createMessage("warning", content, options);
   }
 
   error(content, options = {}) {
-    return this.createMessage('error', content, options)
+    return this.createMessage("error", content, options);
   }
 
   info(content, options = {}) {
-    return this.createMessage('info', content, options)
+    return this.createMessage("info", content, options);
   }
 
   _prompt(content, options = {}) {
     return new Promise((resolve, reject) => {
       this.runtime.queue(() => {
         const {
-          title = '提示',
-          type = 'confirm',
-          inputValue = '',
-          confirmText = '确定',
-          cancelText = '取消',
+          title = "提示",
+          type = "confirm",
+          inputValue = "",
+          confirmText = "确定",
+          cancelText = "取消",
           onConfirm = null,
           onCancel = null,
-        } = options
+        } = options;
 
-        const overlay = document.createElement('div')
-        overlay.className = 'vmsg-overlay'
+        const overlay = document.createElement("div");
+        overlay.className = "vmsg-overlay";
 
-        const dialog = document.createElement('div')
-        dialog.className = 'vmsg-dialog'
+        const dialog = document.createElement("div");
+        dialog.className = "vmsg-dialog";
 
-        const header = document.createElement('div')
-        header.className = 'vmsg-header'
+        const header = document.createElement("div");
+        header.className = "vmsg-header";
 
-        const titleEl = document.createElement('h3')
-        titleEl.className = 'vmsg-title'
-        titleEl.textContent = title
+        const titleEl = document.createElement("h3");
+        titleEl.className = "vmsg-title";
+        titleEl.textContent = title;
 
-        const closeBtn = document.createElement('button')
-        closeBtn.className = 'vmsg-close-btn'
-        closeBtn.innerHTML = '&times;'
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "vmsg-close-btn";
+        closeBtn.innerHTML = "&times;";
 
-        header.appendChild(titleEl)
-        header.appendChild(closeBtn)
+        header.appendChild(titleEl);
+        header.appendChild(closeBtn);
 
-        const body = document.createElement('div')
-        body.className = 'vmsg-body'
+        const body = document.createElement("div");
+        body.className = "vmsg-body";
 
-        const contentEl = document.createElement('div')
-        contentEl.className = 'vmsg-prompt-content'
-        contentEl.textContent = content
-        body.appendChild(contentEl)
+        const contentEl = document.createElement("div");
+        contentEl.className = "vmsg-prompt-content";
+        contentEl.textContent = content;
+        body.appendChild(contentEl);
 
-        let inputEl = null
-        if (type === 'input') {
-          inputEl = document.createElement('input')
-          inputEl.className = 'vmsg-input'
-          inputEl.type = 'text'
-          inputEl.value = inputValue
-          body.appendChild(inputEl)
+        let inputEl = null;
+        if (type === "input") {
+          inputEl = document.createElement("input");
+          inputEl.className = "vmsg-input";
+          inputEl.type = "text";
+          inputEl.value = inputValue;
+          body.appendChild(inputEl);
         }
 
-        const footer = document.createElement('div')
-        footer.className = 'vmsg-footer'
+        const footer = document.createElement("div");
+        footer.className = "vmsg-footer";
 
-        const cancelBtn = document.createElement('button')
-        cancelBtn.className = 'vmsg-btn vmsg-btn-cancel'
-        cancelBtn.textContent = cancelText
+        const cancelBtn = document.createElement("button");
+        cancelBtn.className = "vmsg-btn vmsg-btn-cancel";
+        cancelBtn.textContent = cancelText;
 
-        const confirmBtn = document.createElement('button')
-        confirmBtn.className = 'vmsg-btn vmsg-btn-confirm'
-        confirmBtn.textContent = confirmText
+        const confirmBtn = document.createElement("button");
+        confirmBtn.className = "vmsg-btn vmsg-btn-confirm";
+        confirmBtn.textContent = confirmText;
 
-        footer.appendChild(cancelBtn)
-        footer.appendChild(confirmBtn)
+        footer.appendChild(cancelBtn);
+        footer.appendChild(confirmBtn);
 
-        dialog.appendChild(header)
-        dialog.appendChild(body)
-        dialog.appendChild(footer)
-        overlay.appendChild(dialog)
-        document.body.appendChild(overlay)
+        dialog.appendChild(header);
+        dialog.appendChild(body);
+        dialog.appendChild(footer);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
 
-        const cleanup = []
-        let settled = false
+        const cleanup = [];
+        let settled = false;
 
         const finalize = (callback) => {
           if (settled) {
-            return
+            return;
           }
-          settled = true
-          overlay.classList.remove('show')
-          cleanup.splice(0).forEach((fn) => fn())
+          settled = true;
+          overlay.classList.remove("show");
+          cleanup.splice(0).forEach((fn) => fn());
           window.setTimeout(() => {
-            overlay.remove()
-            callback()
-          }, 300)
-        }
+            overlay.remove();
+            callback();
+          }, 300);
+        };
 
         const cancel = () => {
           finalize(() => {
-            if (typeof onCancel === 'function') {
-              onCancel()
+            if (typeof onCancel === "function") {
+              onCancel();
             }
-            reject(new Error('cancelled'))
-          })
-        }
+            reject(new Error("cancelled"));
+          });
+        };
 
         const confirm = () => {
-          const value = inputEl ? inputEl.value : true
+          const value = inputEl ? inputEl.value : true;
           finalize(() => {
-            resolve(value)
-            if (typeof onConfirm === 'function') {
-              onConfirm(value)
+            resolve(value);
+            if (typeof onConfirm === "function") {
+              onConfirm(value);
             }
-          })
-        }
+          });
+        };
 
         const escHandler = (event) => {
-          if (event.key === 'Escape') {
-            cancel()
+          if (event.key === "Escape") {
+            cancel();
           }
-        }
+        };
 
-        document.addEventListener('keydown', escHandler)
-        cleanup.push(() => document.removeEventListener('keydown', escHandler))
+        document.addEventListener("keydown", escHandler);
+        cleanup.push(() => document.removeEventListener("keydown", escHandler));
 
-        closeBtn.addEventListener('click', cancel)
-        cancelBtn.addEventListener('click', cancel)
-        confirmBtn.addEventListener('click', confirm)
-        overlay.addEventListener('click', (event) => {
+        closeBtn.addEventListener("click", cancel);
+        cancelBtn.addEventListener("click", cancel);
+        confirmBtn.addEventListener("click", confirm);
+        overlay.addEventListener("click", (event) => {
           if (event.target === overlay) {
-            cancel()
+            cancel();
           }
-        })
+        });
 
         const showTimer = this.runtime.schedule(() => {
-          overlay.classList.add('show')
-        }, 10)
-        cleanup.push(() => window.clearTimeout(showTimer))
+          overlay.classList.add("show");
+        }, 10);
+        cleanup.push(() => window.clearTimeout(showTimer));
 
         if (inputEl) {
           const focusTimer = this.runtime.schedule(() => {
-            inputEl.focus()
-            inputEl.select()
-          }, 300)
-          cleanup.push(() => window.clearTimeout(focusTimer))
+            inputEl.focus();
+            inputEl.select();
+          }, 300);
+          cleanup.push(() => window.clearTimeout(focusTimer));
         }
-      })
-    })
+      });
+    });
   }
 
   confirm(content, options = {}) {
     return this._prompt(content, {
       ...options,
-      type: 'confirm',
-    })
+      type: "confirm",
+    });
   }
 
   prompt(message, content, options = {}) {
     return this._prompt(message, {
       ...options,
-      type: 'input',
+      type: "input",
       inputValue: content,
-    })
+    });
   }
 }
 
-const message = new Message()
+const message = new Message();
 
-export default message
-export { Message, MessageRuntime }
+export default message;
+export { Message, MessageRuntime };

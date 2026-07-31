@@ -646,7 +646,7 @@ export async function normalizeRoutesModule(moduleExports, context = {}) {
 
 // ---- 生命周期辅助 ----
 
-function runRuntimeTreeLifecycle(root, method) {
+function runRuntimeTreeLifecycle(root, method, reason) {
   if (!root || typeof method !== 'string') return
   const rootInstance = instanceOf(root)
   if (rootInstance) {
@@ -655,13 +655,13 @@ function runRuntimeTreeLifecycle(root, method) {
       if (!instance || visited.has(instance)) return
       visited.add(instance)
       const host = instance.host
-      if (host) instance.scope?.[method]?.(host)
+      if (host) instance.scope?.[method]?.(host, reason)
       instance.children.forEach(child => runInstance(child))
     }
     runInstance(rootInstance)
     return
   }
-  instanceOf(root)?.scope?.[method]?.(root)
+  instanceOf(root)?.scope?.[method]?.(root, reason)
 }
 
 // ---- Page ----
@@ -899,7 +899,7 @@ class Page {
     else this.clearTitleWatchers()
     if (!this.attach()) return false
     if (!this._meta.didInitialActivation) { this._meta.didInitialActivation = true; return true }
-    this.roots().forEach(root => runRuntimeTreeLifecycle(root, 'activate'))
+    this.roots().forEach(root => runRuntimeTreeLifecycle(root, 'activate', 'route'))
     return true
   }
 
@@ -908,7 +908,7 @@ class Page {
     if (!this._meta.didInitialActivation) return
     const skipLayout = opts?.skipLayout ?? false
     if (skipLayout && this.layoutDom && this.dom) {
-      runRuntimeTreeLifecycle(this.dom, 'deactive')
+      runRuntimeTreeLifecycle(this.dom, 'deactive', 'route')
       // 只断开与父实例的连接（保留子树），不能用 detachInstance 因为
       // detachInstance 会清空 children 破坏子树，导致 reactivate 时遍历失败
       const inst = instanceOf(this.dom, false)
@@ -916,7 +916,7 @@ class Page {
       return
     }
     this.roots().forEach(root => {
-      runRuntimeTreeLifecycle(root, 'deactive')
+      runRuntimeTreeLifecycle(root, 'deactive', 'route')
       // 同上：软断开，保留子树
       const inst = instanceOf(root, false)
       if (inst?.parent) { inst.parent.children.delete(inst); inst.parent = null }

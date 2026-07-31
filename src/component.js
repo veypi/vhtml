@@ -121,7 +121,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   ctx.resumeMO?.()
 
   mountRef(dom, originData, componentRuntime, target, ctx)
-  instance.scope?.activate(dom)
+  instance.scope?.activate(dom, 'mount')
 }
 
 export async function setupRef(dom, data, parentRuntime, target, instance, singleMode = false, ctx) {
