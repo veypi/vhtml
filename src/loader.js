@@ -7,6 +7,11 @@
  */
 
 import vcss from './vcss.js'
+import { withTimeout } from './utils.js'
+
+// 网络操作超时（ms）：服务端 accept 后不响应时兜底，避免组件永久卡在 vparsing
+const FETCH_TIMEOUT = 10000
+const SCRIPT_TIMEOUT = 15000
 import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch } from './module.js'
 import { prepareStaticUrlAttrs } from './compiler-attrs.js'
 
@@ -62,8 +67,13 @@ class ResourceLoader {
     if (key) script.setAttribute('key', key)
     script.type = dom.getAttribute('type') || 'text/javascript'
     await new Promise((resolve) => {
-      script.onload = () => resolve(script)
+      const timer = setTimeout(() => {
+        console.error(`[vhtml] Script load timeout: ${src}`)
+        resolve()
+      }, SCRIPT_TIMEOUT)
+      script.onload = () => { clearTimeout(timer); resolve(script) }
       script.onerror = () => {
+        clearTimeout(timer)
         console.error(`[vhtml] Failed to load external script: ${src}`)
         resolve()
       }
@@ -219,7 +229,7 @@ class TemplateLoader {
   }
 
   async fetchFile(url) {
-    const response = await fetch(url, { headers: { 'X-No-Fallback': '1' } })
+    const response = await withTimeout(fetch(url, { headers: { 'X-No-Fallback': '1' } }), FETCH_TIMEOUT, `fetch ${url}`)
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     return response.text()
   }
@@ -241,14 +251,14 @@ class TemplateLoader {
 
   async doFetchUI(fetchUrl, unsafe = false) {
     try {
-      const response = await fetch(fetchUrl, { headers: { 'X-No-Fallback': 1 } })
+      const response = await withTimeout(fetch(fetchUrl, { headers: { 'X-No-Fallback': 1 } }), FETCH_TIMEOUT, `fetch ${fetchUrl}`)
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const scopedHeaders = this.readScopedHeaders(response)
       const responseScoped = normalizeScoped(scopedHeaders.scoped || '')
       delete scopedHeaders.scoped
       const descriptorModule = await this.moduleManager.getModule(responseScoped)
       mergeModulePatch(descriptorModule, scopedHeaders)
-      const text = await response.text()
+      const text = await withTimeout(response.text(), FETCH_TIMEOUT, `read ${fetchUrl}`)
       const descriptorUrl = fetchUrl.endsWith('.html') ? fetchUrl.slice(0, -5) : fetchUrl
       const descriptor = await this.parser.parse(text, descriptorModule, descriptorUrl, unsafe)
       this.cache.templates.set(fetchUrl, descriptor)

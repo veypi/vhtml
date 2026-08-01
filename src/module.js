@@ -7,6 +7,7 @@
  */
 
 import { Wrap, Watch, EnsureWrap } from './reactive.js'
+import { withTimeout } from './utils.js'
 import EventBus from './vbus.js'
 import I18n from './i18n.js'
 import vmessage from './vmessage.js'
@@ -318,7 +319,7 @@ export class ModuleContextManager {
     const envUrl = `${base}/env.js`
     this._loadingMod = mod
     try {
-      const envModule = await import(envUrl)
+      const envModule = await withTimeout(import(envUrl), 10000, `import ${envUrl}`)
       if (typeof envModule.default === 'function') {
         await envModule.default(mod, this)
       }

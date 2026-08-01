@@ -1396,6 +1396,26 @@ class RouterView {
     const oldLayout = currentPage?.matchedRoute?.route?.layout || ''
     const reuseLayout = !!(oldLayout && newLayout && oldLayout === newLayout)
 
+    // —— query/hash-only 快速路径 ——
+    // cacheKey 相同、path 相同、layout 相同且页面已激活：仅 query/hash 变化，
+    // 页面与 layout 均已就绪，只需同步 URL 与路由状态（current 是响应式 Wrap，
+    // 组件经 $router.current.query 自动感知），跳过 deactive/activate/mount，
+    // 避免生命周期抖动（定时器/订阅被短暂停掉再恢复）及与首次导航的竞态。
+    const isQueryOnly = !!(
+      currentPage && cacheKey &&
+      currentPage.matchedRoute &&
+      currentPage.matchedRoute.path === matchedRoute.path &&
+      currentPage.matchedRoute.route?.layout === matchedRoute.route?.layout &&
+      currentPage.matchedRoute.fullPath !== matchedRoute.fullPath
+    )
+    if (isQueryOnly) {
+      this.#setRouterPath(matchedRoute, mode, options)
+      currentPage.updateRouter(matchedRoute)
+      this.activePage = currentPage
+      if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)
+      return
+    }
+
     if (reuseLayout && currentPage?.dom && currentPage?.layoutDom) {
       const outlet = currentPage.outlet()
       if (outlet && currentPage.dom.parentNode === outlet) {
@@ -1466,7 +1486,13 @@ class RouterView {
     // 导航锁：若已有更新的导航触发，放弃当前导航
     if (navId !== this.#pendingNavId) {
       if (cacheKey) this.#pageCache.delete(cacheKey)
-      page.destroy({ preserveLayout: reuseLayout })
+      // 若本 page 已被更新的导航复用（activePage 仍指向它），不能销毁：
+      // destroy 会 disposeRuntimeSubtree(layoutDom)，把正在解析中的子组件
+      // （如 layout-header 的 parseRef 还挂在 fetchUI 上）实例 purge 掉，
+      // 其 vparsing 标记永久残留导致组件被 display:none 隐藏且永不恢复。
+      if (this.activePage !== page) {
+        page.destroy({ preserveLayout: reuseLayout })
+      }
       return
     }
 
@@ -1547,7 +1573,7 @@ class RouterView {
 
   /**
    * 合并/替换当前路由的 query 并导航，path/params/hash 保持不变。
-   * patch 中值为 null/undefined 的 key 会被删除。
+   * patch 中值为 null/undefined 的 key 会被删除；值为 '' 的 key 会写入为空参数（?key=）。
    * options: { mode: 'replace'(默认)|'push', merge: true(默认)|false, silent: false(默认)|true }
    * silent=true 时只同步 URL 与 current（响应式），不重新挂载页面。
    */
@@ -1556,11 +1582,29 @@ class RouterView {
     const query = options.merge === false ? {} : { ...(this.current.query || {}) }
     Object.entries(patch || {}).forEach(([key, value]) => {
       if (value === null || value === undefined) delete query[key]
+      // 空字符串：写入 ?key=（置空）。等价检查中“缺失 === 空串”归一，读取侧语义一致；
+      // 若当前已是空串形态（?key=）则跳过导航，避免冗余。
       else query[key] = value
     })
     const target = { path: this.current.path, query, hash: this.current.hash }
     if (options.silent === true) return this.#syncLocation(target, mode, options)
-    return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+    // 目标 query 与当前等价（空值归一：缺失 === ''）时跳过导航。
+    // 否则 $watch 初始化等场景 setQuery 会触发冗余导航，与首次导航形成竞态：
+    // 旧导航 mount 完成后 navId 过期销毁 page，把正在解析中的 layout 子组件
+    // （vparsing 中）实例 purge 掉，组件永久隐藏。
+    const curQuery = this.current.query || {}
+    const patchKeys = new Set(Object.keys(patch || {}))
+    const keys = new Set([...Object.keys(curQuery), ...Object.keys(query)])
+    for (const k of keys) {
+      // 显式删除（null/undefined）但当前仍残留（含空串形态 ?key=）→ 必须导航清除。
+      // 缺失与 '' 归一相等会掩盖此差异，若不强制导航，?key= 会残留在 URL 上删不掉。
+      if (patchKeys.has(k) && query[k] === undefined && curQuery[k] !== undefined) {
+        return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+      }
+      if ((curQuery[k] ?? '') !== (query[k] ?? '')) {
+        return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+      }
+    }
   }
 
   /**

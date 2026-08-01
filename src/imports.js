@@ -1,4 +1,5 @@
 import { getModulePath } from './module.js'
+import { withTimeout } from './utils.js'
 
 function resolvePath(relativePath, currentPath) {
   if (relativePath.startsWith('/')) {
@@ -113,7 +114,7 @@ export async function parseImports(code, data = {}, runtime = {}, src = '', unsa
     try {
       const moduleUrl = toAbsoluteModuleUrl(modulePath, scoped, normalizedSrc)
       const binding = parseImportBindings(match[1], match[0])
-      const module = await import(moduleUrl)
+      const module = await withTimeout(import(moduleUrl), 10000, `import ${moduleUrl}`)
       await injectImportedModule(binding, module, data)
     } catch (error) {
       console.error(`模块加载失败 (${match[0]}):`, error.message)

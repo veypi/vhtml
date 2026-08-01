@@ -318,4 +318,21 @@ function SetAttr(dom, key, value) {
 }
 
 
-export default { CamelToKebabCase, EventsList, BindInputDomValue, SetAttr, AddClicker }
+/**
+ * 给 Promise 加超时：超时后 reject（调用方自行 catch 兜底）。
+ * 用于 fetch / 动态 import / script 加载等网络操作，
+ * 避免服务端挂起（accept 后不响应）导致组件永久卡在 vparsing。
+ */
+export function withTimeout(promise, ms, label = 'operation') {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label} timeout after ${ms}ms`))
+    }, ms)
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v) },
+      (e) => { clearTimeout(timer); reject(e) }
+    )
+  })
+}
+
+export default { CamelToKebabCase, EventsList, BindInputDomValue, SetAttr, AddClicker, withTimeout }

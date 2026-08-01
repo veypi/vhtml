@@ -73,7 +73,14 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   instance.unsafe = isUnsafe
   instance.scope = new ComponentScope(dom)
   dom.setAttribute('vparsing', '')
+  // 兜底清理：仅当元素上没有新实例接管（自己被替换/销毁）时才移除 vparsing，
+  // 避免误删新实例的解析标记；异常或竞态提前退出时组件不会永久隐藏。
+  const clearParsing = () => {
+    const cur = instanceOf(dom, false)
+    if (cur === instance || cur === null) dom.removeAttribute('vparsing')
+  }
 
+  try {
   const parentRuntime = runtime
   const refOf = dom.getAttribute('vrefof')
   const parentRef = dom.closest(`*[vref='${refOf}']`)
@@ -82,7 +89,10 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   if (!target && vsrc) {
     if (!vsrc.endsWith('.html')) vsrc = `${vsrc}.html`
     target = await templateLoader.fetchUI(vsrc, runtime, isUnsafe)
-    if (instanceOf(dom, false) !== instance) return
+    if (instanceOf(dom, false) !== instance) {
+      // 竞态：实例已被替换/销毁（如路由竞态 dispose），提前退出，finally 兜底清理
+      return
+    }
   }
 
   const mod = target?.mod || runtime?.$mod || null
@@ -104,7 +114,9 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   instance.vsrc = vsrc
 
   const originData = await setupRef(dom, data, parentRuntime, target, instance, singleMode, ctx)
-  if (instanceOf(dom, false) !== instance) return
+  if (instanceOf(dom, false) !== instance) {
+    return
+  }
   ctx.suspendMO?.()
 
   if (singleMode) {
@@ -122,6 +134,14 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
 
   mountRef(dom, originData, componentRuntime, target, ctx)
   instance.scope?.activate(dom, 'mount')
+  } catch (error) {
+    // 解析/编译异常：报错并确保 MO 恢复，避免 MutationObserver 永久挂起
+    console.error(`[vhtml] parseRef failed: ${vsrc || target?.url || ''}`, error)
+    ctx.resumeMO?.()
+    clearParsing()
+  } finally {
+    clearParsing()
+  }
 }
 
 export async function setupRef(dom, data, parentRuntime, target, instance, singleMode = false, ctx) {
