@@ -777,6 +777,17 @@ class Page {
       if (layoutInst && contentInst) attachChildInstance(layoutInst, contentInst)
       return true
     }
+    // 不变式：路由声明了 layout 的页面不允许无 layout 激活（缓存页被
+    // detachLayout 后从不同 layout 返回时会裸挂内容、外壳丢失且无报错）
+    if (this.matchedRoute?.route?.layout) {
+      this.ownerView?.debug?.('page route requires layout but layoutDom missing, remount required', {
+        htmlPath: this.htmlPath,
+        routePath: this.matchedRoute?.path,
+        fullPath: this.matchedRoute?.fullPath,
+        layout: this.matchedRoute?.route?.layout,
+      })
+      return false
+    }
     if (this.dom && (this.dom === this.node || this.dom.contains(this.node))) {
       this.ownerView?.debug?.('cached page DOM contains router host, remount required', {
         htmlPath: this.htmlPath,
@@ -944,7 +955,17 @@ class Page {
     if (contentDom && !(preserveLayout && layoutDom && (contentDom === layoutDom || contentDom.contains(layoutDom)))) {
       disposeRuntimeSubtree(contentDom)
     }
-    if (layoutDom && !preserveLayout) disposeRuntimeSubtree(layoutDom)
+    if (layoutDom && !preserveLayout) {
+      // 导航竞态下本页可能与活动页共享同一 layout（existingLayout），仍在使用
+      // 的外壳不能销毁，否则活动页的 layout 会被 purge 成死壳
+      const layoutInUse = this.ownerView?.activePage && this.ownerView.activePage !== this &&
+        this.ownerView.activePage.layoutDom === layoutDom
+      if (!layoutInUse) {
+        disposeRuntimeSubtree(layoutDom)
+        // 同步剔除 layout 缓存条目，防止后续 attachLayout 挂上死壳
+        this.ownerView?.dropLayoutCache?.(layoutDom)
+      }
+    }
     if (!preserveLayout) detachInstance(this.layoutInstance)
     detachInstance(this.instance)
     this.layoutInstance = null
@@ -1345,6 +1366,34 @@ class RouterView {
     return matchedRoute.path || matchedRoute.fullPath.split(/[?#]/)[0]
   }
 
+  // layout 缓存活性校验：disposeRuntimeSubtree 只销毁实例不移除 DOM，
+  // 死壳条目必须剔除，否则 attachLayout 会挂上已销毁的 layout 外壳
+  #isLayoutCacheAlive(entry) {
+    if (!entry?.dom) return false
+    const inst = instanceOf(entry.dom, false)
+    if (!inst) return false
+    if (inst.scope?.state === 'disposed') return false
+    return true
+  }
+
+  #getCachedLayout(layout) {
+    const url = normalizeLayoutUrl(layout)
+    if (!url) return null
+    const entry = this.#layoutCache.get(url)
+    if (!entry) return null
+    if (this.#isLayoutCacheAlive(entry)) return entry
+    this.#layoutCache.delete(url)
+    return null
+  }
+
+  // Page.destroy 实际 dispose layout 时调用，同步剔除缓存条目防投毒
+  dropLayoutCache(layoutDom) {
+    if (!layoutDom) return
+    for (const [url, entry] of this.#layoutCache) {
+      if (entry.dom === layoutDom) this.#layoutCache.delete(url)
+    }
+  }
+
   async #navigateTo(matchedRoute, mode = 'push', options = {}) {
     if (!matchedRoute) return
     const navId = ++this.#pendingNavId
@@ -1435,8 +1484,11 @@ class RouterView {
       const page = this.#pageCache.get(cacheKey)
       const isSharedPage = page.matchedRoute.fullPath !== matchedRoute.fullPath
       if (isSharedPage) page.updateRouter(matchedRoute)
-      if (reuseLayout && !page.layoutDom) {
-        const cachedLayout = this.#layoutCache.get(normalizeLayoutUrl(newLayout))
+      // 路由声明了 layout 而缓存页缺失（曾被同 layout 跳转 detachLayout）时，
+      // 无论本次是否复用 layout 都必须补挂——否则 attach() 会把内容裸挂到宿主
+      // 节点（无外壳、无报错）；缓存缺失/死壳时不挂，activate 失败转 remount
+      if (newLayout && !page.layoutDom) {
+        const cachedLayout = this.#getCachedLayout(newLayout)
         if (cachedLayout) page.attachLayout(cachedLayout.dom, cachedLayout.instance)
       }
       if (page.activate()) {
@@ -1464,7 +1516,7 @@ class RouterView {
     })
 
     const normalizedLayoutUrl = normalizeLayoutUrl(to.layout)
-    const existingLayout = normalizedLayoutUrl ? this.#layoutCache.get(normalizedLayoutUrl) : null
+    const existingLayout = this.#getCachedLayout(to.layout)
 
     let mountResult
     try {

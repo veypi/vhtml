@@ -128,21 +128,8 @@ function moveItemBefore(itemStart, itemEnd, refNode) {
   insertBefore(nodes, refNode)
 }
 
-function readVforKeySpec(dom) {
-  const dynamicKey = dom.getAttribute(':key')
-  const staticKey = dom.getAttribute('key')
-  if (dynamicKey !== null) dom.removeAttribute(':key')
-  if (staticKey !== null) dom.removeAttribute('key')
-  return { dynamicKey, staticKey }
-}
-
 function normalizeVforIndex(key) {
   return key === '0' ? 0 : (Number(key) || key)
-}
-
-function stringifyCacheKey(prefix, value) {
-  if (value === null || value === undefined) return ''
-  return `${prefix}:${String(value)}`
 }
 
 function dedupeCacheKey(cacheKey, seen) {
@@ -164,7 +151,6 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const indexName = matches[2]
   const listExpr = matches[4]
 
-  const keySpec = readVforKeySpec(dom)
   const sourceNodes = getSourceNodes(dom)
 
   const vforStart = document.createComment('~vfor')
@@ -200,30 +186,22 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
       return Wrap(local, data)
     }
 
-    const resolveCacheKey = (key, value, itemData) => {
-      let cacheKey = ''
-      if (keySpec.dynamicKey !== null) {
-        itemData = itemData || createItemData(key, value)
-        cacheKey = stringifyCacheKey('key', Run(keySpec.dynamicKey, itemData, runtime))
+    const resolveCacheKey = (key, value) => {
+      if (value && typeof value === 'object') {
+        const id = value[DataID]
+        if (id) {
+          const ck = `data:${id}`
+          if (!seen[ck]) return ck
+        }
       }
-      if (!cacheKey && keySpec.staticKey !== null) {
-        cacheKey = stringifyCacheKey('key', keySpec.staticKey)
-      }
-      if (!cacheKey) {
-        cacheKey = stringifyCacheKey('data', value?.[DataID])
-      }
-      return cacheKey || `unkeyed:${key}`
+      return `unkeyed:${key}`
     }
 
     Object.keys(items).forEach(key => {
       const value = items[key]
-      let itemData = null
-      if (keySpec.dynamicKey !== null) {
-        itemData = createItemData(key, value)
-      }
-      const ck = dedupeCacheKey(resolveCacheKey(key, value, itemData), seen)
+      const ck = dedupeCacheKey(resolveCacheKey(key, value), seen)
       keep.add(ck)
-      order.push({ key, value, ck, itemData })
+      order.push({ key, value, ck })
     })
 
     // 移除过期条目
@@ -238,7 +216,6 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     let refNode = vforEnd
     for (let i = order.length - 1; i >= 0; i--) {
       const { key, value, ck } = order[i]
-      let { itemData } = order[i]
       let entry = cache[ck]
       if (!entry) {
         const itemStart = document.createComment('~vitem')
@@ -246,7 +223,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
         insertBefore([itemStart, itemEnd], refNode)
 
         const clones = sourceNodes.map(n => n.cloneNode(true))
-        itemData = itemData || createItemData(key, value)
+        const itemData = createItemData(key, value)
 
         // 将 clone 插入 item 范围，再处理 v-if/v-else 链
         insertBefore(clones, itemEnd)
