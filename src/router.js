@@ -905,6 +905,37 @@ class Page {
     while (this._meta.titleWatchers.length > 0) Cancel(this._meta.titleWatchers.pop())
   }
 
+  // 一次性求值标题（不建 watcher，供缓存页列表等非激活场景读取）。
+  // 拆分规则与 updateTitle 一致；表达式求值失败兜底为空串。
+  evalTitle() {
+    const title = (this._meta.title || '').trim()
+    if (!title) return ''
+    if (!title.includes('{{')) return title
+    const titleRuntime = this.runtime() || {}
+    const varRegex = /{{|}}/g
+    let match, nextStart = 0, start = -1
+    const parts = []
+    while ((match = varRegex.exec(title)) !== null) {
+      if (match[0] === '{{') { start = match.index }
+      else if (start >= 0) {
+        if (nextStart !== start) parts.push(title.slice(nextStart, start))
+        const expr = title.slice(start + 2, match.index)
+        let value
+        try { value = Run(expr, {}, titleRuntime) } catch { value = '' }
+        if (typeof value === 'function') {
+          try { value = value() } catch { value = '' }
+        } else if (typeof value === 'object' && value) {
+          value = JSON.stringify(value)
+        }
+        parts.push(value ?? '')
+        nextStart = match.index + 2
+        start = -1
+      }
+    }
+    parts.push(title.slice(nextStart))
+    return parts.join('')
+  }
+
   activate() {
     if (this.ownerView?.affectsDocument) this.updateTitle()
     else this.clearTitleWatchers()
@@ -1392,6 +1423,68 @@ class RouterView {
     for (const [url, entry] of this.#layoutCache) {
       if (entry.dom === layoutDom) this.#layoutCache.delete(url)
     }
+  }
+
+  /**
+   * 缓存页列表（供标签页/页面管理 UI）。
+   * 每项: { key, title, path, fullPath, isActive, active(), del() }
+   * - key: cacheKey（默认 = path 不含 query/hash）
+   * - title: 一次性求值后的标题（{{}} 模板按页面 runtime 计算）
+   * - fullPath: 该缓存项最近一次激活的完整路径（含 query/hash）
+   * - active(): 切到该缓存页（等价 push(fullPath)，返回 promise）
+   * - del(): 删除该缓存页（等价 dropPage(key)，返回 boolean）
+   */
+  cachedPages() {
+    const list = []
+    for (const [key, page] of this.#pageCache) {
+      const fullPath = page.matchedRoute?.fullPath || ''
+      list.push({
+        key,
+        title: page.evalTitle(),
+        path: page.matchedRoute?.path || '',
+        fullPath,
+        isActive: page === this.#currentPage,
+        active: () => this.push(fullPath),
+        del: () => this.dropPage(key),
+      })
+    }
+    return list
+  }
+
+  /**
+   * 删除指定 cacheKey 的缓存页。
+   * - 首次挂载进行中的页拒绝删除（避免与在途 mount 置 active 竞态），返回 false
+   * - 当前活动页：销毁后以 replace 重挂当前路由（等价刷新当前页）
+   * - 共享同一 layout 外壳的其它缓存页先 detachLayout，防止持有将被销毁的
+   *   死壳；活动页共享外壳时跳过它并走 preserveLayout，保留其实例链接
+   */
+  dropPage(key) {
+    const page = this.#pageCache.get(key)
+    if (!page) return false
+    if (!page.meta.didInitialActivation) return false
+    const isActive = page === this.#currentPage
+    const layoutDom = page.layoutDom
+    if (layoutDom) {
+      for (const [, other] of this.#pageCache) {
+        if (other === page || other.layoutDom !== layoutDom) continue
+        if (!isActive && other === this.#currentPage) continue
+        other.detachLayout()
+      }
+    }
+    this.#pageCache.delete(key)
+    if (isActive) {
+      const matchedRoute = page.matchedRoute
+      page.deactive()
+      // 先置空：绕过 #navigateTo 的 already-active 短路，
+      // 同时让 destroy 的 layoutInUse 检查不命中（外壳一并销毁重建）
+      this.activePage = null
+      page.destroy()
+      if (matchedRoute) this.#navigateTo(matchedRoute, 'replace')
+      return true
+    }
+    const layoutInUse = !!(layoutDom && this.#currentPage?.layoutDom === layoutDom)
+    page.destroy({ preserveLayout: layoutInUse })
+    return true
   }
 
   async #navigateTo(matchedRoute, mode = 'push', options = {}) {
