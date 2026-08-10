@@ -3,585 +3,371 @@
  * Copyright (C) 2025 veypi <i@veypi.com>
  *
  * Distributed under terms of the GPL license.
- * simple css parser
+ *
+ * 组件样式作用域编译器（单遍 tokenizer，字符串/括号/方括号感知）
+ *
+ * 契约（test/vcss.test.js 锁定）：
+ *   - 普通选择器追加 [vrefof="{scope}"]（组件编译出的后代元素携带 vrefof）
+ *   - body / :root 映射为宿主节点选择器 [vref="{scope}"]，其后内容穿透不追加 vrefof
+ *   - @keyframes 名称与 animation/animation-name 引用统一追加 "-{scope 字母数字}" 后缀
  */
 
-
+// animation 简写中可能出现的非名称关键字
+const ANIM_KEYWORDS = new Set([
+  'ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'step-start', 'step-end',
+  'infinite', 'normal', 'reverse', 'alternate', 'alternate-reverse',
+  'none', 'forwards', 'backwards', 'both', 'running', 'paused',
+])
 
 class CSSParser {
   constructor() {
-    this.scopeAttribute = '';
+    this.scopeAttribute = ''
     this.scopeBody = ''
-    this.scopedKeyframes = new Map(); // 存储已处理的keyframe映射
+    this.scopeSuffix = ''
+    this.scopedKeyframes = new Map()
   }
 
   /**
-   * 解析CSS文本并添加作用域
-   * @param {string} cssText - CSS文本
-   * @param {string} scope - 作用域标识符
-   * @returns {string} - 处理后的CSS文本
+   * 解析 CSS 文本并添加作用域
+   * @param {string} cssText
+   * @param {string} scope 作用域标识（组件 URL）
+   * @returns {string}
    */
   parse(cssText, scope) {
-    this.scopeAttribute = `[vrefof="${scope}"]`;
+    this.scopeAttribute = `[vrefof="${scope}"]`
     this.scopeBody = `[vref="${scope}"]`
-    this.scopedKeyframes.clear();
-    this.scopeSuffix = scope.replace(/[^a-zA-Z0-9]/g, ''); // 清理作用域后缀
+    this.scopeSuffix = scope.replace(/[^a-zA-Z0-9]/g, '')
+    this.scopedKeyframes.clear()
 
-    // 移除注释
-    cssText = this.removeComments(cssText);
-
-    // 第一遍：收集所有keyframes名称
-    this.collectKeyframes(cssText);
-
-    // 第二遍：解析CSS规则并替换动画名称
-    return this.parseRules(cssText);
+    cssText = this.stripComments(cssText)
+    this.collectKeyframes(cssText)
+    return this.parseRules(cssText)
   }
 
-  /**
-   * 收集所有keyframes名称
-   * @param {string} cssText 
-   */
   collectKeyframes(cssText) {
-    const keyframeRegex = /@keyframes\s+([^\s{]+)/gi;
-    let match;
-
-    while ((match = keyframeRegex.exec(cssText)) !== null) {
-      const originalName = match[1];
-      const scopedName = originalName + '-' + this.scopeSuffix;
-      this.scopedKeyframes.set(originalName, scopedName);
+    const re = /@keyframes\s+([^\s{]+)/gi
+    let m
+    while ((m = re.exec(cssText)) !== null) {
+      this.scopedKeyframes.set(m[1], m[1] + '-' + this.scopeSuffix)
     }
   }
 
-  /**
-   * 移除CSS注释
-   * @param {string} cssText 
-   * @returns {string}
-   */
-  removeComments(cssText) {
-    return cssText.replace(/\/\*[\s\S]*?\*\//g, '');
-  }
-
-  /**
-   * 解析CSS规则
-   * @param {string} cssText 
-   * @returns {string}
-   */
-  parseRules(cssText) {
-    let result = '';
-    let i = 0;
-
-    while (i < cssText.length) {
-      // 跳过空白字符
-      while (i < cssText.length && /\s/.test(cssText[i])) {
-        result += cssText[i];
-        i++;
-      }
-
-      if (i >= cssText.length) break;
-
-      // 检查是否是@规则
-      if (cssText[i] === '@') {
-        const atRule = this.parseAtRule(cssText, i);
-        result += atRule.content;
-        i = atRule.endIndex;
+  /** 移除注释；字符串字面量内的注释序列保留 */
+  stripComments(cssText) {
+    let out = ''
+    let i = 0
+    const n = cssText.length
+    while (i < n) {
+      const c = cssText[i]
+      if (c === '"' || c === "'") {
+        const end = this.scanString(cssText, i)
+        out += cssText.slice(i, end)
+        i = end
+      } else if (c === '/' && cssText[i + 1] === '*') {
+        i += 2
+        while (i < n && !(cssText[i] === '*' && cssText[i + 1] === '/')) i++
+        i = Math.min(i + 2, n)
       } else {
-        // 普通CSS规则
-        const rule = this.parseNormalRule(cssText, i);
-        result += rule.content;
-        i = rule.endIndex;
+        out += c
+        i++
       }
     }
-
-    return result;
+    return out
   }
 
-  /**
-   * 解析@规则（如@media, @keyframes等）
-   * @param {string} cssText 
-   * @param {number} startIndex 
-   * @returns {object}
-   */
-  parseAtRule(cssText, startIndex) {
-    let i = startIndex;
-    let atRuleContent = '';
-
-    // 读取@规则名称和参数
-    while (i < cssText.length && cssText[i] !== '{') {
-      atRuleContent += cssText[i];
-      i++;
+  /** 返回从 start（引号）开始的字符串字面量的结束下标（右引号之后） */
+  scanString(s, start) {
+    const q = s[start]
+    let i = start + 1
+    while (i < s.length) {
+      if (s[i] === '\\') { i += 2; continue }
+      if (s[i] === q) return i + 1
+      i++
     }
-
-    if (i >= cssText.length) {
-      return { content: atRuleContent, endIndex: i };
-    }
-
-    // 检查是否是@keyframes或@media
-    const atRuleName = atRuleContent.toLowerCase().trim();
-
-    if (atRuleName.startsWith('@keyframes')) {
-      return this.parseKeyframes(cssText, startIndex);
-    } else if (atRuleName.startsWith('@media')) {
-      return this.parseMedia(cssText, startIndex);
-    } else if (atRuleName.startsWith('@supports')) {
-      return this.parseSupports(cssText, startIndex);
-    } else {
-      // 其他@规则，查找匹配的大括号
-      const braceContent = this.findMatchingBrace(cssText, i);
-      return {
-        content: atRuleContent + braceContent.content,
-        endIndex: braceContent.endIndex
-      };
-    }
+    return s.length
   }
 
-  /**
-   * 解析@keyframes规则
-   * @param {string} cssText 
-   * @param {number} startIndex 
-   * @returns {object}
-   */
-  parseKeyframes(cssText, startIndex) {
-    let i = startIndex;
-    let result = '';
-
-    // 读取@keyframes声明
-    while (i < cssText.length && cssText[i] !== '{') {
-      result += cssText[i];
-      i++;
-    }
-
-    if (i >= cssText.length) {
-      return { content: result, endIndex: i };
-    }
-
-    // 处理keyframes内容
-    const braceContent = this.findMatchingBrace(cssText, i);
-    const keyframesContent = braceContent.content;
-
-    // 为keyframes名称添加作用域
-    const keyframeName = this.extractKeyframeName(result);
-    const scopedKeyframeName = this.scopedKeyframes.get(keyframeName);
-    if (scopedKeyframeName) {
-      result = result.replace(keyframeName, scopedKeyframeName);
-    }
-
-    result += keyframesContent;
-
-    return {
-      content: result,
-      endIndex: braceContent.endIndex
-    };
-  }
-
-  /**
-   * 提取keyframe名称
-   * @param {string} keyframeDeclaration 
-   * @returns {string}
-   */
-  extractKeyframeName(keyframeDeclaration) {
-    const match = keyframeDeclaration.match(/@keyframes\s+([^\s{]+)/i);
-    return match ? match[1] : '';
-  }
-
-  /**
-   * 解析@media规则
-   * @param {string} cssText 
-   * @param {number} startIndex 
-   * @returns {object}
-   */
-  parseMedia(cssText, startIndex) {
-    let i = startIndex;
-    let result = '';
-
-    // 读取@media声明
-    while (i < cssText.length && cssText[i] !== '{') {
-      result += cssText[i];
-      i++;
-    }
-
-    if (i >= cssText.length) {
-      return { content: result, endIndex: i };
-    }
-
-    result += '{';
-    i++; // 跳过开始的 '{'
-
-    // 解析@media内部的CSS规则
-    let braceLevel = 1;
-    let innerCss = '';
-
-    while (i < cssText.length && braceLevel > 0) {
-      if (cssText[i] === '{') {
-        braceLevel++;
-      } else if (cssText[i] === '}') {
-        braceLevel--;
-        if (braceLevel === 0) {
-          break;
-        }
+  /** 解析规则序列（样式表顶层或 @media/@supports 内部） */
+  parseRules(cssText) {
+    let out = ''
+    let i = 0
+    const n = cssText.length
+    while (i < n) {
+      // prelude：扫描到顶层 '{' 或 ';'（字符串感知）
+      const start = i
+      let inStr = null
+      while (i < n) {
+        const c = cssText[i]
+        if (inStr) {
+          if (c === '\\') i++
+          else if (c === inStr) inStr = null
+        } else if (c === '"' || c === "'") inStr = c
+        else if (c === '{' || c === ';') break
+        i++
       }
-      innerCss += cssText[i];
-      i++;
+      const prelude = cssText.slice(start, i)
+      if (i >= n) {
+        out += prelude
+        break
+      }
+      if (cssText[i] === ';') {
+        // 无块 @规则（@import/@charset/@namespace 等）原样通过
+        out += prelude + ';'
+        i++
+        continue
+      }
+      const block = this.readBlock(cssText, i)
+      i = block.endIndex
+      const ws = prelude.match(/^\s*/)[0]
+      const name = prelude.trim()
+      if (!name) {
+        out += prelude + block.content
+      } else if (name[0] === '@') {
+        out += ws + this.processAtRule(name, block)
+      } else {
+        out += ws + this.scopeSelector(name) + this.processRuleContent(block.content)
+      }
     }
-
-    // 递归处理@media内部的CSS规则
-    const processedInnerCss = this.parseRules(innerCss);
-    result += processedInnerCss;
-
-    if (i < cssText.length && cssText[i] === '}') {
-      result += '}';
-      i++;
-    }
-
-    return {
-      content: result,
-      endIndex: i
-    };
+    return out
   }
 
-  /**
-   * 解析@supports规则
-   * @param {string} cssText 
-   * @param {number} startIndex 
-   * @returns {object}
-   */
-  parseSupports(cssText, startIndex) {
-    return this.parseMedia(cssText, startIndex);
+  /** 读取一对匹配大括号（含），字符串内的括号不计 */
+  readBlock(cssText, start) {
+    let i = start
+    let depth = 0
+    let inStr = null
+    const n = cssText.length
+    while (i < n) {
+      const c = cssText[i]
+      if (inStr) {
+        if (c === '\\') i++
+        else if (c === inStr) inStr = null
+      } else if (c === '"' || c === "'") inStr = c
+      else if (c === '{') depth++
+      else if (c === '}') {
+        depth--
+        if (depth === 0) { i++; break }
+      }
+      i++
+    }
+    return { content: cssText.slice(start, i), endIndex: i }
   }
 
-  /**
-   * 解析普通CSS规则
-   * @param {string} cssText 
-   * @param {number} startIndex 
-   * @returns {object}
-   */
-  parseNormalRule(cssText, startIndex) {
-    let i = startIndex;
-    let selector = '';
-
-    // 读取选择器
-    while (i < cssText.length && cssText[i] !== '{') {
-      selector += cssText[i];
-      i++;
+  processAtRule(prelude, block) {
+    const lower = prelude.toLowerCase()
+    if (lower.startsWith('@keyframes')) {
+      const m = prelude.match(/@keyframes\s+([^\s{]+)/i)
+      const scoped = m && this.scopedKeyframes.get(m[1])
+      if (scoped) {
+        // 锚定替换 @keyframes 声明中的名称 token；直接 replace(name) 会误伤
+        // "@keyframes" 关键字内的相同子串（如名称 'a'/'m'）
+        prelude = prelude.replace(/(@keyframes\s+)[^\s{]+/i, `$1${scoped}`)
+      }
+      return prelude + block.content
     }
-
-    if (i >= cssText.length) {
-      return { content: selector, endIndex: i };
+    if (lower.startsWith('@media') || lower.startsWith('@supports')) {
+      const inner = block.content.slice(1, -1)
+      return prelude + '{' + this.parseRules(inner) + '}'
     }
-
-    // 处理选择器添加作用域
-    const scopedSelector = this.addScopeToSelector(selector.trim());
-
-    // 读取CSS规则体并处理动画名称
-    const braceContent = this.findMatchingBrace(cssText, i);
-    const processedContent = this.processRuleContent(braceContent.content);
-
-    return {
-      content: scopedSelector + processedContent,
-      endIndex: braceContent.endIndex
-    };
+    // 其他 @规则（@font-face 等）原样通过
+    return prelude + block.content
   }
 
-  /**
-   * 处理CSS规则内容，替换动画名称
-   * @param {string} content 
-   * @returns {string}
-   */
+  /** 处理规则体内的 animation / animation-name 动画名引用 */
   processRuleContent(content) {
-    let processedContent = content;
-
-    // 处理 animation 属性
-    processedContent = processedContent.replace(
-      /animation\s*:\s*([^;]+);/gi,
-      (match, animationValue) => {
-        const processedValue = this.processAnimationValue(animationValue);
-        return `animation: ${processedValue};`;
-      }
-    );
-
-    // 处理 animation-name 属性
-    processedContent = processedContent.replace(
-      /animation-name\s*:\s*([^;]+);/gi,
-      (match, animationNames) => {
-        const processedNames = this.processAnimationNames(animationNames);
-        return `animation-name: ${processedNames};`;
-      }
-    );
-
-    return processedContent;
+    content = content.replace(
+      /(?<![-\w])animation-name\s*:\s*([^;}]+)(;|\})/gi,
+      (m, names, term) => `animation-name: ${this.processAnimationNames(names)}${term}`,
+    )
+    content = content.replace(
+      /(?<![-\w])animation\s*:\s*([^;}]+)(;|\})/gi,
+      (m, value, term) => `animation: ${this.processAnimationValue(value)}${term}`,
+    )
+    return content
   }
 
-  /**
-   * 处理animation属性值
-   * @param {string} animationValue 
-   * @returns {string}
-   */
-  /**
-   * 按括号外的逗号切分（避免 cubic-bezier(0.1, 0.7, 1.0, 0.1) 被错误切分）
-   */
-  splitOutsideParens(value) {
-    const parts = [];
-    let depth = 0;
-    let current = '';
-    for (const char of value) {
-      if (char === '(') depth++;
-      else if (char === ')') depth--;
-      else if (char === ',' && depth === 0) {
-        parts.push(current.trim());
-        current = '';
-        continue;
-      }
-      current += char;
-    }
-    if (current.trim()) parts.push(current.trim());
-    return parts;
+  processAnimationValue(value) {
+    let important = ''
+    value = value.replace(/!important\s*$/i, () => {
+      important = ' !important'
+      return ''
+    })
+    return this.splitTopLevel(value, ',')
+      .map(anim => this.renameSingleAnimation(anim.trim()))
+      .join(', ') + important
   }
 
-  processAnimationValue(animationValue) {
-    // animation 可能包含多个动画，用括号外的逗号分隔
-    const animations = this.splitOutsideParens(animationValue);
-
-    return animations.map(animation => {
-      const parts = animation.split(/\s+/);
-
-      // 第一个非时间、非数字、非关键字的值通常是动画名称
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-
-        // 跳过时间值 (如 0.3s, 200ms)
-        if (/^\d+(\.\d+)?(s|ms)$/.test(part)) continue;
-
-        // 跳过数字值 (如 iteration count)
-        if (/^\d+(\.\d+)?$/.test(part)) continue;
-
-        // 跳过CSS关键字
-        if (['ease', 'ease-in', 'ease-out', 'ease-in-out', 'linear', 'infinite',
-          'normal', 'reverse', 'alternate', 'alternate-reverse', 'forwards',
-          'backwards', 'both', 'running', 'paused'].includes(part)) continue;
-
-        // 跳过贝塞尔曲线
-        if (part.startsWith('cubic-bezier(')) continue;
-
-        // 这应该是动画名称
-        const scopedName = this.scopedKeyframes.get(part);
-        if (scopedName) {
-          parts[i] = scopedName;
-        }
-        break;
-      }
-
-      return parts.join(' ');
-    }).join(', ');
+  processAnimationNames(names) {
+    return this.splitTopLevel(names, ',')
+      .map(n => {
+        const t = n.trim()
+        return this.scopedKeyframes.get(t) || t
+      })
+      .join(', ')
   }
 
-  /**
-   * 处理animation-name属性值
-   * @param {string} animationNames 
-   * @returns {string}
-   */
-  processAnimationNames(animationNames) {
-    return animationNames.split(',').map(name => {
-      const trimmedName = name.trim();
-      const scopedName = this.scopedKeyframes.get(trimmedName);
-      return scopedName || trimmedName;
-    }).join(', ');
+  /** 在单个 animation 简写中定位动画名并重命名（跳过时间/次数/关键字/时间函数） */
+  renameSingleAnimation(anim) {
+    if (!anim) return anim
+    const tokens = this.tokenizeValue(anim)
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i]
+      if (/^-?(\d+\.?\d*|\.\d+)(m?s)$/i.test(t)) continue // 时间值 0.3s / 200ms
+      if (/^\d+(\.\d+)?$/.test(t)) continue // 迭代次数
+      if (/^(cubic-bezier|steps)\(/i.test(t)) continue // 时间函数
+      if (ANIM_KEYWORDS.has(t.toLowerCase())) continue // 关键字
+      // 首个剩余 token 即动画名
+      const scoped = this.scopedKeyframes.get(t)
+      if (scoped) tokens[i] = scoped
+      break
+    }
+    return tokens.join(' ')
   }
 
-  /**
-   * 为选择器添加作用域
-   * @param {string} selector 
-   * @returns {string}
-   */
-  addScopeToSelector(selector) {
-    if (!selector.trim()) return selector;
-
-    // 分割多个选择器（用逗号分隔）
-    const selectors = selector.split(',').map(sel => sel.trim());
-
-    const scopedSelectors = selectors.map(sel => {
-      return this.addScopeToSingleSelector(sel);
-    });
-
-    return scopedSelectors.join(', ');
+  /** 括号感知空白分词（cubic-bezier(0.1, 0.7, ...) 含空格保持单 token） */
+  tokenizeValue(value) {
+    const tokens = []
+    let depth = 0
+    let cur = ''
+    for (const c of value) {
+      if (c === '(') depth++
+      else if (c === ')') depth--
+      if (/\s/.test(c) && depth === 0) {
+        if (cur) { tokens.push(cur); cur = '' }
+      } else {
+        cur += c
+      }
+    }
+    if (cur) tokens.push(cur)
+    return tokens
   }
 
-  /**
-   * 为单个选择器添加作用域
-   * @param {string} selector 
-   * @returns {string}
-   */
-  addScopeToSingleSelector(selector) {
-    if (!selector.trim()) return selector;
-
-    // 处理伪元素选择器 - 在伪元素前添加作用域
-    if (selector.includes('::')) {
-      const parts = selector.split('::');
-      const mainPart = parts[0];
-      const pseudoElement = '::' + parts.slice(1).join('::');
-
-      // 为主要部分添加作用域
-      const scopedMain = this.addScopeToSelectorPart(mainPart);
-      return scopedMain + pseudoElement;
-    }
-
-    // 处理伪类选择器 - 在伪类前添加作用域
-    if (selector.includes(':') && !selector.includes('::')) {
-      const pseudoMatch = selector.match(/^([^:]+)(:.+)$/);
-      if (pseudoMatch) {
-        const mainPart = pseudoMatch[1];
-        const pseudoClass = pseudoMatch[2];
-
-        // 为主要部分添加作用域
-        const scopedMain = this.addScopeToSelectorPart(mainPart);
-        return scopedMain + pseudoClass;
+  /** 按顶层分隔符切分（括号/方括号/字符串感知） */
+  splitTopLevel(value, sep) {
+    const parts = []
+    let paren = 0
+    let bracket = 0
+    let inStr = null
+    let cur = ''
+    for (let i = 0; i < value.length; i++) {
+      const c = value[i]
+      if (inStr) {
+        cur += c
+        if (c === '\\') { if (i + 1 < value.length) cur += value[++i] }
+        else if (c === inStr) inStr = null
+        continue
       }
+      if (c === '"' || c === "'") { inStr = c; cur += c; continue }
+      if (c === '(') paren++
+      else if (c === ')') paren--
+      else if (c === '[') bracket++
+      else if (c === ']') bracket--
+      if (c === sep && paren === 0 && bracket === 0) {
+        parts.push(cur)
+        cur = ''
+        continue
+      }
+      cur += c
     }
-
-    // 处理特殊选择器
-    if (selector === '*' || selector.startsWith('@')) {
-      return selector;
-    }
-
-    // 处理复合选择器
-    return this.addScopeToSelectorPart(selector);
+    parts.push(cur)
+    return parts
   }
 
-  /**
-   * 为选择器部分添加作用域
-   * @param {string} selectorPart 
-   * @returns {string}
-   */
-  addScopeToSelectorPart(selectorPart) {
-    // 处理组合器选择器（>、+、~、空格）
-    const combinatorRegex = /(\s*[>+~]\s*|\s+)/;
-
-    if (combinatorRegex.test(selectorPart)) {
-      // 分割选择器，但保留组合器
-      const parts = selectorPart.split(combinatorRegex);
-      if (/^body(?:$|[:\[ ])/.test(parts[0])) {
-        parts[0] = this.scopeBody + parts[0].slice(4)
-        return parts.join('');
-      }
-      if (/^:root(?:$|[:\[ ])/.test(parts[0])) {
-        parts[0] = this.scopeBody + parts[0].slice(5)
-        return parts.join('');
-      }
-
-      // 只在最后一个选择器部分添加作用域
-      for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].trim() && !combinatorRegex.test(parts[i])) {
-          let tag = parts[i].trim()
-          if (/^body(?:$|[:\[ ])/.test(tag)) {
-            parts[i] = this.scopeBody + tag.slice(4)
-          } else if (/^:root(?:$|[:\[ ])/.test(tag)) {
-            parts[i] = this.scopeBody + tag.slice(5)
-          } else {
-            parts[i] = parts[i].trim() + this.scopeAttribute;
-          }
-          break;
-        }
-      }
-
-      return parts.join('');
-    }
-    selectorPart = selectorPart.trim()
-    let tag = selectorPart.trim()
-    if (/^body(?:$|[:\[ ])/.test(tag)) {
-      return this.scopeBody + tag.slice(4)
-    } else if (/^:root(?:$|[:\[ ])/.test(tag)) {
-      return this.scopeBody + tag.slice(5)
-    } else {
-      return tag + this.scopeAttribute;
-    }
+  scopeSelector(selector) {
+    return this.splitTopLevel(selector, ',')
+      .map(s => this.scopeSingleSelector(s.trim()))
+      .join(', ')
   }
 
-  /**
-   * 查找匹配的大括号
-   * @param {string} cssText 
-   * @param {number} startIndex 
-   * @returns {object}
-   */
-  findMatchingBrace(cssText, startIndex) {
-    let i = startIndex;
-    let content = '';
-    let braceLevel = 0;
+  scopeSingleSelector(sel) {
+    if (!sel || sel === '*') return sel
 
-    while (i < cssText.length) {
-      content += cssText[i];
+    // 宿主选择器开头：body / :root 映射为宿主节点，其后内容全部穿透
+    const host = sel.match(/^(body|:root)(?=$|[.\[#: >+~])/)
+    if (host) return this.scopeBody + sel.slice(host[0].length)
 
-      if (cssText[i] === '{') {
-        braceLevel++;
-      } else if (cssText[i] === '}') {
-        braceLevel--;
-        if (braceLevel === 0) {
-          i++;
-          break;
-        }
-      }
-      i++;
+    // 首个顶层伪类/伪元素切分：主体加作用域，伪类部分原样保留
+    // （锁定行为：.a:hover .b → .a[A]:hover .b，伪类后的后代不再加作用域）
+    const idx = this.findTopLevelColon(sel)
+    if (idx > 0) {
+      return this.scopeSelectorChain(sel.slice(0, idx)) + sel.slice(idx)
     }
+    return this.scopeSelectorChain(sel)
+  }
 
-    return {
-      content: content,
-      endIndex: i
-    };
+  /** 查找首个顶层 ':'（方括号/字符串内的冒号忽略，如 [href*=":"]） */
+  findTopLevelColon(sel) {
+    let bracket = 0
+    let inStr = null
+    for (let i = 0; i < sel.length; i++) {
+      const c = sel[i]
+      if (inStr) {
+        if (c === '\\') i++
+        else if (c === inStr) inStr = null
+        continue
+      }
+      if (c === '"' || c === "'") { inStr = c; continue }
+      if (c === '[') bracket++
+      else if (c === ']') bracket--
+      else if (c === ':' && bracket === 0) return i
+    }
+    return -1
+  }
+
+  /** 为无伪类的选择器链加作用域：只作用于最后一个复合选择器 */
+  scopeSelectorChain(part) {
+    // 切分为复合选择器与组合器（顶层空白 / > + ~），保留原始分隔
+    const tokens = [] // { sel: boolean, text: string }
+    let paren = 0
+    let bracket = 0
+    let inStr = null
+    let cur = ''
+    let i = 0
+    const n = part.length
+    const flush = () => { if (cur) { tokens.push({ sel: true, text: cur }); cur = '' } }
+    while (i < n) {
+      const c = part[i]
+      if (inStr) {
+        cur += c
+        if (c === '\\') { if (i + 1 < n) cur += part[++i] }
+        else if (c === inStr) inStr = null
+        i++
+        continue
+      }
+      if (c === '"' || c === "'") { inStr = c; cur += c; i++; continue }
+      if (c === '(') paren++
+      else if (c === ')') paren--
+      else if (c === '[') bracket++
+      else if (c === ']') bracket--
+      if (paren === 0 && bracket === 0 && (/\s/.test(c) || c === '>' || c === '+' || c === '~')) {
+        flush()
+        // 消费整个组合器：空白* [>+~]? 空白*
+        let comb = ''
+        while (i < n && /\s/.test(part[i])) comb += part[i++]
+        if (i < n && (part[i] === '>' || part[i] === '+' || part[i] === '~')) comb += part[i++]
+        while (i < n && /\s/.test(part[i])) comb += part[i++]
+        tokens.push({ sel: false, text: comb })
+        continue
+      }
+      cur += c
+      i++
+    }
+    flush()
+
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const t = tokens[i]
+      if (!t.sel) continue
+      const host = t.text.match(/^(body|:root)(?=$|[.\[#:])/)
+      if (host) t.text = this.scopeBody + t.text.slice(host[0].length)
+      else t.text = t.text + this.scopeAttribute
+      break
+    }
+    return tokens.map(t => t.text).join('')
   }
 }
 
-// 使用示例
-const parser = new CSSParser();
+const parser = new CSSParser()
 
-// 示例CSS
-const cssText = `
-  body{}
-  .container::before, .a {
-    content: "";
-    animation-name: fadeIn, slideUp;
-    animation: slideIn 0.5s infinite alternate;
-  }
-  
-  @keyframes slideIn {
-    from {
-      transform: translateX(-100%);
-    }
-    to {
-      transform: translateX(0);
-    }
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-  
-  @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
-  }
-  
-  @media (max-width: 768px) {
-    .container {
-      font-size: 14px;
-      animation: slideIn 0.2s ease-out;
-    }
-    
-    .item {
-      margin: 5px;
-    }
-  }
-  
-  .box > .child {
-    color: green;
-  }
-  
-  .box + .sibling {
-    margin-top: 20px;
-  }
-`;
-
-// 解析并添加作用域
-// console.log(parser.parse(cssText, 'comasd-123'));
-
-// 导出类
-export default parser;
+export default parser
 
 export { CSSParser }
