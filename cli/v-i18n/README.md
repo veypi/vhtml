@@ -33,6 +33,21 @@ v-i18n add '{"zh-CN":{"hello":"你好"},"en-US":{"hello":"Hello"}}'
 - 保存文件后输出统计信息和缺失的 key 列表
 - 如果存在缺失项，自动输出建议执行的 `v-i18n add` 命令
 
+### 内置保留键（`_` 前缀）
+
+以 `_` 开头的 key 是内置动态翻译保留入口（如 `_theme.dark`、`_err.INVALID_TOKEN`），用于变量拼接、后端错误码等无法静态扫描到的动态翻译场景：
+
+```js
+$t('_theme.' + t.key)      // 动态拼接，key 由变量决定
+$t('_err.' + err.code)     // 后端错误码动态翻译
+$t(c.titleKey)             // titleKey: '_home.case_video_title'（变量赋值引用）
+```
+
+保留键规则：
+- 不参与缺失检查（代码中提取到的 `_` 开头字面量直接跳过）
+- 不参与未引用检查（`--autoremove` 不会删除）
+- 由 langs.json 手动维护，scan 输出中单独统计显示数量
+
 ```bash
 v-i18n scan
 

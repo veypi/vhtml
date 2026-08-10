@@ -80,6 +80,9 @@ func runScan() error {
 		for _, lang := range config.Languages {
 			if items, ok := translations[lang]; ok {
 				for key := range items {
+					if strings.HasPrefix(key, "_") {
+						continue // 内置保留键（_ 前缀）永不自动删除
+					}
 					if !foundKeys[key] && !isParentKeyUsed(key, foundKeys) {
 						delete(items, key)
 					}
@@ -94,6 +97,19 @@ func runScan() error {
 
 	// 输出统计信息
 	printStatsTable(foundKeys, translations, config)
+
+	// 输出内置保留键统计
+	reservedCount := 0
+	if items, ok := translations[config.DefaultLanguage]; ok {
+		for key := range items {
+			if strings.HasPrefix(key, "_") {
+				reservedCount++
+			}
+		}
+	}
+	if reservedCount > 0 {
+		fmt.Printf("🔒 内置保留键（_ 前缀，不参与删除/缺失/未引用检查）: %d 个\n", reservedCount)
+	}
 
 	// 输出未引用的 key 列表
 	if len(unusedKeys) > 0 {
@@ -357,6 +373,9 @@ func scanFiles(config *Config) (map[string]bool, error) {
 		for _, match := range matches {
 			if len(match) > 1 {
 				key := string(match[1])
+				if strings.HasPrefix(key, "_") {
+					continue // 内置保留键（_ 前缀）：由 langs.json 手动维护，不参与扫描
+				}
 				keys[key] = true
 			}
 		}
@@ -439,6 +458,9 @@ func findMissingKeys(found, existing map[string]bool) []string {
 func findUnusedKeys(found, existing map[string]bool) []string {
 	var unused []string
 	for key := range existing {
+		if strings.HasPrefix(key, "_") {
+			continue // 内置保留键不参与未引用检查
+		}
 		if !found[key] {
 			if isParentKeyUsed(key, found) {
 				continue
