@@ -117,6 +117,8 @@ System variable pool, inherited from ancestor components via prototype chain.
 | `$emit(name, ...args)` | emit custom event to the parent's `@name` handler |
 | `$message` | global toast / dialog API |
 
+`$emit` event names must not collide with native DOM event names (`change`, `input`, `click`, ...): a parent's `@name` would attach as a native DOM listener and never receive the custom payload (the runtime prints a warning). Always pick non-built-in names.
+
 ### `$router`
 
 Nearest ancestor `<vrouter>` view, local to the current router subtree.
@@ -130,6 +132,8 @@ Nearest ancestor `<vrouter>` view, local to the current router subtree.
 | `setQuery(patch, opts?)` / `setParams(patch, opts?)` | merge/replace then navigate; `opts: { mode: 'replace' \| 'push', merge }` |
 | `onChange(fn)` | subscribe to route changes, returns unsubscribe function |
 | `addRoute(route)` / `addRoutes(routes)` / `resetRoutes()` | runtime route management |
+| `cachedPages()` | cached-page list for tab/page-management UIs: `{ key, title, path, fullPath, isActive, active(), del() }` |
+| `dropPage(key)` | destroy a cached page by cacheKey (dropping the active page remounts it ≈ refresh); returns `false` while the page is mid-mount |
 
 ## URL Prefix Rules
 
@@ -183,9 +187,9 @@ Static imports are supported; relative paths resolve against the component's own
 <div v-if="a">A</div>
 <div v-else-if="b">B</div>
 <div v-else>C</div>
-<div :key='item.id' v-for="item in items">{{ item.name }}</div>
-<div :key='idx' v-for="(item, idx) in items">...</div>
-<template :key='item.id' v-for="item in items">      <!-- multi-root list -->
+<div v-for="item in items">{{ item.name }}</div>
+<div v-for="(item, idx) in items">...</div>
+<template v-for="item in items">                     <!-- multi-root list -->
   <div>{{ item.a }}</div>
   <div>{{ item.b }}</div>
 </template>
@@ -199,6 +203,7 @@ Static imports are supported; relative paths resolve against the component's own
 - Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
 - Special events: `@mounted` (node inserted into DOM), `@outerclick` (click outside the element).
 - `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
+- `v-for` has **no `:key` attribute** — item identity is tracked automatically (objects by reference, primitives by position). A `:key` on a v-for node compiles as a plain inert attribute; delete it.
 - Always initialize list variables in `<script setup>`: `items = []`.
 
 ## Script Types
@@ -245,7 +250,7 @@ Host nodes expose `$data`, `$sys`, `$mod`. Prefer `props + $emit` for normal com
 </body>
 ```
 
-Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`); fallback content runs in the child's own runtime. `<vslot>` supports `:name` for dynamic slot names.
+Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`); fallback content runs in the child's own runtime. `<vslot>` supports `:name` for dynamic slot names. `<vslot vbind="a, b">` exposes the outlet component's `$data` keys `a`/`b` to the projected content (re-synced on change) — the slot-props mechanism.
 
 ## `env.js`
 
@@ -257,12 +262,12 @@ export default async ($mod, manager) => {
   $mod.$i18n.load(await $mod.fetch('/langs.json').then(r => r.json()))
 
   await manager.loadModule('/shared')          // preload a sub-module and wait for its env.js
-  manager.addAlias('ui-kit', '/lib/ui-kit')    // <ui-kit-button> → /lib/ui-kit/button.html
+  manager.addAlias('uikit', '/lib/ui-kit')     // <uikit-button> → /lib/ui-kit/button.html
 }
 ```
 
 - `manager.loadModule(subPath)` — preload a sub-module's `env.js`; `/`-prefixed = absolute, otherwise relative to the current scoped.
-- `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias; `baseUrl` must start with `/` or `https://`.
+- `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. Non-global aliases only register while an `env.js` is loading; aliases resolve only in non-root modules (`scoped` ≠ `''`).
 
 Do NOT use `env.js` for route guards, per-page state, or component-local data.
 
@@ -369,11 +374,12 @@ $message.info('Notice')
 $message.success('Done')
 $message.warning('Careful')
 $message.error('Failed')
-$message.confirm('Delete?').then(() => { ... })
-$message.prompt('Name', 'default').then(value => { ... })
+$message.confirm('Delete?').then(() => { ... }).catch(() => { /* cancelled */ })
+$message.prompt('Name', 'default').then(value => { ... }).catch(() => {})
+$message.copy('text')                        // clipboard copy + success toast
 ```
 
-Toast options: `{ duration = 3000, showClose, onClose }` (`duration: 0` = no auto-close). Dialog options: `{ title, confirmText, cancelText }`.
+Toast options: `{ duration = 3000, showClose, onClose }` (`duration: 0` = no auto-close). Dialog options: `{ title, confirmText, cancelText, onConfirm, onCancel }`. Cancel/dismiss **rejects** the promise with `Error("cancelled")` — always attach a `.catch`.
 
 ## i18n
 
@@ -408,21 +414,30 @@ v-i18n scan                    # scan, clean up, report missing keys
 v-i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 ```
 
+### Reserved keys (`_` prefix)
+
+Keys starting with `_` (`_err.40100`, `_theme.dark`) are maintained manually in langs.json: scan skips them for missing/unused checks, `--autoremove` never deletes them. Use for dynamic keys referenced via concatenation, variables, or function args (not exact string literals).
+
 ## Reactivity Contract & Pitfalls
 
-vhtml reactivity = Proxy dep-tracking + rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's evaluation are **never notified** (feedback-loop guard). These produce one silent dead-zone you must avoid:
+vhtml reactivity = Proxy dep-tracking + rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's own evaluation are **never notified** (feedback-loop guard).
 
-| pattern | result |
-| ------- | ------ |
-| `:key` = **index** + replace list items with **new objects** | **DOM freezes silently** (data updates, DOM never does — no warning). v-for reuses the cached item and its in-place data update happens inside watcher evaluation, so all downstream notifications are suppressed. |
-| `:key` = stable identity (id) | cached items stay; mutate their fields via the proxy path to update |
-| unkeyed list | cache key = item `DataID`; wholesale replacement destroys & rebuilds items (works, costs more) |
-| mutate nested object through held **raw reference** (`msg.text = x` after `const msg = {...}`) | **bypasses the proxy set trap — no update** (same as Vue's toRaw hazard). Always write via the proxy path: `d.list[i].text = x` |
-| top-level scalar `$data` prop written from timers/rAF | always re-renders dependents — use for animations/streaming content |
+### v-for item identity (no `:key`)
 
-Rules:
+v-for tracks items automatically; there is no `:key` attribute (it compiles as a plain inert attribute — delete it):
 
-1. `:key` must be a stable identity key; never use array indexes when list items are replaced wholesale.
+| list content | cache identity | update behavior |
+| ------------ | -------------- | --------------- |
+| object items | the item object itself (a `DataID` symbol stamped on first reactive wrap) | mutate fields via the proxy → in-place patch, DOM kept · `list[i] = {...}` → merged into the existing item proxy (identity & DOM kept) · wholesale `list = [new objects]` → all entries destroyed & rebuilt (correct, but loses transient state like focus) |
+| objects without `DataID` (e.g. fresh objects returned on every call of a function source like `v-for="tr in tracks()"`) | array position | same shape (equal top-level key set) → merged in place, DOM kept · shape change → entry destroyed & rebuilt (stale bindings are never evaluated against the mismatched item) |
+| primitive items (string/number) | array position | value changes patch in place, DOM kept |
+| same object twice in one list | — | both entries bind the same record; avoid |
+
+Structural edits (insert / remove / reorder): copy the array (`slice()` / spread), mutate the copy, assign it back — kept items retain identity, so their DOM is preserved and physically re-ordered. Never `splice` a reactive array proxy directly (the set trap merges shifted items into each other); `push` is safe.
+
+### Other rules
+
+1. Mutating a nested object through a held **raw reference** (`msg.text = x` after `const msg = {...}`) bypasses the proxy set trap — no update (same as Vue's toRaw hazard). Always write via the proxy path: `d.list[i].text = x`.
 2. For streaming/animation (typewriter, count-up): drive from top-level scalar `$data` props, not nested object fields; lists should be append-only immutable records.
 3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — do state mutations from event handlers, timers, or rAF callbacks.
 
@@ -442,7 +457,7 @@ Rules:
     <input v:value="keyword" placeholder="Search" />
     <div v-if="loading">Loading...</div>
     <div v-else>
-      <div :key='item.id' v-for="item in list" class="card">
+      <div v-for="item in list" class="card">
         <h3>{{ item.name }}</h3>
         <button @click="remove(item.id)">Delete</button>
       </div>
