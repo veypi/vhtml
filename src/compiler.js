@@ -168,40 +168,56 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     clearVforRange(vforStart, vforEnd)
   })
 
-  watch(parentScope, () => {
+  const createItemData = (key, value) => {
+    // 迭代变量与索引都必须是本地 key（Wrap 的 set 会穿透 root 链，
+    // 先占位再 Wrap 可防止 indexName 与 root 同名时被误写入 root）
+    const local = { [valueName]: value }
+    if (indexName) local[indexName] = normalizeVforIndex(key)
+    return Wrap(local, data)
+  }
+
+  const resolveCacheKey = (key, value, seen) => {
+    if (value && typeof value === 'object') {
+      const id = value[DataID]
+      if (id) {
+        const ck = `data:${id}`
+        if (!seen[ck]) return ck
+      }
+    }
+    return `unkeyed:${key}`
+  }
+
+  // 形状比较：标量无形状恒同；数组与对象互异；对象要求键集合一致（浅比较一层）
+  const sameVforShape = (a, b) => {
+    const ao = a !== null && typeof a === 'object'
+    const bo = b !== null && typeof b === 'object'
+    if (ao !== bo) return false
+    if (!ao) return true
+    if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b)
+    const ka = Object.keys(a)
+    const kb = Object.keys(b)
+    return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k))
+  }
+
+  // target 只负责求值与逐条读取（依赖注册期不做任何写入）：
+  // 列表根引用与数组内容 '' 的变更都会重新触发本 watcher
+  const collect = () => {
     let items = Run(listExpr, data, runtime)
     if (typeof items === 'function') items = items()
     if (typeof items === 'number') items = Array.from({ length: items }, (_, i) => i)
     if (!items) items = []
+    return Object.keys(items).map(key => ({ key, value: items[key] }))
+  }
 
+  // reconcile 在 callback 中执行（runTarget 返回、listen_tags 弹出之后）：
+  // 命中条目的就地数据写入会正常通知下游绑定，标量列表原位换值不再静默
+  const reconcile = (order) => {
+    if (!order) return
     const keep = new Set()
-    const order = []
     const seen = Object.create(null)
-
-    const createItemData = (key, value) => {
-      // 迭代变量与索引都必须是本地 key（Wrap 的 set 会穿透 root 链，
-      // 先占位再 Wrap 可防止 indexName 与 root 同名时被误写入 root）
-      const local = { [valueName]: value }
-      if (indexName) local[indexName] = normalizeVforIndex(key)
-      return Wrap(local, data)
-    }
-
-    const resolveCacheKey = (key, value) => {
-      if (value && typeof value === 'object') {
-        const id = value[DataID]
-        if (id) {
-          const ck = `data:${id}`
-          if (!seen[ck]) return ck
-        }
-      }
-      return `unkeyed:${key}`
-    }
-
-    Object.keys(items).forEach(key => {
-      const value = items[key]
-      const ck = dedupeCacheKey(resolveCacheKey(key, value), seen)
-      keep.add(ck)
-      order.push({ key, value, ck })
+    order.forEach(item => {
+      item.ck = dedupeCacheKey(resolveCacheKey(item.key, item.value, seen), seen)
+      keep.add(item.ck)
     })
 
     // 移除过期条目
@@ -217,6 +233,13 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     for (let i = order.length - 1; i >= 0; i--) {
       const { key, value, ck } = order[i]
       let entry = cache[ck]
+      if (entry && entry.data && ck.startsWith('unkeyed:') && !sameVforShape(entry.data[valueName], value)) {
+        // 位置键复用到不同形状的条目：不是同一条目，销毁重建而非 copyBind 合并——
+        // 合并会先删旧键再通知，旧分支内的绑定会对错位数据瞬时求值（报错噪音）
+        removeVforItem(entry)
+        delete cache[ck]
+        entry = null
+      }
       if (!entry) {
         const itemStart = document.createComment('~vitem')
         const itemEnd = document.createComment('~/vitem')
@@ -242,7 +265,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
         entry = { startMark: itemStart, endMark: itemEnd, data: itemData, textCleanups }
         cache[ck] = entry
       } else if (entry.data) {
-        // 更新已有条目的数据
+        // 更新已有条目的数据（callback 期写入，通知不被反馈守卫吞掉）
         entry.data[valueName] = value
         if (indexName) entry.data[indexName] = normalizeVforIndex(key)
       }
@@ -250,7 +273,9 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
       moveItemBefore(entry.startMark, entry.endMark, refNode)
       refNode = entry.startMark
     }
-  })
+  }
+
+  watch(parentScope, collect, reconcile)
 }
 
 export function compileVif(nodes, data, runtime, ctx) {
@@ -300,6 +325,9 @@ export function compileVif(nodes, data, runtime, ctx) {
 
     const parentScope = instanceOf(startMark.parentNode)?.scope
     watch(parentScope, () => Run(ifExpr, data, runtime), (targetIndex) => {
+      // 表达式求值失败（Run 捕获异常返回 undefined）时归一为 -1，
+      // 按无命中分支处理，避免非法下标进入 showBranch 崩溃中断整个 flush
+      if (typeof targetIndex !== 'number' || Number.isNaN(targetIndex)) targetIndex = -1
       if (targetIndex === activeIndex) return
       clearContent()
       showBranch(targetIndex)

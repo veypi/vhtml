@@ -19,7 +19,12 @@ const flushUpdates = () => {
   let count = 0
   for (const index of list) {
     if (callbackList[index]) {
-      callbackList[index]()
+      try {
+        callbackList[index]()
+      } catch (e) {
+        // 单个 watcher 异常不中断整轮 flush，避免一处模板错误冻结全页响应式
+        console.error('watcher error', e)
+      }
       count++
     }
   }
