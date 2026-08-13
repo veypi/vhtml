@@ -2,7 +2,7 @@ module github.com/veypi/vhtml
 
 go 1.25.4
 
-require github.com/veypi/vigo v0.7.2
+require github.com/veypi/vigo v0.7.3
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
