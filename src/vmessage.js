@@ -487,6 +487,10 @@ class Message {
         const escHandler = (event) => {
           if (event.key === "Escape") {
             cancel();
+          } else if (event.key === "Enter") {
+            // 回车确认（prompt 输入框内回车同样确认）；settled 守卫防与按钮 click 双触发
+            event.preventDefault();
+            confirm();
           }
         };
 
