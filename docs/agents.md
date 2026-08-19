@@ -61,6 +61,8 @@ body .title { ... }     /* ALL descendant elements, scope attribute not required
 
 With a `body` / `:root` prefix, descendant selectors are no longer scope-restricted — they also match runtime-created elements (`document.createElement`, third-party library DOM) that carry no scope attribute. Plain selectors only match component-compiled elements.
 
+Nested rule blocks are scoped recursively: `@media`, `@supports`, and `@container` (size and style queries) — selectors and `@keyframes` references inside them get the same scope treatment. Other at-rules (`@font-face`, `@import`, …) pass through untouched.
+
 ### Props
 
 Attributes on a component tag map to the child's `$data` keys (auto camelCase ↔ kebab-case):

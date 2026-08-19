@@ -87,7 +87,7 @@ class CSSParser {
     return s.length
   }
 
-  /** 解析规则序列（样式表顶层或 @media/@supports 内部） */
+  /** 解析规则序列（样式表顶层或 @media/@supports/@container 内部） */
   parseRules(cssText) {
     let out = ''
     let i = 0
@@ -165,7 +165,11 @@ class CSSParser {
       }
       return prelude + block.content
     }
-    if (lower.startsWith('@media') || lower.startsWith('@supports')) {
+    if (
+      lower.startsWith('@media') ||
+      lower.startsWith('@supports') ||
+      lower.startsWith('@container')
+    ) {
       const inner = block.content.slice(1, -1)
       return prelude + '{' + this.parseRules(inner) + '}'
     }

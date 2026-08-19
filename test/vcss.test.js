@@ -182,8 +182,8 @@ describe('pseudo classes and elements', () => {
   })
 })
 
-// @media / @supports 递归处理
-describe('at-rules: media / supports', () => {
+// @media / @supports / @container 递归处理
+describe('at-rules: media / supports / container', () => {
   test('@media inner rules are scoped', () => {
     assert.equal(
       parse('@media (max-width:768px){.a{x:1}}'),
@@ -209,6 +209,41 @@ describe('at-rules: media / supports', () => {
     assert.equal(
       parse('@supports (display:grid){.a{display:grid}}'),
       `@supports (display:grid){.a${A}{display:grid}}`,
+    )
+  })
+
+  test('@container inner rules are scoped', () => {
+    assert.equal(
+      parse('@container (min-width:400px){.a{x:1}}'),
+      `@container (min-width:400px){.a${A}{x:1}}`,
+    )
+  })
+
+  test('@container named container query', () => {
+    assert.equal(
+      parse('@container sidebar (min-width:400px){.a{x:1}.b{y:2}}'),
+      `@container sidebar (min-width:400px){.a${A}{x:1}.b${A}{y:2}}`,
+    )
+  })
+
+  test('@container style query', () => {
+    assert.equal(
+      parse('@container style(--accent: blue){.a{x:1}}'),
+      `@container style(--accent: blue){.a${A}{x:1}}`,
+    )
+  })
+
+  test('@container inner host piercing rule', () => {
+    assert.equal(
+      parse('@container (min-width:400px){body .a{x:1}}'),
+      `@container (min-width:400px){${B} .a{x:1}}`,
+    )
+  })
+
+  test('@keyframes inside @container is renamed and referenced', () => {
+    assert.equal(
+      parse('@container (min-width:400px){@keyframes m{from{x:1}}.a{animation:m 1s}}'),
+      `@container (min-width:400px){@keyframes m-${SUFFIX}{from{x:1}}.a${A}{animation: m-${SUFFIX} 1s}}`,
     )
   })
 
