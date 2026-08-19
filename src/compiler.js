@@ -33,6 +33,20 @@ function getSourceNodes(dom) {
   return [dom.cloneNode(true)]
 }
 
+/*
+ * 结构源节点共享：源节点只读（仅用于 cloneNode），按内容全局共享，
+ * 实现见 source-cache.js。避免每个实例化点各驻留一份模板克隆。
+ */
+import { getSharedTemplateNodes, getSharedSourceCacheSize } from './source-cache.js'
+export { getSharedSourceCacheSize }
+
+function getSharedSourceNodes(dom) {
+  return getSharedTemplateNodes(
+    dom.nodeName === 'TEMPLATE' ? 'h:' + dom.innerHTML : 'e:' + dom.outerHTML,
+    () => getSourceNodes(dom),
+  )
+}
+
 /** 将一组节点按顺序插入到 refNode 之前（用 fragment 保持顺序） */
 function insertBefore(nodes, refNode) {
   const frag = document.createDocumentFragment()
@@ -151,7 +165,8 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const indexName = matches[2]
   const listExpr = matches[4]
 
-  const sourceNodes = getSourceNodes(dom)
+  // 模板源全局共享（源节点只读，仅用于 cloneNode）
+  const sourceNodes = getSharedSourceNodes(dom)
 
   const vforStart = document.createComment('~vfor')
   const vforEnd = document.createComment('~/vfor')
@@ -353,7 +368,7 @@ export function compileVif(nodes, data, runtime, ctx) {
       node.replaceWith(startMark, endMark)
 
       node.removeAttribute('v-if')
-      const source = getSourceNodes(node)
+      const source = getSharedSourceNodes(node)
 
       chain = {
         conds: [vif],
@@ -370,7 +385,7 @@ export function compileVif(nodes, data, runtime, ctx) {
       if (velseif !== null) {
         chain.conds.push(velseif)
         node.removeAttribute('v-else-if')
-        chain.sourceBranches.push(getSourceNodes(node))
+        chain.sourceBranches.push(getSharedSourceNodes(node))
         node.remove()
         continue
       }
@@ -378,7 +393,7 @@ export function compileVif(nodes, data, runtime, ctx) {
       if (node.getAttribute('v-else') !== null) {
         chain.conds.push('')
         node.removeAttribute('v-else')
-        chain.sourceBranches.push(getSourceNodes(node))
+        chain.sourceBranches.push(getSharedSourceNodes(node))
         node.remove()
         continue
       }
@@ -433,13 +448,6 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
     dom.replaceWith(...childs)
     childs.forEach(c => compileNode(c, scopedData, activeRuntime, ctx, runtimeScope))
     return
-  }
-
-  if (!metaOf(dom).sourceNodes) {
-    metaOf(dom).sourceNodes = Array.from(dom.childNodes).map(node => node.cloneNode(true))
-    metaOf(dom).sourceAttrs = Array.from(dom.attributes)
-      .filter(a => !['v-if', 'v-else-if', 'v-else'].includes(a.name))
-      .map(a => ({ name: a.name, value: a.value }))
   }
 
   let vfortxt = dom.getAttribute('v-for')

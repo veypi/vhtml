@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 修复
+- **结构指令模板源全局共享（内存泄漏级修复）**：`v-for` 的 `sourceNodes` 与 `v-if` 链的 `sourceBranches` 从「每个实例化点各驻留一份模板克隆」改为按内容（outerHTML）全局共享一份只读模板（LRU 上限 512 项）。修复前，长列表场景中驻留规模 = item 数 × 分支数 × 模板大小（如 40 条消息的聊天页，仅游离模板源即驻留约 1.9 万 DOM 节点，超过活 DOM 本身两倍）；修复后每种模板内容全局仅一份。源节点自提取起只用于 `cloneNode` 读取，共享安全。
+- **编译器 meta 不再驻留子树深克隆**：删除 `compileNode` 写入 `meta.sourceNodes/sourceAttrs` 的死代码（历史 v-if 恢复残留，全库无读取方），消除 O(节点数×深度) 的二次方驻留；组件实例的 `sourceNodes` 槽模板快照改为局部变量直传，`ComponentInstance.sourceNodes` 字段移除。
+- **插槽模板全局共享**：`createSlotContents` 的投影模板与 `createOutletState` 的 fallback 模板同样接入内容寻址共享缓存（源只读），消除每个组件实例一份插槽克隆的驻留。
+- **模板描述符释放解析残留**：`processScripts` 提取脚本为纯数据记录（`{code, setup, active, deactive, dispose}`）不再驻留 `<script>` 元素；`parse()` 完成后置空 `descriptor.tmp` 与 `descriptor.heads`——此前每个模板常驻一个完整 DOMParser 文档骨架（节点数统计中 47+ 个文档的来源）。
+- **setupRef 闭包驻留修复**：模板属性处理提取为模块级 `applyTemplateAttrs`，避免 `bodyClone`/`attrs` 被 setupRef 作用域内长寿命的 watch 闭包共享 context 提升而终生驻留（V8 闭包共享上下文语义）。
+
 ### 变更
 - **RouterView 默认缓存 key**：默认 `cacheKey` 由 `fullPath`（含 query）改为纯 `path`，query 变化只更新路由状态（`updateRouter`）而不再重挂页面 DOM；`cacheKey: false` / string / function 语义不变。
 

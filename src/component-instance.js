@@ -14,7 +14,6 @@ export class ComponentInstance {
     this.vsrc = ''
     this.events = null
     this.slotContents = null
-    this.sourceNodes = null
     this.vforData = null
     this.slotOutletState = null
     this.unsafe = false

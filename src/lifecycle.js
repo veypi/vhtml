@@ -44,18 +44,19 @@ export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}, r
 }
 
 export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime, sandboxOptions = {}) {
-  const code = scriptNode.innerHTML
+  // scriptNode 为解析期扁平化的纯数据记录：{ code, setup, active, deactive, dispose }
+  const code = scriptNode.code
   const scope = inst?.scope
   const run = (host, reason) => runScript(code, dom, inst, data, inst?.runtime || runtime, sandboxOptions, reason)
-  if (scriptNode.hasAttribute('active')) {
+  if (scriptNode.active) {
     scope?.onActive(run)
     return
   }
-  if (scriptNode.hasAttribute('deactive')) {
+  if (scriptNode.deactive) {
     scope?.onDeactive(run)
     return
   }
-  if (scriptNode.hasAttribute('dispose')) {
+  if (scriptNode.dispose) {
     scope?.onDispose(run)
     return
   }

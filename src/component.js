@@ -152,7 +152,7 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
   const sandboxOptions = inst?.unsafe ? { unsafe: true } : {}
 
   if (target.setup) {
-    let script = target.setup.innerHTML
+    let script = target.setup.code
     if (inst?.unsafe) {
       console.warn(`unsafe component "${target.url}" contains <script setup>, imports and external modules are blocked`)
     }
@@ -179,11 +179,6 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
 
   if (singleMode) return originData
 
-  if (!instance.sourceNodes) {
-    instance.sourceNodes = Array.from(dom.childNodes)
-      .filter(n => !(n.nodeType === 3 && !n.textContent.trim()))
-      .map(node => node.cloneNode(true))
-  }
   if (dom.hasAttribute('vslot-inherit')) {
     dom.removeAttribute('vslot-inherit')
     let owner = instanceOf(dom.parentNode)
@@ -192,8 +187,11 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
     }
     instance.slotContents = owner?.slotContents || {}
   } else {
-    const slotContents = createSlotContents(instance.sourceNodes || [], data, parentRuntime)
-    instance.slotContents = slotContents
+    // 插槽源直接取宿主当前子节点（createSlotContents 内部逐条深克隆），
+    // 不再在实例上驻留快照副本（实例终生持有会双倍占用内存）
+    const slotSources = Array.from(dom.childNodes)
+      .filter(n => !(n.nodeType === 3 && !n.textContent.trim()))
+    instance.slotContents = createSlotContents(slotSources, data, parentRuntime)
   }
   dom.innerHTML = ''
 
@@ -254,6 +252,14 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
   })
 
   let attrs = Array.from(bodyClone.attributes)
+  attrs = applyTemplateAttrs(dom, bodyClone, attrs, originData, componentRuntime, ctx)
+  return originData
+}
+
+// 模板属性应用单独成函数：bodyClone/attrs 只在直排代码中被引用，
+// 若留在 setupRef 作用域内，会被该作用域内长寿命的 watch/$watch 闭包
+// 共享的 context 提升并终生驻留（V8 闭包共享上下文语义）
+function applyTemplateAttrs(dom, bodyClone, attrs, originData, componentRuntime, ctx) {
   attrs = attrs.filter(attr => {
     if (ctx.compileAttr(dom, attr.name, attr.value, originData, componentRuntime, ctx)) {
       bodyClone.removeAttribute(attr.name)
@@ -277,7 +283,6 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
       dom.setAttribute(attr.name, attr.value)
     }
   })
-  return originData
 }
 
 export function mountRef(dom, componentData, runtime, target, ctx) {

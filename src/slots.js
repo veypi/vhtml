@@ -6,9 +6,23 @@ import { Wrap, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
 import { Run } from './sandbox.js'
 import { instanceOf, metaOf, setNodeScope } from './component-instance.js'
 import { watch } from './runtime-watch.js'
+import { getSharedTemplateNodes } from './source-cache.js'
 
 function cloneNodes(nodes) {
   return (nodes || []).map(node => node.cloneNode(true))
+}
+
+// 插槽/后备模板源全局共享（只读，渲染时克隆）：
+// 同一投影点内容在所有组件实例间只驻留一份
+function sharedSlotTemplate(node, removeVslot) {
+  const key = node.nodeType === 3
+    ? `st:${node.textContent}`
+    : `se${removeVslot ? '1' : '0'}:${node.outerHTML}`
+  return getSharedTemplateNodes(key, () => {
+    const c = node.cloneNode(true)
+    if (removeVslot) c.removeAttribute?.('vslot')
+    return c
+  })
 }
 
 function normalizeSlotName(name) {
@@ -56,7 +70,7 @@ function createOutletState(dom) {
   const state = metaOf(dom).slotOutletState
   if (state) return state
   const nextState = {
-    fallbackTemplates: cloneNodes(Array.from(dom.childNodes)),
+    fallbackTemplates: Array.from(dom.childNodes).map(n => sharedSlotTemplate(n, false)),
     currentKey: '',
     currentMode: '',
     cleanup: null,
@@ -97,9 +111,8 @@ export function createSlotContents(sourceNodes, data, runtime) {
   const slots = Object.create(null)
   sourceNodes.forEach(node => {
     if (node.nodeType === 3 && !node.textContent.trim()) return
-    const template = node.cloneNode(true)
-    const slotName = normalizeSlotName(template.getAttribute?.('vslot'))
-    template.removeAttribute?.('vslot')
+    const slotName = normalizeSlotName(node.getAttribute?.('vslot'))
+    const template = sharedSlotTemplate(node, true)
     if (!slots[slotName]) {
       slots[slotName] = {
         id: GenUniqueID(),

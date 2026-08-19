@@ -151,11 +151,20 @@ class TemplateParser {
   }
 
   processScripts(descriptor) {
+    // 脚本元素不驻留：提取为纯数据（code + 生命周期标记），
+    // 避免每个模板缓存一份游离的 <script> DOM 节点
     descriptor.body.querySelectorAll('script').forEach(scriptNode => {
       const content = scriptNode.innerHTML.trim()
       if (!content) { scriptNode.remove(); return }
-      if (scriptNode.hasAttribute('setup')) descriptor.setup = scriptNode
-      else if (!scriptNode.hasAttribute('no-vhtml')) descriptor.scripts.push(scriptNode)
+      const record = {
+        code: scriptNode.innerHTML,
+        setup: scriptNode.hasAttribute('setup'),
+        active: scriptNode.hasAttribute('active'),
+        deactive: scriptNode.hasAttribute('deactive'),
+        dispose: scriptNode.hasAttribute('dispose'),
+      }
+      if (record.setup) descriptor.setup = record
+      else if (!scriptNode.hasAttribute('no-vhtml')) descriptor.scripts.push(record)
       scriptNode.remove()
     })
   }
@@ -181,6 +190,10 @@ class TemplateParser {
     this.syncRefOwnerId(descriptor.body, url)
     prepareStaticUrlAttrs(descriptor.body, mod)
     await this.resourceLoader.loadHeads(descriptor.heads, mod, descriptor, unsafe)
+    // 解析完成后 tmp 文档与 heads 不再使用，立即释放：
+    // DOMParser 每模板产生一个独立文档，常驻会整棵驻留（含 head 内容与文档骨架）
+    descriptor.heads = []
+    descriptor.tmp = null
     return descriptor
   }
 
