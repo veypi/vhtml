@@ -25,7 +25,7 @@
 1. **改版本号** — 更新以下 4 处：
    - `package.json` → `version`
    - `ui/page/about.html` → 页面显示的版本号
-   - `cli/v-i18n/main.go` → CLI version 常量
+   - `cli/vhtml/main.go` → CLI version 常量
    - `docs/CHANGELOG.md` → 将 `[Unreleased]` 改为版本号 + 日期
 
 2. **更新 TODO.md** — 删除已实现内容，置空下一个版本计划

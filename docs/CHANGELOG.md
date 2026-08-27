@@ -7,6 +7,9 @@
 
 ## [Unreleased]
 
+### 新增
+- **`vhtml` 命令行工具（cli/vhtml）**：单一二进制，零 Go 代码即可开发 vhtml 应用。默认命令 `vhtml`（等同 `vhtml serve`）为当前 `./ui` 目录启动 dev server：静态服务直读磁盘、SPA 回退 `root.html`（每次请求重新渲染，`{{.scoped}}` 注入）、`/vhtml/` 前缀提供框架运行时（`--src` 切换 src 模块直读用于框架调试）、文件变更 live reload（SSE + 自动注入脚本）、`vhtml.config.json` 配置 API 代理表（类 vue devServer.proxy，支持路径正则重写与 WebSocket）。原独立 `v-i18n` 工具合并为子命令 `vhtml i18n scan/add`（参数不变，提示文案同步更新）。新增 `vhtml init` 脚手架命令生成最小项目骨架。配置加载遵循 vigo/flags 原生协议：flag > 环境变量 > `vhtml.config.json` > default 标签。
+
 ### 修复
 - **结构指令模板源全局共享（内存泄漏级修复）**：`v-for` 的 `sourceNodes` 与 `v-if` 链的 `sourceBranches` 从「每个实例化点各驻留一份模板克隆」改为按内容（outerHTML）全局共享一份只读模板（LRU 上限 512 项）。修复前，长列表场景中驻留规模 = item 数 × 分支数 × 模板大小（如 40 条消息的聊天页，仅游离模板源即驻留约 1.9 万 DOM 节点，超过活 DOM 本身两倍）；修复后每种模板内容全局仅一份。源节点自提取起只用于 `cloneNode` 读取，共享安全。
 - **编译器 meta 不再驻留子树深克隆**：删除 `compileNode` 写入 `meta.sourceNodes/sourceAttrs` 的死代码（历史 v-if 恢复残留，全库无读取方），消除 O(节点数×深度) 的二次方驻留；组件实例的 `sourceNodes` 槽模板快照改为局部变量直传，`ComponentInstance.sourceNodes` 字段移除。
@@ -202,17 +205,17 @@
 
 ## 发布流程
 
-本项目同时作为 **npm 包**（`@veypi/vhtml`）和 **Go module**（`github.com/veypi/vhtml`）发布。发版核心围绕 `src/` 源码和 `package.json`，`v-i18n` 仅作为辅助 CLI 工具同步更新。
+本项目同时作为 **npm 包**（`@veypi/vhtml`）和 **Go module**（`github.com/veypi/vhtml`）发布。发版核心围绕 `src/` 源码和 `package.json`，`vhtml` CLI（`cli/vhtml`）作为辅助工具同步更新。
 
 发布新版本时，请按以下步骤操作：
 
 ### 1. 更新版本号
 - 更新 `package.json` 中的 `version` 字段。
-- 同步更新 `cli/v-i18n/main.go` 中的 `version` 变量（保持与 `package.json` 一致）。
+- 同步更新 `cli/vhtml/main.go` 中的 `version` 变量（保持与 `package.json` 一致）。
 
 ### 2. 更新文档
-- 如果 `v-i18n` 命令行为或用法有变化，更新 `cli/v-i18n/README.md`。
-- 如果 `v-i18n` 使用示例需要更新，同步修改 `docs/agents.md`。
+- 如果 CLI 命令行为或用法有变化，更新 `cli/vhtml/README.md`。
+- 如果 CLI 使用示例需要更新，同步修改 `docs/agents.md`。
 - 在 `docs/CHANGELOG.md` 顶部新增一个版本章节，描述本次 `src/` 核心变更和发布内容。
 
 ### 3. 构建并更新 dist
@@ -227,11 +230,10 @@ npm run build
 # 测试 vhtml 构建产物
 npm run build
 
-# 测试 v-i18n
-cd cli/v-i18n
-go build -o v-i18n .
-go install .
-v-i18n -h
+# 测试 vhtml CLI
+go build -o vhtml ./cli/vhtml
+go install github.com/veypi/vhtml/cli/vhtml
+vhtml -h
 ```
 
 ### 5. 在 `dev` 分支提交变更
@@ -263,8 +265,8 @@ npm publish --access public
 ```bash
 go clean -modcache
 GOPROXY=https://goproxy.cn,direct GOSUMDB=off \
-  go install github.com/veypi/vhtml/cli/v-i18n@vX.Y.Z
-v-i18n -h
+  go install github.com/veypi/vhtml/cli/vhtml@vX.Y.Z
+vhtml -h
 ```
 
 ### 10. 切回 `dev` 分支
@@ -274,5 +276,6 @@ git checkout dev
 
 ### 注意事项
 - Go module proxy 会永久缓存版本。如果某个标签有问题，**不要 force-push 同一个标签**。必须递增版本号重新打标签（例如 `v0.7.3` → `v0.7.4`）。
-- `v-i18n` CLI 的版本号必须始终与 `package.json` 保持同步。
+- `vhtml` CLI 的版本号必须始终与 `package.json` 保持同步。
+- `cli/vhtml` 依赖 vigo 的新 API（contrib/proxy、flags JSON 配置）时，发版前必须确保 vigo 已打上包含对应改动的标签，并将 `go.mod` 的 vigo 版本提升到该标签，否则脱离 go.work 构建（go install）会失败。
 - 每次发版必须确保 `dist/` 是最新构建的，因为 npm 发布以 `dist/` 为主要内容。

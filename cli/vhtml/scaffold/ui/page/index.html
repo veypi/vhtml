@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ $t('home.title') }}</title>
+</head>
+<style>
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f8fafc;
+  }
+
+  .hero {
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  .hero p {
+    color: #64748b;
+    margin-bottom: 2rem;
+  }
+
+  .hero button {
+    padding: 0.6rem 1.4rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: #6366f1;
+    color: #fff;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .hero .count {
+    margin-top: 1.5rem;
+    color: #334155;
+  }
+</style>
+
+<body>
+  <div class="hero">
+    <h1>{{ $t('home.hello') }}</h1>
+    <p>{{ $t('home.desc') }}</p>
+    <button @click="count++">{{ $t('home.click') }}</button>
+    <div class="count">count = {{ count }}</div>
+  </div>
+</body>
+<script setup>
+  count = 0;
+</script>
+
+</html>

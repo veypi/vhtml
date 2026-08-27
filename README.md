@@ -23,6 +23,17 @@ vhtml 是一个轻量级的浏览器端响应式前端框架，基于 HTML5 标�
 </script>
 ```
 
+## vhtml CLI（开发服务器 + i18n）
+
+零构建开发体验，类似 `vite dev`：只需前端文件即可起服务，支持 API 代理与 live reload。
+
+```bash
+go install github.com/veypi/vhtml/cli/vhtml@latest
+vhtml init my-app && cd my-app && vhtml
+```
+
+详见 [cli/vhtml/README.md](cli/vhtml/README.md)。
+
 ## 快速开始
 
 ```html

@@ -5,7 +5,7 @@
 // Distributed under terms of the MIT license.
 //
 
-package main
+package i18n
 
 import (
 	"encoding/json"
@@ -22,13 +22,6 @@ var scanOpts = struct {
 }{
 	Verbose:    false,
 	AutoRemove: false,
-}
-
-func init() {
-	cmdScan := cmdMain.SubCommand("scan", "扫描代码中的 i18n key，自动排序、清理并报告缺失")
-	cmdScan.AutoRegister(&globalOpts)
-	cmdScan.AutoRegister(&scanOpts)
-	cmdScan.Command = runScan
 }
 
 func runScan() error {
@@ -244,7 +237,7 @@ func runScan() error {
 
 // printStatsTable 输出统计表格
 // totalKeys: 代码中扫描到的所有 key（作为总数基准）
-func printStatsTable(totalKeys map[string]bool, translations map[string]map[string]interface{}, config *Config) {
+func printStatsTable(totalKeys map[string]bool, translations map[string]map[string]interface{}, config *runtimeConfig) {
 	total := len(totalKeys)
 
 	fmt.Println("┌──────────┬────────┬────────┬──────────┐")
@@ -273,7 +266,7 @@ func printStatsTable(totalKeys map[string]bool, translations map[string]map[stri
 }
 
 // printAddCommand 输出建议执行的 add 命令
-func printAddCommand(missingKeys []string, translations map[string]map[string]interface{}, config *Config) {
+func printAddCommand(missingKeys []string, translations map[string]map[string]interface{}, config *runtimeConfig) {
 	// 判断每种语言的缺失情况
 	langMissing := make(map[string][]string)
 	for _, lang := range config.Languages {
@@ -312,12 +305,12 @@ func printAddCommand(missingKeys []string, translations map[string]map[string]in
 	if err != nil {
 		return
 	}
-	fmt.Printf("添加请执行: v-i18n add -json '%s'\n", string(jsonBytes))
+	fmt.Printf("添加请执行: vhtml i18n add -json '%s'\n", string(jsonBytes))
 	fmt.Println("\n⚠️  注意：上述命令中的 \"\" 为占位符，请替换为实际翻译内容后再执行。")
 }
 
 // scanFiles 扫描文件中的 i18n keys
-func scanFiles(config *Config) (map[string]bool, error) {
+func scanFiles(config *runtimeConfig) (map[string]bool, error) {
 	keys := make(map[string]bool)
 
 	pattern := config.Scan.Pattern

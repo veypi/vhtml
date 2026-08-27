@@ -412,8 +412,8 @@ Toast options: `{ duration = 3000, showClose, onClose }` (`duration: 0` = no aut
 Key scanning via CLI:
 
 ```bash
-v-i18n scan                    # scan, clean up, report missing keys
-v-i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
+vhtml i18n scan                    # scan, clean up, report missing keys
+vhtml i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 ```
 
 ### Reserved keys (`_` prefix)

@@ -1,0 +1,18 @@
+{
+  "zh-CN": {
+    "home.click": "点我",
+    "home.desc": "零构建、零虚拟 DOM，真实 DOM 响应式前端框架。",
+    "home.hello": "你好，vhtml",
+    "home.title": "vhtml 应用",
+    "notFound.backHome": "返回首页",
+    "notFound.message": "页面未找到"
+  },
+  "en-US": {
+    "home.click": "Click me",
+    "home.desc": "A reactive frontend framework on real DOM. Zero build, zero virtual DOM.",
+    "home.hello": "Hello, vhtml",
+    "home.title": "vhtml App",
+    "notFound.backHome": "Back home",
+    "notFound.message": "Page not found"
+  }
+}

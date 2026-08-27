@@ -5,12 +5,15 @@
 // Distributed under terms of the MIT license.
 //
 
-package main
+package i18n
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
+
+	"github.com/veypi/vigo/flags"
 )
 
 // ========== add 命令 ==========
@@ -20,14 +23,7 @@ var addOpts = struct {
 	JSON: "",
 }
 
-func init() {
-	cmdAdd := cmdMain.SubCommand("add", "添加翻译 key，接收 JSON 格式数据")
-	cmdAdd.AutoRegister(&globalOpts)
-	cmdAdd.AutoRegister(&addOpts)
-	cmdAdd.Command = runAdd
-}
-
-func runAdd() error {
+func runAdd(cmd *flags.Flags) error {
 	config := GetConfig()
 
 	// 读取 JSON 输入
@@ -43,9 +39,9 @@ func runAdd() error {
 		}
 	} else if addOpts.JSON != "" {
 		raw = addOpts.JSON
-	} else if len(os.Args) > 2 {
-		// 尝试从剩余参数拼接（支持 v-i18n add '{"zh-CN":{...}}'）
-		raw = os.Args[len(os.Args)-1]
+	} else if cmd.NArg() > 0 {
+		// 位置参数形式：vhtml i18n add '{"zh-CN":{...}}'
+		raw = strings.Join(cmd.Args(), " ")
 	}
 
 	if raw != "" {
