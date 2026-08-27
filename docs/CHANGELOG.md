@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased]
+## [0.9.2] - 2026-08-27
 
 ### 新增
 - **`vhtml` 命令行工具（cli/vhtml）**：单一二进制，零 Go 代码即可开发 vhtml 应用。默认命令 `vhtml`（等同 `vhtml serve`）为当前 `./ui` 目录启动 dev server：静态服务直读磁盘、SPA 回退 `root.html`（每次请求重新渲染，`{{.scoped}}` 注入）、`/vhtml/` 前缀提供框架运行时（`--src` 切换 src 模块直读用于框架调试）、文件变更 live reload（SSE + 自动注入脚本）、`vhtml.config.json` 配置 API 代理表（类 vue devServer.proxy，支持路径正则重写与 WebSocket）。原独立 `v-i18n` 工具合并为子命令 `vhtml i18n scan/add`（参数不变，提示文案同步更新）。新增 `vhtml init` 脚手架命令生成最小项目骨架。配置加载遵循 vigo/flags 原生协议：flag > 环境变量 > `vhtml.config.json` > default 标签。

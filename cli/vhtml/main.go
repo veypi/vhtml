@@ -15,7 +15,7 @@ import (
 	"github.com/veypi/vigo/logv"
 )
 
-var version = "v0.9.0" // 与 package.json version 保持同步
+var version = "v0.9.2" // 与 package.json version 保持同步
 
 func main() {
 	cfg := &Config{I18n: i18n.DefaultConfig()}
