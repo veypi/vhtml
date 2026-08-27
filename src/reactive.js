@@ -181,6 +181,23 @@ function copyBind(oldValue, newValue) {
 
 let stopChecking = false
 
+// 通知某个依赖 key 下的全部 watcher；已注销的回収掉
+function notifyListeners(listeners, lkey) {
+  const list = listeners[lkey]
+  if (!list) return
+  let i = 0
+  while (i < list.length) {
+    const cb = list[i]
+    if (!callbackList[cb]) {
+      list.splice(i, 1)
+    } else {
+      i++
+      cacheUpdateList.push(cb)
+      scheduleUpdate()
+    }
+  }
+}
+
 export function Wrap(data, root = undefined) {
   const did = GenUniqueID()
   const isArray = Array.isArray(data)
@@ -228,6 +245,9 @@ export function Wrap(data, root = undefined) {
       const oldValue = Reflect.get(target, key, receiver)
       if (oldValue === newValue) return true
       else if (stopChecking) return Reflect.set(target, key, newValue, receiver)
+      // 新增 key 属于结构变化：除精确 key 外还需通知结构依赖（'' 通道，
+      // 数组已有该语义——其所有 key 都注册在 '' 上）
+      const hadKey = Reflect.has(target, key)
       let result = true
       if (Array.isArray(newValue) && Array.isArray(oldValue)) {
         oldValue.length = 0
@@ -241,23 +261,23 @@ export function Wrap(data, root = undefined) {
         result = Reflect.set(target, key, newValue, receiver)
       }
       if (result && listen_tags.length === 0) {
-        let lkey = key
-        if (isArray) lkey = ''
-        if (listeners[lkey]) {
-          let i = 0
-          while (i < listeners[lkey].length) {
-            let cb = listeners[lkey][i]
-            if (!callbackList[cb]) {
-              listeners[lkey].splice(i, 1)
-            } else {
-              i++
-              cacheUpdateList.push(cb)
-              scheduleUpdate()
-            }
-          }
-        }
+        notifyListeners(listeners, isArray ? '' : key)
+        if (!isArray && !hadKey) notifyListeners(listeners, '')
       }
       return result
+    },
+    // Object.keys / for...in / 展开都会走 ownKeys：注册结构依赖（'' 通道），
+    // 否则空数组/空对象上 v-for 的 collect 无任何内容依赖，首次 push 静默不更新
+    ownKeys(target) {
+      if (listen_tags.length > 0) {
+        const idx = listen_tags[listen_tags.length - 1]
+        if (!listeners.hasOwnProperty('')) {
+          listeners[''] = [idx]
+        } else if (listeners[''].indexOf(idx) == -1) {
+          listeners[''].push(idx)
+        }
+      }
+      return Reflect.ownKeys(target)
     },
     has(target, key) {
       if (Reflect.has(target, key)) return true
@@ -266,21 +286,9 @@ export function Wrap(data, root = undefined) {
     deleteProperty(target, key) {
       const result = Reflect.deleteProperty(target, key)
       if (result && listen_tags.length === 0) {
-        let lkey = key
-        if (isArray) lkey = ''
-        if (listeners[lkey]) {
-          let i = 0
-          while (i < listeners[lkey].length) {
-            let cb = listeners[lkey][i]
-            if (!callbackList[cb]) {
-              listeners[lkey].splice(i, 1)
-            } else {
-              i++
-              cacheUpdateList.push(cb)
-              scheduleUpdate()
-            }
-          }
-        }
+        // 删 key 同属结构变化，通知 '' 通道（数组语义并入 ''）
+        notifyListeners(listeners, isArray ? '' : key)
+        if (!isArray) notifyListeners(listeners, '')
       }
       return result
     },
