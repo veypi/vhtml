@@ -215,7 +215,7 @@
 
 ### 2. 更新文档
 - 如果 CLI 命令行为或用法有变化，更新 `cli/vhtml/README.md`。
-- 如果 CLI 使用示例需要更新，同步修改 `docs/agents.md`。
+- 如果 CLI 使用示例需要更新，同步修改 `SKILL.md`（仓库根，即原 docs/agents.md 迁移后的核心技能文件）。
 - 在 `docs/CHANGELOG.md` 顶部新增一个版本章节，描述本次 `src/` 核心变更和发布内容。
 
 ### 3. 构建并更新 dist
