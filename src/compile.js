@@ -9,6 +9,7 @@
  */
 
 import { reportError } from './errors.js'
+import { compileStats, now } from './compile-stats.js'
 
 // ============================================================
 // 编译上下文（表达式错误定位，v0.10.3）
@@ -98,38 +99,44 @@ function stripComments(code) {
 }
 
 export function compileCode(originCode, { async: isAsync, label } = {}) {
-  const cache = isAsync ? asyncCache : syncCache
-  let fn = cacheGet(cache, originCode)
-  if (fn) return fn
+  const t0 = now()
+  try {
+    const cache = isAsync ? asyncCache : syncCache
+    let fn = cacheGet(cache, originCode)
+    if (fn) return fn
 
-  const code = originCode.trim()
-  const cleanCode = stripComments(code).trim()
-  const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
-  const wrap = (body) => `\nwith (sandbox) {\n${body}\n}`
-  const Compiler = isAsync ? AsyncFunction : Function
+    const code = originCode.trim()
+    const cleanCode = stripComments(code).trim()
+    const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
+    const wrap = (body) => `\nwith (sandbox) {\n${body}\n}`
+    const Compiler = isAsync ? AsyncFunction : Function
 
-  const tryCompile = (body) => new Compiler('sandbox', wrap(body))
+    const tryCompile = (body) => new Compiler('sandbox', wrap(body))
 
-  if (!isStatement) {
+    if (!isStatement) {
+      try {
+        fn = tryCompile(`return (\n${code}\n)`)
+        cachePut(cache, originCode, fn)
+        return fn
+      } catch (_) {}
+    }
+
     try {
-      fn = tryCompile(`return (\n${code}\n)`)
+      fn = tryCompile(code)
       cachePut(cache, originCode, fn)
       return fn
-    } catch (_) {}
-  }
-
-  try {
-    fn = tryCompile(code)
-    cachePut(cache, originCode, fn)
-    return fn
-  } catch (error) {
-    // fail-fast：编译失败必须暴露（旧行为返回 null 使绑定无声失效）
-    reportError('compile', error?.message || String(error), {
-      label,
-      code: toPreview(originCode),
-      component: compileContext || undefined,
-      stack: error?.stack || '',
-    })
-    throw error
+    } catch (error) {
+      // fail-fast：编译失败必须暴露（旧行为返回 null 使绑定无声失效）
+      reportError('compile', error?.message || String(error), {
+        label,
+        code: toPreview(originCode),
+        component: compileContext || undefined,
+        stack: error?.stack || '',
+      })
+      throw error
+    }
+  } finally {
+    compileStats.codeCompiles++
+    compileStats.codeMs += now() - t0
   }
 }

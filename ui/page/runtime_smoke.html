@@ -196,24 +196,27 @@
   probeMessage = 'message #1';
   slotVersion = 1;
   messageState = 'idle';
+  // v0.10.3：$message 移出内核、由 vhtml-ui env 注册（本 docs 应用不挂 vhtml-ui），
+  // 交互面改用本页内联状态 + console；$message 真实覆盖在 aic/vhtml-ui 应用回归。
   showInfo = () => {
     messageState = 'info opened';
-    $message.info('runtime smoke message');
+    console.log('runtime smoke message');
   };
   openConfirm = async () => {
-    try {
-      await $message.confirm('确认当前 runtime 行为正常吗？');
+    // eslint-disable-next-line no-alert
+    if (window.confirm('确认当前 runtime 行为正常吗？')) {
       messageState = 'confirm accepted';
-    } catch (error) {
+    } else {
       messageState = 'confirm cancelled';
     }
   };
   openPrompt = async () => {
-    try {
-      let value = await $message.prompt('输入任意文本验证 prompt', 'draft');
-      messageState = 'prompt value: ' + value;
-    } catch (error) {
+    // eslint-disable-next-line no-alert
+    const value = window.prompt('输入任意文本验证 prompt', 'draft');
+    if (value === null) {
       messageState = 'prompt cancelled';
+    } else {
+      messageState = 'prompt value: ' + value;
     }
   };
 </script>

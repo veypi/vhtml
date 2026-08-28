@@ -267,7 +267,6 @@ src/
 ├── vcss.js        # CSS scoping 解析器
 ├── vbus.js        # EventBus
 ├── i18n.js        # 国际化
-├── vmessage.js    # toast/dialog
 ├── utils.js       # DOM 工具（SetAttr、BindInputDomValue 等）
 ├── url.js         # URL 工具
 ```

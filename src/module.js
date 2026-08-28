@@ -10,7 +10,6 @@ import { Wrap, Watch, EnsureWrap, defineProperty } from './reactive.js'
 import { withTimeout } from './utils.js'
 import EventBus from './vbus.js'
 import I18n from './i18n.js'
-import vmessage from './vmessage.js'
 
 // ---- define 登记表（__vhtml_dev.defines） ----
 
@@ -85,9 +84,6 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
 export function createSystemContext(parent = null, initial = {}) {
   const sys = Object.create(parent || null)
 
-  if (!Object.prototype.hasOwnProperty.call(sys, '$message')) {
-    sys.$message = vmessage
-  }
   if (initial && typeof initial === 'object') {
     Object.assign(sys, initial)
   }

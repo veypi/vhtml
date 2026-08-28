@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.10.3] - 2026-08-29
+
+### 变更（破坏性）
+- **`$message` 移出内核**：`src/vmessage.js` 删除，改由 vhtml-ui 提供——vhtml-ui env.js 经 `all.define('$message', vmessage)` 注册到 manager.globals（守卫读防多挂载点重复 define），应用根 env.js 装配 `all.loadModule("v")`（须先于 vbase 装载）。模板/脚本调用面零改动（`$message` 经 $mod root 链回落解析）；`$sys` 暴露面同步收窄。docs 示例页（examples/runtime_smoke/preview）改用内联实现，docs sys 表标注来源。
+
+### 变更
+- **AOT 行模板计划化评估后撤回（实测收益不成立）**：v-for 行计划化（buildRowPlan/instantiateRowPlan）落地后同日撤回——结构编译耗时占比 62-92% 的大头是绑定安装/DOM 而非行分发，真实语料 full 200 行实测持平偏负（63.5ms vs 57.9ms），仅纯结构行 -40% 无实际场景；且 instantiateRowPlan 对 compileVif/compileNode 逐行镜像带来永久双份维护债（落地期间已产生 3 个镜像漂移 bug）。撤回后 `__vhtml_dev.compileStats` 保留 5 项轻量诊断（nodeCompiles/nodeMs/codeCompiles/codeMs/vforLines）。教训：编译优化立项前必须把「分发开销」与「绑定安装/DOM」在计时上拆开测量。
+
+## [0.10.2] - 2026-08-28
+
+### 新增
+- **`vhtml check` 静态检查命令**：AI 写 UI 工作流的静态保障——模板内每个候选表达式仅编译验证不执行（零副作用）。复用新剥离的纯编译核 `src/compile.js`（compileCode/stripComments/编译缓存/编译上下文自 sandbox.js 迁出，零 DOM 依赖，浏览器与 node 检查器共用同一文件，检查语义 = 运行时语义）。能抓：表达式语法错误、指令拼写（`v-fo`）、vslot 名称配对、模板结构错误；不能抓：语义（未定义标识符静态静默）。受支持输入 `*.html`；无 node 环境明确报错（exit 2）不静默通过。text/JSON 双输出（JSON 供 agent 消费）。
+
+### 修复
+- **只读锁 sloppy 静默**：组件代码经 `new Function` 编译为非严格模式，对描述符锁属性赋值曾静默 no-op 且不进错误登记表；Wrap set 陷阱 `Reflect.set` 返 false 时显式 throw TypeError（含 getter-only 访问器）——fail-fast 不依赖调用方严格性。
+- **recordDefine 顺序**：登记表先于 defineProperty 执行，锁属性再 define 抛错时留幻影条目；改为执行成功后才登记（$mod.define 与 manager.define 两处）。
+- **defineRegistry 不随 clear() 清空**：manager.clear() 增 `defineRegistry.length = 0`（原数组引用，__vhtml_dev.defines 同步清空）。
+- **并发模块加载单槽错配**：await 交错时 `_loadingMod` 单槽错配 recordDefine 归属、误抑制 outside-env 警告；改 `_loadingStack` 数组 + 栈顶 getter，loadEnvConfig push/pop 自平衡。
+- **嵌套 v-for 触发 observer 兜底 dev 警告**：`<template v-for>` 多根行内嵌 v-for 时 compileVfor 的 replaceWith 未 dispose 行根（刚挂 boundary 实例）→ MutationObserver 兜底回收报警告；修复为替换前 `disposeRuntimeSubtree(dom)`（实例尚为空壳释放安全；常规流程无实例幂等空转）。
+
 ## [0.10.1] - 2026-08-28
 
 ### 新增

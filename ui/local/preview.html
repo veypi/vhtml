@@ -415,13 +415,14 @@
     switchView = switchView === 'code' ? 'preview' : 'code';
   };
 
-  // 复制代码
+  // 复制代码（v0.10.3：$message 移出内核由 vhtml-ui 提供，本页不挂 vhtml-ui，
+  // 成功/失败改走 console；提示反馈由 vhtml-ui 应用承载）
   copyCode = () => {
     if (!code) return;
     navigator.clipboard.writeText(code).then(() => {
-      $message.success($t('preview.copySuccess'));
+      console.log($t('preview.copySuccess'));
     }).catch(() => {
-      $message.error($t('preview.copyError'));
+      console.error($t('preview.copyError'));
     });
   };
 

@@ -10,6 +10,7 @@ import { Run } from './sandbox.js'
 import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
 import { watch } from './runtime-watch.js'
+import { compileStats, now } from './compile-stats.js'
 import {
   instanceOf, setInstance, metaOf, peekMeta,
   createInstance,
@@ -48,7 +49,7 @@ function getSharedSourceNodes(dom) {
 }
 
 /** 将一组节点按顺序插入到 refNode 之前（用 fragment 保持顺序） */
-function insertBefore(nodes, refNode) {
+export function insertBefore(nodes, refNode) {
   const frag = document.createDocumentFragment()
   nodes.forEach(n => frag.appendChild(n))
   refNode.parentNode.insertBefore(frag, refNode)
@@ -262,6 +263,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
         entry = null
       }
       if (!entry) {
+        compileStats.vforLines++
         const itemStart = document.createComment('~vitem')
         const itemEnd = document.createComment('~/vitem')
         insertBefore([itemStart, itemEnd], refNode)
@@ -273,7 +275,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
         insertBefore(clones, itemEnd)
         const textCleanups = []
         const remaining = compileVif(clones, itemData, runtime, ctx)
-        remaining.forEach(n => {
+        remaining.forEach((n) => {
           if (n.nodeType === 1) {
             metaOf(n).vforData = itemData
             ensureStructuralBoundary(n, itemData, runtime)
@@ -421,6 +423,18 @@ export function compileVif(nodes, data, runtime, ctx) {
 // ---- 根编译入口 ----
 
 export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
+  // 帧耗时 = 本次总耗时 − 递归子调用耗时（嵌套累计会按深度放大，不可比）
+  const t0 = now()
+  const prevMs = compileStats.nodeMs
+  compileStats.nodeCompiles++
+  try {
+    return compileNodeInner(dom, scopedData, runtime, ctx, scope)
+  } finally {
+    compileStats.nodeMs += (now() - t0) - (compileStats.nodeMs - prevMs)
+  }
+}
+
+function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
   if (runtime instanceof HTMLElement) {
     throw new Error('runtime error')
   }

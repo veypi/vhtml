@@ -373,8 +373,8 @@
 <script setup>
   msg = '';
   send = () => {
-    // $emit 向父组件发送事件
-    $message.success('消息: ' + msg);
+    // $emit 向父组件发送事件（$message 自 v0.10.3 由 vhtml-ui 提供，示例改用 console）
+    console.log('消息: ' + msg);
   };
 <\/script>`;
 

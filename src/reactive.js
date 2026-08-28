@@ -52,6 +52,7 @@
  */
 
 import { errorLog } from './errors.js'
+import { compileStats } from './compile-stats.js'
 
 const listenStack = []   // 求值期栈：栈顶 = 当前正在注册依赖的 handle
 const dirty = new Set()  // 待 flush 的 handle（Set 去重，迭代中删除安全）
@@ -539,6 +540,8 @@ if (typeof window !== 'undefined' && !window.__vhtml_dev) {
         liveHandles: devStats.watches - devStats.cancels,
       }
     },
+    // 编译耗时统计（v0.10.3 AOT 评估诊断；compile.js / compiler.js 共用，非契约）
+    compileStats,
     cascadeErrors,
     // 全局错误登记表（errors.js，v0.10.3 错误契约）：编译/表达式/挂载四类
     get errors() {

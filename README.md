@@ -83,7 +83,7 @@ $data → $mod → $sys → expose → execArgs → window
 
 - **`$data`**：组件实例私有状态，来自 `<script setup>` 的裸赋值和 props
 - **`$mod`**：模块级上下文，同 scoped 下所有组件共享。包含 `scoped`、`$bus`、`$i18n`、`$t`、`fetch`
-- **`$sys`**：系统变量池。包含 `$router`、`$emit`、`$message`
+- **`$sys`**：系统变量池。包含 `$router`、`$emit`
 
 ### 数据绑定
 
@@ -245,6 +245,8 @@ const result = await $mod.fetch('/api/users', {
 ```
 
 ### 消息通知
+
+> v0.10.3 起 `$message` 由 vhtml-ui 包提供（其 env.js 注册到 globals，应用装载 vhtml-ui 模块后可用），内核不再内置。
 
 ```js
 $message.info("信息提示")

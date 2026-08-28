@@ -1,6 +1,6 @@
 ---
 name: vhtml
-description: vhtml browser-only HTML component framework user manual — components, script setup, bindings, props, URL prefix rules, ESM import, slots, refs, env.js, routes.js, vrouter, $data/$sys/$mod/$router, $t/$i18n, $bus, $message, lifecycle scripts. Read this guide whenever a task involves vhtml pages, components, routing, i18n, or module-scoped concepts.
+description: vhtml browser-only HTML component framework user manual — components, script setup, bindings, props, URL prefix rules, ESM import, slots, refs, env.js, routes.js, vrouter, $data/$sys/$mod/$router, $t/$i18n, $bus, lifecycle scripts. Read this guide whenever a task involves vhtml pages, components, routing, i18n, or module-scoped concepts.
 ---
 
 # vhtml Frontend Guide
@@ -54,12 +54,12 @@ Component file shape:
 Component styles are automatically scoped to the component's DOM subtree; `@keyframes` names are isolated per component.
 
 ```css
-.title { ... }          /* matches only elements compiled by this component (scope-attributed) */
+.title { ... }          /* matches only elements compiled by this component */
 body { ... }            /* the component host node itself (body / :root → host) */
 body .title { ... }     /* ALL descendant elements, scope attribute not required — style piercing */
 ```
 
-With a `body` / `:root` prefix, descendant selectors are no longer scope-restricted — they also match runtime-created elements (`document.createElement`, third-party library DOM) that carry no scope attribute. Plain selectors only match component-compiled elements.
+With a `body` / `:root` prefix, descendant selectors are no longer scope-restricted — they also reach runtime-created elements (`document.createElement`, third-party library DOM), which plain selectors don't match.
 
 Nested rule blocks are scoped recursively: `@media`, `@supports`, and `@container` (size and style queries) — selectors and `@keyframes` references inside them get the same scope treatment. Other at-rules (`@font-face`, `@import`, …) pass through untouched.
 
@@ -106,18 +106,18 @@ Module-scoped context shared by all components under the same `scoped` prefix. N
 | `$t(key, params)` | translation shorthand |
 | `fetch(url, options)` | scoped fetch — relative and `/`-prefixed URLs auto-prepend `scoped` |
 | `restrictedFetch` | replaces `fetch` in `unsafe` mode — throws on http(s) URLs and cross-scoped paths |
-| `define(key, value, opts?)` | reactive-enhanced `Object.defineProperty` bound to this module (see below) |
+| `define(key, value, opts?)` | define a module entry — see below |
 
 Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as custom keys on `$mod`.
 
-**Two-level tree + define (v0.10.1, addWrapper removed):** each `$mod` is a local entry tree with a root-chain fallback to a per-page global layer (`manager.globals`):
+**Local entries and shared (global) entries:** each module has its own `$mod` entries; on top of that there is a per-page shared layer that every module reads and writes:
 
-- Read: local key wins; local miss + global hit → read through to the global entry (reactive — the global define notifies already-subscribed readers).
-- Write by assignment `$mod.x = y`: local hit → local write; local miss + global hit → writes through to the global entry (visible to every module); both miss → creates a local private entry. Assignment stays legal everywhere and equals `define` without opts.
-- `$mod.define(key, value, opts?)` = explicit **local** write: never falls through to the global layer, so it can shadow a global same-name entry (that is its purpose vs assignment). `manager.define(key, value, opts?)` (the `all` second argument of env.js) = explicit **global** write. Both accept `{ get, set, writable, configurable, enumerable }`; descriptor defaults are all `true` (repeated define = overwrite, last wins). Readonly = `{ writable: false, configurable: false }` — later assignment or re-define throws the native TypeError (no reserved-word list; the descriptor is the boundary). Accessors installed on a wrapped proxy get `this = proxy`, and getter bodies track reactive deps; setter writes notify watchers of the key.
-- Framework builtins (`scoped`, `$bus`, `$i18n`, `$t`, `fetch`, `restrictedFetch`, `define`) are locked readonly at assembly time — env.js assigning/redefining them fails fast.
-- Global entries must be defined while an `env.js` is loading (load-order invariant: components compile only after env.js completes, so templates never read a global before its define). `manager.define` outside env.js loading warns in dev — already-compiled templates that read-missed the key would not re-evaluate.
-- `__vhtml_dev.defines` registry lists every define: `{ name, target: '<scope>|$globals', opts }`.
+- Read: a local entry wins; if the key exists only in the shared layer, `$mod.key` returns the shared value (reactive — shared updates propagate to readers in any module).
+- Write by assignment `$mod.x = y`: local entry present → writes the local entry; only a shared entry exists → writes through to the shared entry (visible to every module); neither exists → creates a local private entry. Assignment is always legal and equals `define` without opts.
+- `$mod.define(key, value, opts?)` = explicit **local** write: never touches the shared layer, so it can shadow a shared same-name entry (that is its purpose vs assignment). `manager.define(key, value, opts?)` (the second `env.js` argument) = explicit **shared** write. Both accept `{ get, set, writable, configurable, enumerable }`; defaults are all `true` (repeated define = overwrite, last wins). Readonly = `{ writable: false, configurable: false }` — later assignment or re-define throws a TypeError. Accessor options are supported: getters re-evaluate reactively, setters notify watchers.
+- Built-in keys (`scoped`, `$bus`, `$i18n`, `$t`, `fetch`, `restrictedFetch`, `define`) are readonly — assigning or redefining them throws.
+- Define shared entries inside an `env.js`: components start compiling only after env.js finishes, so templates never read a shared entry before it exists. Defining a shared entry later still works, but already-rendered templates that read-missed the key will not re-evaluate — a dev warning is logged.
+- `__vhtml_dev.defines` lists every define: `{ name, target: '<scope>|$globals', opts }`.
 
 ### `$sys`
 
@@ -127,9 +127,8 @@ System variable pool, inherited from ancestor components via prototype chain.
 | ----- | ------------- |
 | `$router` | proxy to the nearest ancestor `<vrouter>` |
 | `$emit(name, ...args)` | emit custom event to the parent's `@name` handler |
-| `$message` | global toast / dialog API |
 
-`$emit` event names must not collide with native DOM event names (`change`, `input`, `click`, ...): a parent's `@name` would attach as a native DOM listener and never receive the custom payload. Since v0.10.3 this **throws** (fail-fast) instead of warning. Always pick non-built-in names.
+`$emit` event names must not collide with native DOM event names (`change`, `input`, `click`, ...): a parent's `@name` would attach as a native DOM listener and never receive the custom payload. This **throws** (fail-fast). Always pick non-built-in names.
 
 ### `$router`
 
@@ -147,7 +146,7 @@ Nearest ancestor `<vrouter>` view, local to the current router subtree.
 | `cachedPages()` | cached-page list for tab/page-management UIs: `{ key, title, path, fullPath, isActive, active(), del() }` |
 | `dropPage(key)` | destroy a cached page by cacheKey (dropping the active page remounts it ≈ refresh); returns `false` while the page is mid-mount |
 
-Navigation is transactional (v0.10.2): resolving stages the page off-tree, commit is one synchronous atomic switch; a new navigation supersedes the in-flight one. Two idempotence invariants: navigating to the **already-committed destination** or to the **same target as the in-flight navigation** is a no-op and never supersedes — so URL-sync patterns (`setParams`/`setQuery` inside a setup watcher) are safe even when they fire during the page's own first build. `current.params`/`current.query` are staged to the target snapshot before the build starts, so a page's setup reads its own route params on first build. Anchors without `href` (pure `@click` buttons) are not registered with the router and receive no `href`/`active`; an empty-string target is not a valid navigation (never resolves to the current path).
+Navigation is transactional: the target page is prepared first and switched in atomically; a new navigation supersedes one still in flight. Two idempotence rules: navigating to the **already-current destination**, or repeating the **target of an in-flight navigation**, is a no-op — so URL-sync patterns (`setParams`/`setQuery` inside a setup watcher) are safe even when they fire during the page's own first build. `current.params`/`current.query` already hold the target values before the page starts building, so setup can read its own route params on first run. Anchors without `href` (pure `@click` buttons) are not registered with the router and receive no `href`/`active`; an empty-string target is not a valid navigation (never resolves to the current path).
 
 ## URL Prefix Rules
 
@@ -186,7 +185,7 @@ Static imports are supported; relative paths resolve against the component's own
 - `.min.js` and `http://` imports are rejected with a warning — load external libraries via `<script>` tags instead.
 - `await import('path')` dynamic imports are supported.
 - In `unsafe` mode, all import statements are stripped.
-- `unsafe` is a **fat-finger guard, not a security boundary** (v0.10.3): functions reachable through `$data` / `$mod` / `$sys` and bare data reads are wrapped so `.constructor` / `__proto__` escape chains are blocked, but sandboxed code can still reach `Function` via string literals (`"x".constructor.constructor`) because primitives auto-box outside any proxy. Real isolation requires ShadowRealm/iframe-level solutions.
+- `unsafe` mode is a **fat-finger guard, not a security boundary**: it blocks common escape tricks, but a determined script can still break out. Never rely on it for real isolation — treat it as protection against accidental mistakes only.
 
 ## Bindings
 
@@ -234,13 +233,13 @@ Static imports are supported; relative paths resolve against the component's own
 Helpers available in all script types:
 
 - `$node` — the current host DOM element.
-- `$watch(() => expr, (val) => { ... })` — reactive effect, auto-cleaned on dispose. In `<script setup>` registrations are queued and drained deterministically right after props binding completes (v0.10.3; the old 50ms timer is gone), so the first evaluation already sees bound props; in other scripts it registers immediately.
+- `$watch(() => expr, (val) => { ... })` — reactive watcher, auto-cleaned on dispose. In `<script setup>` the first evaluation runs after props are bound, so it already sees the incoming prop values; in other script types it starts immediately.
 
-### Disposal Contract (v0.10.1)
+### Disposal Contract
 
-- **Who removes DOM owns the dispose**: before externally removing an element that hosts vhtml runtime state (instances / bindings / metas), call `disposeNode(el)` (exported from `vhtml/component-instance.js`). It destroys the whole subtree's runtime state and is idempotent (returns `false` when there was nothing left to clean).
-- The framework already disposes explicitly at all internal removal points (`v-for` / `v-if` / `:vsrc` / `v-html` / `parseRef` replacement / page destroy). External `el.remove()` without `disposeNode` still gets collected by a MutationObserver **fallback**, but logs a dev warning (`disposed via observer fallback`) — treat that warning as a bug in the remover and switch to `disposeNode`. The warning is limited to vhtml-template-derived DOM (elements stamped with `vrefof`/`vref` by the loader/template); unmarked DOM (e.g. elements owned by third-party libraries that happen to carry vhtml state) is collected silently — cleanup always runs, only the warning is gated.
-- Route-cached pages survive removal via the instance field `keepOnDetach`. Since v0.10.3 it is declared through `parseRef` options (`{ keepOnDetach: true }`, used by the router) or set directly on the instance; the old `data-keep` DOM attribute channel is fully removed and no longer translates.
+- **Who removes DOM owns the dispose**: before externally removing an element that hosts vhtml content (instances / bindings), call `disposeNode(el)` (exported from `vhtml/component-instance.js`). It cleans the whole subtree and is idempotent (returns `false` when there was nothing to clean).
+- The framework handles disposal at all its own removal points (`v-for` / `v-if` / `:vsrc` / `v-html` / page destroy). An external `el.remove()` without `disposeNode` is still cleaned up automatically, but logs a dev warning (`disposed via observer fallback`) — treat that warning as a bug in the removing code and switch to `disposeNode`. The warning only fires for DOM created from vhtml templates; foreign DOM (e.g. elements owned by third-party libraries) is cleaned up silently.
+- Route-cached pages survive DOM removal via the instance field `keepOnDetach` (managed by the router).
 
 ## Refs and Parent-to-Child Calls
 
@@ -271,7 +270,7 @@ Host nodes expose `$data`, `$sys`, `$mod`. Prefer `props + $emit` for normal com
 </body>
 ```
 
-Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`); fallback content runs in the child's own runtime. `<vslot>` supports `:name` for dynamic slot names. `<vslot vbind="a, b">` exposes the outlet component's `$data` keys `a`/`b` to the projected content (re-synced on change) — the slot-props mechanism.
+Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`); fallback content runs in the child's own runtime. `<vslot>` supports `:name` for dynamic slot names. `<vslot vbind="a, b">` exposes the outlet component's `$data` keys `a`/`b` to the projected content (kept in sync on change).
 
 ## `env.js`
 
@@ -290,7 +289,7 @@ export default async ($mod, manager) => {
 
 - `manager.loadModule(subPath)` — preload a sub-module's `env.js`; `/`-prefixed = absolute, otherwise relative to the current scoped.
 - `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. Non-global aliases only register while an `env.js` is loading; aliases resolve only in non-root modules (`scoped` ≠ `''`).
-- `$mod.define(key, value, opts?)` / `manager.define(key, value, opts?)` — module-local vs global entries of the two-level `$mod` tree (semantics see the `$mod` section).
+- `$mod.define(key, value, opts?)` / `manager.define(key, value, opts?)` — module-local vs shared entries (semantics see the `$mod` section).
 
 Do NOT use `env.js` for route guards, per-page state, or component-local data.
 
@@ -390,20 +389,6 @@ $mod.$bus.emitLocal('evt', data)               // local only, never broadcasts
 $mod.$bus.off('evt', fn)
 ```
 
-## `$message`
-
-```js
-$message.info('Notice')
-$message.success('Done')
-$message.warning('Careful')
-$message.error('Failed')
-$message.confirm('Delete?').then(() => { ... }).catch(() => { /* cancelled */ })
-$message.prompt('Name', 'default').then(value => { ... }).catch(() => {})
-$message.copy('text')                        // clipboard copy + success toast
-```
-
-Toast options: `{ duration = 3000, showClose, onClose }` (`duration: 0` = no auto-close). Dialog options: `{ title, confirmText, cancelText, onConfirm, onCancel }`. Cancel/dismiss **rejects** the promise with `Error("cancelled")` — always attach a `.catch`.
-
 ## i18n
 
 `$i18n` and `$t` live on `$mod` — translations are module-scoped by default.
@@ -441,60 +426,65 @@ vhtml i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 
 Keys starting with `_` (`_err.40100`, `_theme.dark`) are maintained manually in langs.json: scan skips them for missing/unused checks, `--autoremove` never deletes them. Use for dynamic keys referenced via concatenation, variables, or function args (not exact string literals).
 
-## Web Components: No Interop (v0.10.2 decision)
+## Web Components: No Interop
 
-vhtml does **not** special-case native Web Components. A tag containing `-` is always an internal vhtml component and goes through the component pipeline (fetch + compile) — no `customElements` probe, no property-first binding, no exemption attributes.
+vhtml does **not** special-case native Web Components. A tag containing `-` is always an internal vhtml component, loaded and compiled by vhtml.
 
 To embed a third-party WC, keep it **outside vhtml's compilation scope** and handle it yourself: a `no-vhtml` region (compilation skipped — set attributes / append children from a setup script or via `v-html` content), or plain manual DOM (`document.createElement` + `customElements` registration in your own code).
 
-## Tooling: `vhtml check` (v0.10.2)
+## Tooling: `vhtml check`
 
-Static template check for AI-written-UI workflows. Compiles every candidate expression through the **same pure compile core as the runtime** (`src/compile.js`, task-0 extraction) — compile-only, never executes, zero side effects. Node-side: the Go CLI probes `node`, resolves the compile core (`VHTML_COMPILE_CORE` env, else walks up from cwd for `src/compile.js`), runs the embedded `cli/vhtml/check.mjs`.
+Static template check for AI-written-UI workflows. Every candidate expression in the template is compiled for verification only — nothing is executed, zero side effects. Requires Node.js; when Node is unavailable the command fails explicitly (exit `2`), never a silent pass.
 
 ```bash
 vhtml check [path...]            # default "."; skips node_modules/dist/.git, collects *.html
 vhtml check --json               # findings as a JSON array (agent consumption)
 ```
 
-**Exit codes (contract, frozen at v0.10.3):** `0` = no findings; `1` = findings (E or W); `2` = tool failure (node/core missing, IO) — explicit error, never silent pass.
+**Input scope:** `*.html` templates only — `.js` files are not supported inputs (JS comments are not masked, so a `<tag>`-shaped literal inside a comment is reported as a structure finding). Config/env JS is covered indirectly via the `<script>` blocks of HTML files.
+
+**Exit codes (stable contract):** `0` = no findings; `1` = findings (E or W); `2` = tool failure (e.g. Node.js missing) — explicit error, never silent pass.
 
 **Output (text):** `<file>:<line>:<col> [E|W] <kind>: <message>`; JSON: `[{file,line,col,severity,kind,message}]`.
 
-**Kinds:** `syntax` (interpolation `{{ }}`, `:bind`, `@handler`, `v-if/else-if/show/html` RHS, `v-for` RHS, inline `<script>` blocks — static `import ... from` lines are stripped first, mirroring `imports.js parseImports`), `vfor` (malformed LHS/RHS), `directive` (unknown `v-` attr — catches `v-fo` typos; bare `@evt` without handler), `vslot-pair`, `structure` (tag balance, AUTOCLOSE_OK set silences legal omissions like `li`/`p`), `io`.
+**Kinds:** `syntax` (interpolation `{{ }}`, `:bind`, `@handler`, `v-if/else-if/show/html` RHS, `v-for` RHS, inline `<script>` blocks), `vfor` (malformed LHS/RHS), `directive` (unknown `v-` attr — catches `v-fo` typos; bare `@evt` without handler), `vslot-pair`, `structure` (tag balance; legal tag omissions like `li`/`p` are accepted), `io`.
 
-**Ability boundary (do not over-promise):** checks syntax/structure only — no semantic validation, no undefined-identifier detection (runtime `has`-always-true + `warnMissedIdentifier` is the runtime mechanism). Modifier-only handlers (`@click.stop`) are legal. Files containing Go-template syntax (`{{.`) are skipped wholesale (server-templated sources like `rses/ui/root.html` — the runtime compiles the *rendered* product).
+**Ability boundary (do not over-promise):** syntax and structure only — no semantic validation, no undefined-identifier detection (undefined names warn once at runtime). Modifier-only handlers (`@click.stop`) are legal. Files containing Go-template syntax (`{{.`) are skipped wholesale (server-templated sources; only the rendered output can be checked).
 
-## Reactivity Contract & Pitfalls (v0.10.0)
+## Reactivity Contract & Pitfalls
 
-vhtml reactivity = Proxy dep-tracking + two-phase rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's own evaluation are **never notified** (feedback-loop guard).
+Nested objects are reactive — no opt-in needed. Updates are batched: multiple writes within the same task collapse into one refresh. Writes made **during a watcher's own evaluation are ignored** (feedback-loop guard).
 
-**Change gate**: before invoking a watcher callback, the new value is compared with the previous one (`Object.is` by default) — the callback fires only when the value actually changed. `equality: null` opt-out exists for always-run subscriptions (used internally by v-for reconcile). Known boundary: a template expression that returns a fresh reference on every evaluation (e.g. `items.filter(...)`) always passes the gate — avoid allocating inside template expressions.
+**Change gate**: a watcher callback fires only when the value actually changed (`Object.is` comparison). Pass `{ equality: null }` to `$watch` for an always-run subscription. Known boundary: a template expression that returns a fresh reference on every evaluation (e.g. `items.filter(...)`) always passes the gate — avoid allocating inside template expressions.
 
-**Pure-replacement writes**: assigning to a proxied key replaces the value outright — no deep merge. `d.x = { a: 1 }` installs a fresh proxy with a fresh identity (deep merge only happens inside v-for position-key reuse via `mergeIntoProxy`).
+**Pure-replacement writes**: assigning to a reactive key replaces the value outright — no deep merge, and the new value gets a fresh identity (v-for position-keyed row reuse is the one exception — see below).
 
-**Array mutators**: `splice / shift / unshift / sort / reverse / copyWithin / fill` on a reactive array are batch-wrapped — all their notifications collapse into one flush; `push / pop` notify per raw set (still deduped within a frame). In-place mutation is safe and keeps v-for row identity for position-keyed rows.
+**Array mutators**: all standard mutators (`push / pop / splice / shift / unshift / sort / reverse / copyWithin / fill`) are safe on reactive arrays; their notifications collapse into one refresh. In-place mutation keeps v-for row identity.
 
 ### v-for item identity (no `:key`)
 
 v-for tracks items automatically; there is no `:key` attribute (it compiles as a plain inert attribute — delete it):
 
-| list content | cache identity | update behavior |
-| ------------ | -------------- | --------------- |
-| object items | the item object itself (a `DataID` symbol stamped on first reactive wrap) | mutate fields via the proxy → in-place patch, DOM kept · `list[i] = {...}` → fresh identity → entry destroyed & rebuilt (v0.10.0: pure replacement, no merge) · wholesale `list = [new objects]` → all entries destroyed & rebuilt (correct, but loses transient state like focus) |
-| objects without `DataID` (e.g. fresh objects returned on every call of a function source like `v-for="tr in tracks()"`) | array position | same shape (equal top-level key set) → merged in place, DOM kept · shape change → entry destroyed & rebuilt (stale bindings are never evaluated against the mismatched item) |
+| list content | identity | update behavior |
+| ------------ | -------- | --------------- |
+| object items with stable references | the item itself | mutate fields → in-place patch, DOM kept · `list[i] = {...}` replaces the entry → destroyed & rebuilt · wholesale `list = [new objects]` → all entries destroyed & rebuilt (transient state like focus is lost) |
+| fresh objects without stable references (e.g. a function source like `v-for="tr in tracks()"`) | array position | same shape (equal top-level key set) → merged in place, DOM kept · shape change → entry destroyed & rebuilt |
 | primitive items (string/number) | array position | value changes patch in place, DOM kept |
-| same object twice in one list | — | both entries bind the same record; avoid |
+| the same object twice in one list | — | both entries bind the same record; avoid |
 
-Structural edits (insert / remove / reorder): either in-place mutators (`splice` / `unshift` / `sort` — batch-wrapped, safe since v0.10.0) or copy-then-assign (`slice()` / spread + assign back); kept items retain identity, so their DOM is preserved and physically re-ordered.
+Structural edits (insert / remove / reorder): either in-place mutators (`splice` / `unshift` / `sort`) or copy-then-assign (`slice()` / spread + assign back) — both are safe; kept items retain identity, so their DOM is preserved and physically re-ordered.
 
 ### Other rules
 
-1. Mutating a nested object through a held **raw reference** (`msg.text = x` after `const msg = {...}`) bypasses the proxy set trap — no update (same as Vue's toRaw hazard). Always write via the proxy path: `d.list[i].text = x`.
+1. Mutating a nested object through a held **raw reference** (`const msg = {...}` then `msg.text = x`) bypasses reactivity — no update. Always write through the reactive path: `d.list[i].text = x`.
 2. For streaming/animation (typewriter, count-up): drive from top-level scalar `$data` props, not nested object fields; lists should be append-only immutable records.
-3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — do state mutations from event handlers, timers, or rAF callbacks.
-4. Watcher callbacks only fire on value change (`Object.is` gate). If you need an always-run watcher, pass `{ equality: null }` to `$watch`.
-5. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds within one flush with a scheduler-level throw carrying the effect-chain diagnostic — check `window.__vhtml_dev.cascadeErrors`.
-6. Errors are exposed, never silent (v0.10.3 error contract): template compilation failures throw (bindings no longer die silently), a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space, and every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (ring buffer, newest last) with code preview and component location (`tag`/`vref`/`vsrc`). Undefined identifiers read inside sandboxed code warn once per name (spelling check).
+3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — mutate state from event handlers, timers, or rAF callbacks instead.
+4. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds in one refresh, throwing an error — check `window.__vhtml_dev.cascadeErrors` for the effect chain.
+5. Errors are exposed, never silent: template compilation failures throw; a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space; every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (newest last) with code preview and component location. Undefined identifiers read inside sandboxed code warn once per name (spelling check).
+
+#### Compile stats (`__vhtml_dev.compileStats`)
+
+Counters for compile-vs-render profiling: `nodeCompiles` / `nodeMs` (DOM-compile calls and self time), `codeCompiles` / `codeMs` (expression compiles, including cache hits), `vforLines` (new v-for rows).
 
 ## Debug
 
@@ -531,7 +521,7 @@ Structural edits (insert / remove / reorder): either in-place mutators (`splice`
 
     remove = (id) => {
       list = list.filter(item => item.id !== id)
-      $message.success('Deleted')
+      console.log('Deleted')
     }
 
     load()
