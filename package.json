@@ -13,7 +13,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build",
+    "build": "node scripts/build.mjs",
     "build:watch": "vite build --watch",
     "dev": "vite build --watch --mode development",
     "preview": "vite preview",
