@@ -42,6 +42,11 @@ func main() {
 		return runInit(dir)
 	}
 
+	cmdCheck := cmd.SubCommand("check", "静态检查模板：表达式语法 / 指令拼写 / vslot 配对 / 标签结构（需 node，检查语义复用运行时编译核）").AllowArgs()
+	checkCfg := &checkOpts{}
+	cmdCheck.AutoRegister(checkCfg)
+	cmdCheck.Command = func() error { return runCheck(cmdCheck, checkCfg) }
+
 	cmd.Parse()
 	if err := cmd.Run(); err != nil {
 		logv.Warn().Msg(err.Error())

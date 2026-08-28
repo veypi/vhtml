@@ -73,8 +73,9 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
   const wrapped = EnsureWrap(mod, globals || undefined)
   // define 绑本模块（显式 local 目标的写入通道；global 目标走 all.define）
   defineProperty(wrapped, 'define', (key, value, opts) => {
+    const r = defineProperty(wrapped, key, value, opts)
     recordDefine(scoped || '/', key, opts)
-    return defineProperty(wrapped, key, value, opts)
+    return r
   }, readonly)
   return wrapped
 }
@@ -173,6 +174,10 @@ export class ModuleContextManager {
     this.modMap = new Map()
     this._aliasMap = new Map()
     this._globalAliases = {}
+    // 正在加载 env.js 的模块栈（P3-3）：嵌套 loadModule 与并发加载经
+    // push/pop 自平衡，取代旧单槽 + 手动保存/恢复（单槽在 await 交错时
+    // 会被内层 finally null 清空，错配 recordDefine 归属、误抑制 outside-env 警告）
+    this._loadingStack = []
     // $mod 二级树的全局层（v0.10.1）：模块 proxy 的 root 链终点。各模块
     // $mod 本地无 key 时读/写穿透到 globals——动态回落取代 addWrapper 复制
     this.globals = Wrap({})
@@ -181,6 +186,11 @@ export class ModuleContextManager {
       fallback: 'en-US',
     })
     this.initLocaleWatcher()
+  }
+
+  /** 正在加载 env.js 的模块（栈顶）；null = 非装载期 */
+  get _loadingMod() {
+    return this._loadingStack[this._loadingStack.length - 1] || null
   }
 
   initLocaleWatcher() {
@@ -201,8 +211,8 @@ export class ModuleContextManager {
     if (!this._loadingMod) {
       console.warn(`all.define: '${String(key)}' defined outside env.js loading — already-compiled templates reading this key will not re-evaluate`)
     }
+    const r = defineProperty(this.globals, key, value, opts)
     recordDefine('$globals', key, opts)
-    defineProperty(this.globals, key, value, opts)
   }
 
   clear() {
@@ -210,6 +220,7 @@ export class ModuleContextManager {
     this._aliasMap.clear()
     this._globalAliases = {}
     this.globals = Wrap({})
+    defineRegistry.length = 0
   }
 
   async getModule(scoped = '') {
@@ -257,8 +268,7 @@ export class ModuleContextManager {
     if (!subPath || typeof subPath !== 'string') {
       throw new Error('loadModule: subPath must be a non-empty string')
     }
-    const savedLoadingMod = this._loadingMod
-    const currentScoped = savedLoadingMod.scoped || ''
+    const currentScoped = this._loadingMod.scoped || ''
 
     let targetScoped
     if (subPath.startsWith('/')) {
@@ -267,13 +277,8 @@ export class ModuleContextManager {
       targetScoped = normalizeScoped(currentScoped ? `${currentScoped}/${subPath}` : `/${subPath}`)
     }
 
-    try {
-      return await this.getModule(targetScoped)
-    } finally {
-      // 确保子模块 env.js 加载完毕后恢复 _loadingMod，
-      // 否则当前 env.js 后续的 addAlias 等调用会丢失模块关联
-      this._loadingMod = savedLoadingMod
-    }
+    // 子模块 loadEnvConfig 的 push/pop 自平衡恢复栈顶，无需保存/恢复
+    return await this.getModule(targetScoped)
   }
 
   broadcastBusEvent(eventName, args, sourceBus) {
@@ -318,7 +323,7 @@ export class ModuleContextManager {
   async loadEnvConfig(mod) {
     const base = mod.scoped && /^https?:\/\//.test(mod.scoped) ? mod.scoped : `${window.location.origin}${mod.scoped || ''}`
     const envUrl = `${base}/env.js`
-    this._loadingMod = mod
+    this._loadingStack.push(mod)
     try {
       const envModule = await withTimeout(import(envUrl), 10000, `import ${envUrl}`)
       if (typeof envModule.default === 'function') {
@@ -327,7 +332,7 @@ export class ModuleContextManager {
     } catch (error) {
       console.warn(`error loading ${envUrl}: ${error}`)
     } finally {
-      this._loadingMod = null
+      this._loadingStack.pop()
     }
   }
 }

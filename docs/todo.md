@@ -1,7 +1,7 @@
 # vhtml 路线图（todo）
 
-来源：2026-08-27 机制评估（Web Components 对比 + 全源码审计）+ 2026-08-28 复核修正 + 2026-08-28 补充设计方向（$mod 职责归位 + 全局对象）。
-已发布 v0.10.0。原则：无用户期允许破坏性改动；错误该暴露就暴露；不做历史兼容。
+来源：2026-08-27 机制评估（Web Components 对比 + 全源码审计）+ 2026-08-28 复核修正 + 2026-08-28 补充设计方向（$mod 职责归位 + 全局对象）+ 2026-08-28 综合评估（双评估交叉核验：修正 check 载体事实错误、补 WC/AOT/契约冻结设计、HMR 定论）。
+已发布 v0.10.1。原则：无用户期允许破坏性改动；错误该暴露就暴露；不做历史兼容。
 
 每个版本通用验收：`node --test` 全过、`vite build` 重建 dist、aic 4000 debug 环境回归高频页面（chat / agents / explorer / os）；性能/内存不倒退——活 DOM 节点与游离驻留水位对比基线（`__vhtml_dev` 缓存水位或 heap snapshot 方法论）；语法或契约变化时同步 SKILL.md 与 skill 镜像（~/.cache/aic/u/admin/skills/vhtml/SKILL.md）。
 
@@ -22,7 +22,7 @@
 
 ---
 
-## v0.10.1 — 模块层职责归位：$mod 二级对象树 + define 公共原语（$mod.define / all.define）+ 路由前缀清理 + addWrapper 移除（破坏性）— 设计定稿 2026-08-28（v3）；2026-08-28 落地并提交（f3e41e6，已打 tag v0.10.1；163/163 测试绿，dist 270.5kB）；路由前缀 P1 修复见 B 节最终方案
+## v0.10.1 — 模块层职责归位：$mod 二级对象树 + define 公共原语（$mod.define / all.define）+ 路由前缀清理 + addWrapper 移除（破坏性）— 设计定稿 2026-08-28（v3）；2026-08-28 落地并提交（f3e41e6，已打 tag v0.10.1；163/163 测试绿，dist 270.5kB）；路由前缀 P1 修复见 B 节最终方案；2026-08-28 综合评估复核：双评估独立核验落地无水分（第二份评估 9/9 事实声明属实），遗留 P2/P3 移交 v0.10.2 顺手修复；dist 已 terser minify（b23eafd，114.7kB）
 
 主题：$mod 从杂物袋升级为「本地条目 + 全局回落」的二级对象树；跨模块共享从「addWrapper 逐模块复制」改为「define 到 manager.globals + root 链动态回落」；define 是 Object.defineProperty 的响应式增强公共原语。设计经 2026-08-28 三轮收敛（v2 三键 store → v3 defineProperty 原语），**以 v3 为准**。
 
@@ -88,6 +88,8 @@ vhtml：删 `addWrapper`/`this.wrappers`/`entry.applied` 整套机制（module.j
 | `aic/ui/layout/default.html:717/734` | `$mod.$os = {...}`（setup 挂）→ dispose 置 null（运行期写 $mod；无封膜，赋值语义 = 「本地无+global 有」穿透写 global、「都没有」写本地——所以 global 条目必须先行建立） | env.js `all.define('$os', {cap: null})` 建立 global 条目；layout setup 里用 `$mod.$os.cap = {...}`（字段写→通知）或直接 `$mod.$os = {...}`（穿透写 global 覆盖，谁后弄谁生效）；dispose 清 null；多窗口单槽互相覆盖为现状语义，注释写明 |
 | `rses/skills/vhtml-ppt/ui/*` | `$mod.page_current/$mod.ppt_mode/$mod.page_count/$mod.ppt_zoom` 跨组件共享状态（模板直读注册依赖） | store 语义的现成用例：define 普通对象（{page_index, ppt_mode, ...}），模板读照旧（惰性 Wrap） |
 
+（2026-08-28 用户定：vhtml-ppt 已弃用、后续删除，替代品 = ppt-studio——上表 ppt 迁移行不再涉及，回归也不用覆盖。）
+
 注意：`$err`/`$local` 等当前**不在** wrapper 共享清单里（vbase 注释明确"不通过 addWrapper 共享"）——迁移为 local define，语义等价，不顺手扩大共享面。
 
 ### 验收
@@ -102,20 +104,29 @@ vhtml：删 `addWrapper`/`this.wrappers`/`entry.applied` 整套机制（module.j
 
 ## v0.10.2 — 工具链（cli/vhtml）
 
-主题：AI 写 UI 工作流的静态保障。
+主题：AI 写 UI 工作流的静态保障。**执行顺序（2026-08-28 综合评估定）**：先做任务 0 编译器边界界定——同时解锁 check 与 v0.10.3 AOT 测量的前置注意，一次投入双收益。**契约纪律：check 输出格式、WC 绑定规则等新契约必须在本版本内定稿**——v0.10.3 冻结后破坏性变更只能走大版本。
 
-- [ ] **`vhtml check` 静态检查命令**：模板表达式语法检查（抓 `v-fo` 类指令拼写、`vslot` 名称配对、表达式语法错误）；与 i18n scan 联动。零运行时成本，可作为 agent 工具直接调用。**载体设计（2026-08-28 修订）**：vhtml 不用 acorn——表达式执行是 `new Function/AsyncFunction`（sandbox.js compileCode）+ 自写指令/注释扫描器；checker 应**复用 sandbox.js 的编译路径与 loader.js 的模板 parse**（node 端直接 import 模块执行），保证检查语义与运行时一致（引入 acorn 会造成语法子集漂移，抓到的错与真实行为不符）。Go 命令探测 node 执行；无 node 环境的降级行为 = 明确报错而非静默通过。
-- [ ] **WC 互操作口子（单向消费）**：compiler 组件分支前置判断 `customElements.get(tagName)`——已注册为原生 Web Component 的 tag 跳过 vhtml 编译，`:x` 绑定对 WC 走 property 赋值。解决三方 WC 被误当 vhtml 组件 fetch 出 `[Load Error]` 的冲突。三方 WC 名与 vhtml 组件名撞名时不得纯静默偏向 WC——dev 模式打警告（tag resolved to native custom element, vhtml component shadowed）。
-- [ ] **组件级 HMR 评估**：CLI live reload 从整页刷新升级为保留状态的热替换；评估成本，不做则记录结论。
+- [x] **任务 0 — 编译器边界界定（纯编译核剥离，2026-08-28 综合评估修正载体设计）**：原设计「node 端直接 import sandbox.js / loader.js」**事实错误**——sandbox.js 顶层无条件 window 引用（`alert.bind(window)` 105-113、`window/document/history/windowValue('fetch')` 118-123），loader.js 依赖 `document.createElement`/`DOMParser`（56/65/185 等），node import 首行即抛 ReferenceError。修正：把 `compileCode`/`stripComments`/isStatement 分类（+ compiler-attrs.js 属性表达式提取）抽成零 DOM 依赖纯模块（如 `sandbox-compile.js`），浏览器与 checker 共用同一文件——零 shim、零语义漂移。编译核本身干净：`new Function('sandbox', 'with(sandbox){...}')` 的产物非严格模式、with 合法，node 可直接执行。顺带满足 AOT 前置注意（先界定编译器边界，不再把「编译即遍历」假设写进更多模块）。**已落地（2026-08-28）**：新文件 `src/compile.js`（compileCode/stripComments/toPreview/编译缓存 LRU/编译上下文 setCompileContext+getCompileContext，唯一依赖 errors.js 同样零 DOM）；sandbox.js 移除对应 ~110 行改由 compile.js 导入（setCompileContext 原路径 re-export，lifecycle.js/component.js 无感）；node 直跑冒烟通过（sync/async 编译执行）；164/164 测试绿；dist 重建。
+- [x] **`vhtml check` 静态检查命令**：复用任务 0 纯编译核。能力边界（写进方案防过度承诺）：**能抓** = 表达式语法错误、指令拼写（`v-fo`）、vslot 名称配对、模板结构错误；**不能抓**语义——`{{ $mod.foo.bar.baz }}` 编译完全通过（运行时才 TypeError）；未定义标识符静态默认静默（has 恒 true + 运行期 `warnMissedIdentifier` 去重警告是运行时机制，sandbox.js:240-262）。**只编译不执行（compileCode 与 executeFn 分离），天然无副作用**。输出格式本版本定稿。与 i18n scan 联动；Go 命令探测 node 执行；无 node 环境 = 明确报错而非静默通过。**已落地（2026-08-28，契约 v1 定稿）**：`cli/vhtml/check.mjs`（字符串级扫描器：注释/script/标签/text 分区遮蔽保行号 → compileCode 只编译检查）+ `cli/vhtml/check.go`（go:embed 检查器、node 探测、编译核解析 VHTML_COMPILE_CORE→向上找 src/compile.js、退出码透传 0/1/2）。实语料全绿（aic/ui、vbase/ui、rses/ui、aic/agents）；变异测试 6 类缺陷全抓（插值/绑定/事件/v-for/script/指令拼写）+ 结构/vslot 警告；两个 false-positive 类已修：setup 脚本静态 import 按 imports.js parseImports 同正则剥离（运行时即剥离后另载 ESM）；含 Go 模板语法 `{{.` 的文件整体跳过（服务端模板，运行时编译渲染产物）。契约已写入 SKILL.md「Tooling: vhtml check」节（exit 0/1/2、text/JSON 双输出、kind 清单、能力边界）。
+- [x] **WC 互操作口子 —— 已评估不做（2026-08-28 用户定，原设计已整体撤销）**：原计划 compiler 组件分支 `customElements.get` 判定（编译期固化）、`v-component` 撞名豁免、`:x` property-first 绑定三细节；落地后用户裁定不与 Web Components 牵扯——vhtml 处理的带 `-` tag 一律内部组件，引用 WC 由用户自行申请非 vhtml DOM（no-vhtml 区域/手动 DOM）处理。代码已全部回退（compiler.js / compiler-attrs.js / test/wc.test.js），决策理由存档见末节「已评估不做」。
+- **组件级 HMR —— 已评估，不做**（2026-08-28 综合评估定论，存档见末节「已评估不做」）：vite build --watch 已覆盖 live reload；保留状态热替换与 v0.10.0 组件实例树/keepOnDetach/生命周期语义纠缠，高成本低回报；AI 写 UI 工作流改组件手动刷新可接受。
+
+### 顺手修复（v0.10.1 评估复核遗留，不阻塞主线）
+
+- [x] **P2 只读锁 sloppy 静默**：组件代码经 `new Function` 编译无 `'use strict'`（sandbox.js:357-360），对锁属性赋值（`$mod.scoped = x`）set 陷阱返 false → sloppy 模式静默 no-op，且不进错误登记表；只有 env.js（ESM 严格模式）真正抛。再 define 抛 TypeError 与严格性无关（Object.defineProperty 原生行为，硬边界可靠）。修法二选一：set 陷阱在 `Reflect.set` 返 false 且描述符锁定时显式 throw（**推荐**——fail-fast 不依赖调用方严格性）/ 仅改 SKILL.md 措辞（SKILL.md 现表述 "later assignment or re-define throws the native TypeError" 无前提，过强）。**已落地（2026-08-28，按推荐修法）**：Wrap set 陷阱 `!result` 显式 throw TypeError（含 getter-only 访问器场景）；define.test.js 补 sloppy 回归用例（new Function 赋值锁属性必须 throw）。
+- [x] **P3-1 recordDefine 顺序**：module.js:204-205 登记先于 defineProperty 执行，对锁属性再 define 抛错时留幻影条目——调换顺序。**已落地（2026-08-28）**：$mod.define 绑定与 manager.define 均改为先执行 defineProperty 成功后再 recordDefine。
+- [x] **P3-2 defineRegistry 不随 clear() 清空**：loader.js:225 reset 路径触发后 `__vhtml_dev.defines` 积累 stale 条目。**已落地（2026-08-28）**：manager.clear() 增 `defineRegistry.length = 0`（原数组引用，__vhtml_dev.defines 同步清空）。
+- [x] **P3-3 _loadingMod 单槽并发错配**：并发模块加载（await 交错）时错配 recordDefine 的 scope 归属、误抑制 outside-env 警告；沿用的既有单槽模式，all.define 是新增消费者，概率低，随下次触碰 module.js 处理。**已落地（2026-08-28）**：单槽改 `_loadingStack` 数组 + `_loadingMod` 栈顶 getter；loadEnvConfig push/pop 自平衡（替代旧手动保存/恢复，旧代码内层 finally null 本就会清空外层状态）；loadModule 移除 savedLoadingMod 样板。
+- [x] **P4 嵌套 v-for 触发 observer 兜底警告**（code_anylse menu.html 实案，外部定位报告 2026-08-28，机制经代码复核属实）：`<template v-for>` 多根行内嵌第二层 `v-for` 时，外层行编译先 `ensureStructuralBoundary` 给行根挂 boundary 实例、再 `compileNode`——行根带内层 v-for 则 `compileVfor` 的 `replaceWith`（compiler.js:173）把刚挂实例的节点替换成标记注释且未显式 dispose → MutationObserver 兜底回收 → dev 警告 `disposed via observer fallback`（×行数）。全平台唯一触发模板结构。**修复（2026-08-28）**：`compileVfor` 替换前 `disposeRuntimeSubtree(dom)`（disposeNode 契约「谁移除谁 dispose」；此时实例尚为空壳——内层 watch/cleanup 挂父级 scope，实测链路 compiler.js:176/178——释放安全；常规流程 dom 无实例，幂等空转）。vfor.test.js 补回归用例（template 多根 v-for + 行内 v-for + vrefof → 断言无兜底警告且嵌套 reconcile 正确；已做反证验证：临时回退修复则新用例必失败）。
 
 ---
 
 ## v0.10.3 — API 收敛与冻结评估
 
-主题：进入 semver 纪律前的收尾评估；各项「不做」须记录理由（延续存档传统）。
+主题：进入 semver 纪律前的收尾评估；各项「不做」须记录理由（延续存档传统）。**契约提醒（2026-08-28 综合评估）**：semver 启动前的破坏性窗口在 v0.10.2——check 输出格式、WC 绑定规则等新契约须已在 v0.10.2 定稿，本版本只收文档，不再收新契约。
 
-- [ ] **AOT 绑定计划评估**：per-template 编译一次生成绑定计划（节点路径 → 指令操作），实例化 = clone + 执行计划，替代每实例全树 compileNode 扫描。大列表场景收益显著；不做则记录理由。前置注意：避免把「编译即遍历」假设写进更多模块。
-- [ ] **vmessage 移出框架内核评估**：$message 是内核里嵌的具体 UI 组件（544 行、硬编码样式/位置），考虑挪到 vhtml-ui 或主题化；sys.$message 调用面不变。
+- [ ] **AOT 绑定计划评估 —— 先测量再决策（2026-08-28 综合评估方法）**：收益入口真实——compiler.js:274 v-for reconcile 每行 `compileNode` 全子树编译（DOM 遍历 + 属性解析），初始渲染大列表 = O(行数 × 行节点数)，AOT（编译一次生成绑定计划，实例化 = clone + 执行计划）把它压成 1 次编译 + N 次轻量执行。但实现复杂度高（编译器两阶段化，slots/嵌套组件/动态组件/生命周期在计划体系里重新表达，163 测试全量重验）。步骤：①dev 模式加编译计数/耗时诊断挂 `__vhtml_dev`，跑 chat / explorer 长列表实测「编译 vs 渲染」占比；②占比 <10% → 不做留档；占比显著 → 只对 v-for 行模板做计划化（范围内优化，不做全量 AOT）。前置 = v0.10.2 任务 0 编译器边界界定。
+- [ ] **vmessage 移出框架内核 —— 成本已核实，建议做（2026-08-28 综合评估 + 用户定装配方式）**：vmessage.js 零内核 import（纯自包含，544 行硬编码样式/位置），唯一挂载点 module.js:87-88（`sys.$message = vmessage`）。**装配方式（2026-08-28 用户定）：挪入 vhtml-ui，经 vhtml-ui 的 env.js `all.define('$message', vmessage)` 定义到 manager.globals——aic/vbase 全部调用面零改动**（模板 `$message(...)` 经 $mod 层 root 链回落解析，不再走 $sys 层；sandbox `$sys` 暴露面 sandbox.js:212 同步收窄）。sys.$message 挂载点删除，内核零 UI 依赖。回归 4000 全页面（$message 高频调用面）。
 - [ ] 文档冻结评估：SKILL.md + skill 镜像 + README 终稿。
 - [ ] 冻结落定后进入 semver 纪律：破坏性改动只走大版本（v0.11.x → 1.0.0）。
 
@@ -134,3 +145,6 @@ vhtml：删 `addWrapper`/`this.wrappers`/`entry.applied` 整套机制（module.j
 - **global 对象卸载/版本化**（2026-08-28）：测试版无需求；global 改写走 define（非只读覆盖，谁后谁生效），无热替换诉求。
 - **$mod.define 三键 store 形态**（2026-08-28 v3 定稿后）：state 工厂对 $mod 单例注册无意义（define 一次恒单实例）；类实例豁免 isProxyType 已天然完成；getters = defineProperty get（`{get(){...}}`）、actions = 普通方法（this 恒代理写入即通知）——三键是纯仪式，不引入。
 - **define 保留字清单 / 重名警告 / `{global:true}` 标志**（2026-08-28）：描述符（writable:false）即只读边界，无需清单；非只读覆盖 = assign 语义（谁后弄谁生效），不警告；global 目标即 manager.globals（`all.define`），目标对象即配置。
+- **checker 走 happy-dom shim**（2026-08-28 综合评估）：shim 的 DOMParser/querySelector 行为与浏览器存在已知漂移，检查结果与真实运行不一致正是该功能要避免的；纯编译核剥离（v0.10.2 任务 0 方案 A）零 shim、零漂移。
+- **组件级 HMR（保留状态热替换）**（2026-08-28 综合评估）：vite build --watch 已覆盖 live reload；保留状态热替换与 v0.10.0 组件实例树 / keepOnDetach / 生命周期语义纠缠，高成本低回报；AI 写 UI 工作流改组件手动刷新可接受。
+- **WC 互操作 / customElements 判定 / v-component 豁免 / property-first 绑定**（2026-08-28 用户定）：vhtml 处理的带 `-` tag 一律内部组件，不与原生 Web Components 牵扯——判定分支、豁免属性、绑定特化全部撤销（曾落地后回退）。用户需要引用三方 WC 时自行申请非 vhtml DOM（`no-vhtml` 区域跳过编译 / 手动 DOM 自建），框架不开口子。

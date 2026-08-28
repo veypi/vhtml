@@ -441,6 +441,29 @@ vhtml i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 
 Keys starting with `_` (`_err.40100`, `_theme.dark`) are maintained manually in langs.json: scan skips them for missing/unused checks, `--autoremove` never deletes them. Use for dynamic keys referenced via concatenation, variables, or function args (not exact string literals).
 
+## Web Components: No Interop (v0.10.2 decision)
+
+vhtml does **not** special-case native Web Components. A tag containing `-` is always an internal vhtml component and goes through the component pipeline (fetch + compile) — no `customElements` probe, no property-first binding, no exemption attributes.
+
+To embed a third-party WC, keep it **outside vhtml's compilation scope** and handle it yourself: a `no-vhtml` region (compilation skipped — set attributes / append children from a setup script or via `v-html` content), or plain manual DOM (`document.createElement` + `customElements` registration in your own code).
+
+## Tooling: `vhtml check` (v0.10.2)
+
+Static template check for AI-written-UI workflows. Compiles every candidate expression through the **same pure compile core as the runtime** (`src/compile.js`, task-0 extraction) — compile-only, never executes, zero side effects. Node-side: the Go CLI probes `node`, resolves the compile core (`VHTML_COMPILE_CORE` env, else walks up from cwd for `src/compile.js`), runs the embedded `cli/vhtml/check.mjs`.
+
+```bash
+vhtml check [path...]            # default "."; skips node_modules/dist/.git, collects *.html
+vhtml check --json               # findings as a JSON array (agent consumption)
+```
+
+**Exit codes (contract, frozen at v0.10.3):** `0` = no findings; `1` = findings (E or W); `2` = tool failure (node/core missing, IO) — explicit error, never silent pass.
+
+**Output (text):** `<file>:<line>:<col> [E|W] <kind>: <message>`; JSON: `[{file,line,col,severity,kind,message}]`.
+
+**Kinds:** `syntax` (interpolation `{{ }}`, `:bind`, `@handler`, `v-if/else-if/show/html` RHS, `v-for` RHS, inline `<script>` blocks — static `import ... from` lines are stripped first, mirroring `imports.js parseImports`), `vfor` (malformed LHS/RHS), `directive` (unknown `v-` attr — catches `v-fo` typos; bare `@evt` without handler), `vslot-pair`, `structure` (tag balance, AUTOCLOSE_OK set silences legal omissions like `li`/`p`), `io`.
+
+**Ability boundary (do not over-promise):** checks syntax/structure only — no semantic validation, no undefined-identifier detection (runtime `has`-always-true + `warnMissedIdentifier` is the runtime mechanism). Modifier-only handlers (`@click.stop`) are legal. Files containing Go-template syntax (`{{.`) are skipped wholesale (server-templated sources like `rses/ui/root.html` — the runtime compiles the *rendered* product).
+
 ## Reactivity Contract & Pitfalls (v0.10.0)
 
 vhtml reactivity = Proxy dep-tracking + two-phase rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's own evaluation are **never notified** (feedback-loop guard).

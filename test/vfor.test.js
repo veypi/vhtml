@@ -263,3 +263,32 @@ test('vif guard companion: same-shape position reuse still patches in place', as
   assert.equal(host.querySelector('.row'), before, 'same shape must keep DOM identity')
   app.destroy()
 })
+
+test('nested v-for in multi-root template: inner rows replaced without observer fallback warning', async () => {
+  // 回归（v0.10.2）：外层 v-for 行编译先给行根挂 boundary 实例，再 compileNode——
+  // 行根若带内层 v-for，compileVfor 会 replaceWith 成标记注释；修复前不显式
+  // dispose，走 MutationObserver 兜底路径触发 dev 警告（code_anylse menu.html 实案）
+  const warnings = []
+  const origWarn = console.warn
+  console.warn = (...args) => { warnings.push(args.join(' ')) }
+  try {
+    const { app, host } = await mount(
+      `<div class="nav">` +
+        `<template v-for="g in groups">` +
+          `<div class="g">{{ g.name }}</div>` +
+          `<a v-for="it in g.items" vrefof="mi" class="mi">{{ it }}</a>` +
+        `</template>` +
+      `</div>`,
+      { groups: [ { name: 'a', items: ['1', '2'] }, { name: 'b', items: ['3'] } ] },
+    )
+    // 嵌套 reconcile 正确性：外层分组 + 内层条目都在
+    assert.deepEqual(texts(host, '.g'), ['a', 'b'])
+    assert.deepEqual(texts(host, '.mi'), ['1', '2', '3'])
+    await flush() // observer 兜底路径的 rAF 窗口
+    const fallback = warnings.filter((w) => w.includes('observer fallback'))
+    assert.deepEqual(fallback, [], 'nested v-for row must be disposed explicitly at the replaceWith site')
+    app.destroy()
+  } finally {
+    console.warn = origWarn
+  }
+})

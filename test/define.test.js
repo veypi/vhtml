@@ -150,6 +150,19 @@ test('manager.define: writes globals, records $globals, warns outside env loadin
   assert.ok(window.__vhtml_dev.defines.some((r) => r.name === '$g1' && r.target === '$globals'))
 })
 
+test('defineProperty: readonly lock throws even from sloppy-mode code (P2)', () => {
+  const p = Wrap({})
+  defineProperty(p, 'fixed', 1, { writable: false, configurable: false })
+  // 组件代码经 new Function 编译（非严格模式）——锁属性赋值不得静默 no-op
+  const sloppySet = new Function('o', 'o.fixed = 2')
+  assert.throws(() => sloppySet(p), TypeError)
+  assert.strictEqual(p.fixed, 1)
+  // 仅 getter 访问器（无 setter）同样显式 throw
+  defineProperty(p, 'acc', 0, { get() { return 7 } })
+  assert.throws(() => new Function('o', 'o.acc = 1')(p), TypeError)
+  assert.strictEqual(p.acc, 7)
+})
+
 test('defineProperty: symbol key and non-object target throw', () => {
   assert.throws(() => defineProperty({}, Symbol('s'), 1), /symbol key/)
   assert.throws(() => defineProperty(null, 'x', 1), /target must be an object/)

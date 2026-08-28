@@ -417,7 +417,13 @@ export function Wrap(data, root = undefined) {
       // 纯替换：深度合并已迁出（mergeIntoProxy），写路径可预测
       const hadKey = Reflect.has(target, key)
       const result = Reflect.set(target, key, newValue, receiver)
-      if (result && listenStack.length === 0) {
+      if (!result) {
+        // 描述符锁（writable:false 数据属性 / 仅 getter 访问器）在 sloppy
+        // 调用方下会静默 no-op（P2，v0.10.2）：显式 throw 让 fail-fast 不依赖
+        // 调用方严格模式；经 executeFn 的 try/catch 落入错误登记表。
+        throw new TypeError(`cannot set ${isArray ? 'array item' : `property '${String(key)}'`}: readonly or setter-less`)
+      }
+      if (listenStack.length === 0) {
         // 新增 key 属于结构变化：除精确 key 外还需通知结构依赖（'' 通道，
         // 数组已有该语义——其所有 key 都注册在 ''）
         notify(listeners, isArray ? '' : key)

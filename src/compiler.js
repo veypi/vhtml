@@ -170,6 +170,12 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
 
   const vforStart = document.createComment('~vfor')
   const vforEnd = document.createComment('~/vfor')
+  // 嵌套 v-for 场景：dom 可能刚被外层 v-for 行编译 / v-if 分支展开挂上
+  // boundary 实例（ensureStructuralBoundary 先于 compileNode 执行）——
+  // 替换为标记注释前显式释放（disposeNode 契约：谁移除谁 dispose）。此时
+  // 该实例尚为空壳（内层 watch/cleanup 挂在父级 scope，不受影响）；常规
+  // 流程 dom 无实例，disposeRuntimeSubtree 幂等空转
+  disposeRuntimeSubtree(dom)
   dom.replaceWith(vforStart, vforEnd)
 
   const cache = Object.create(null)
