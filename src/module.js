@@ -6,11 +6,25 @@
  * 合并原 context.js，消除 createRuntimeEnv 零价值包装。
  */
 
-import { Wrap, Watch, EnsureWrap } from './reactive.js'
+import { Wrap, Watch, EnsureWrap, defineProperty } from './reactive.js'
 import { withTimeout } from './utils.js'
 import EventBus from './vbus.js'
 import I18n from './i18n.js'
 import vmessage from './vmessage.js'
+
+// ---- define 登记表（__vhtml_dev.defines） ----
+
+const defineRegistry = []
+const summarizeOpts = (opts = {}) =>
+  ['get', 'set', 'writable', 'configurable', 'enumerable']
+    .filter((k) => opts && opts[k] !== undefined)
+    .join(',') || '-'
+const recordDefine = (target, name, opts) => {
+  defineRegistry.push({ name, target, opts: summarizeOpts(opts) })
+}
+if (typeof window !== 'undefined' && window.__vhtml_dev) {
+  window.__vhtml_dev.defines = defineRegistry
+}
 
 // ---- 模块上下文 ----
 
@@ -18,23 +32,7 @@ export function getModulePath(source = null) {
   return resolveScope(source)
 }
 
-function lockProperty(obj, key) {
-  if (!obj || typeof obj !== 'object' || !(key in obj)) return
-  Object.defineProperty(obj, key, {
-    value: obj[key],
-    writable: false,
-    configurable: false,
-    enumerable: true,
-  })
-}
-
-function lockProperties(obj, keys) {
-  keys.forEach(key => lockProperty(obj, key))
-}
-
-export function createModuleContext(scoped, sharedLocale, initial = {}, broadcast = null) {
-  const frameworkKeys = ['scoped',  '$bus', '$i18n', '$t', 'fetch', 'restrictedFetch']
-
+export function createModuleContext(scoped, sharedLocale, initial = {}, broadcast = null, globals = null) {
   const mod = { ...initial }
   mod.scoped = scoped
   mod.$bus = new EventBus(broadcast)
@@ -65,8 +63,20 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
     return fetch(resolvedUrl, options)
   }
 
-  lockProperties(mod, frameworkKeys)
-  return EnsureWrap(mod)
+  // 内置件 = 装配期 define 锁只读（v0.10.1，lockProperty 语义并入 define 原语）：
+  // raw 对象上走纯 defineProperty 语义；env.js 后赋值/再定义同名 → 原生
+  // TypeError——先定义者不可覆盖
+  const readonly = { writable: false, configurable: false }
+  for (const key of ['scoped', '$bus', '$i18n', '$t', 'fetch', 'restrictedFetch']) {
+    defineProperty(mod, key, mod[key], readonly)
+  }
+  const wrapped = EnsureWrap(mod, globals || undefined)
+  // define 绑本模块（显式 local 目标的写入通道；global 目标走 all.define）
+  defineProperty(wrapped, 'define', (key, value, opts) => {
+    recordDefine(scoped || '/', key, opts)
+    return defineProperty(wrapped, key, value, opts)
+  }, readonly)
+  return wrapped
 }
 
 // ---- 系统/上下文运行时 ----
@@ -161,9 +171,11 @@ export function mergeModulePatch(mod, patch = {}) {
 export class ModuleContextManager {
   constructor() {
     this.modMap = new Map()
-    this.wrappers = []
     this._aliasMap = new Map()
     this._globalAliases = {}
+    // $mod 二级树的全局层（v0.10.1）：模块 proxy 的 root 链终点。各模块
+    // $mod 本地无 key 时读/写穿透到 globals——动态回落取代 addWrapper 复制
+    this.globals = Wrap({})
     this.sharedLocale = Wrap({
       locale: localStorage.getItem('i18n_locale') || 'zh-CN',
       fallback: 'en-US',
@@ -178,26 +190,26 @@ export class ModuleContextManager {
     })
   }
 
-  async addWrapper(wrapper) {
-    if (typeof wrapper !== 'function') {
-      console.warn('addWrapper: wrapper must be a function')
-      return
+  /**
+   * all.define(key, value, opts) — define 到 manager.globals（v0.10.1，
+   * addWrapper 的替代）：所有模块 $mod 本地无此 key 时经 root 链动态回落。
+   * 必须在 env.js 装载期调用——组件编译后再 define 新键，已编译模板不重估
+   * （root 链 miss 读只注册本地 key 通道，装载顺序不变式见 SKILL.md）→
+   * dev 模式警告。
+   */
+  define(key, value, opts = {}) {
+    if (!this._loadingMod) {
+      console.warn(`all.define: '${String(key)}' defined outside env.js loading — already-compiled templates reading this key will not re-evaluate`)
     }
-    this.wrappers.push(wrapper)
-    // 对所有已注册模块（含创建中）立即触发。entry.applied 先占位再执行，
-    // 与 createModule 各阶段的去重检查配合，保证每个 wrapper 恰好执行一次
-    for (const [scoped, entry] of this.modMap.entries()) {
-      if (entry.applied.has(wrapper)) continue
-      entry.applied.add(wrapper)
-      await wrapper(scoped, entry.mod)
-    }
+    recordDefine('$globals', key, opts)
+    defineProperty(this.globals, key, value, opts)
   }
 
   clear() {
     this.modMap.clear()
-    this.wrappers = []
     this._aliasMap.clear()
     this._globalAliases = {}
+    this.globals = Wrap({})
   }
 
   async getModule(scoped = '') {
@@ -212,28 +224,13 @@ export class ModuleContextManager {
   async createModule(scoped, patch = {}) {
     const mod = createModuleContext(scoped, this.sharedLocale, {}, (eventName, args, sourceBus) => {
       this.broadcastBusEvent(eventName, args, sourceBus)
-    })
+    }, this.globals)
     mergeModulePatch(mod, patch)
     // 提前注册到 modMap，防止子模块 env.js 通过 loadModule
     // 反向引用当前模块时陷入重复创建。
-    // applied 记录已执行的 wrapper：addWrapper 对创建中模块会立即触发，
-    // 此处各阶段执行前统一检查占位，保证每个 wrapper 恰好执行一次。
-    const entry = { mod, applied: new Set() }
+    const entry = { mod }
     this.modMap.set(scoped, entry)
-    // wrapper 先于 env.js 执行：wrapper 是模块的前置加工（注入配置/服务），
-    // env.js 的初始化逻辑可以依赖 wrapper 注入的内容
-    for (const wrapper of [...this.wrappers]) {
-      if (entry.applied.has(wrapper)) continue
-      entry.applied.add(wrapper)
-      await wrapper(scoped, mod)
-    }
     await this.loadEnvConfig(mod)
-    // env 期间新注册的 wrapper 可能已被 addWrapper 立即触发，此处仅兜底
-    for (const wrapper of this.wrappers) {
-      if (entry.applied.has(wrapper)) continue
-      entry.applied.add(wrapper)
-      await wrapper(scoped, mod)
-    }
     return entry
   }
 

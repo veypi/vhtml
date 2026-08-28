@@ -5,7 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [0.10.0] - 2026-08-28
+## [0.10.1] - 2026-08-28
+
+### 新增
+- **`defineProperty` 原语（reactive.js 导出）**：`Object.defineProperty` 的响应式增强。普通对象 = 纯 defineProperty 语义（descriptor 默认值 configurable/writable/enumerable 全 true，重复 define 覆盖）；Wrap proxy 新装 key = 描述符安装 + 通知（key 通道 + 对象 `''` 结构通道）；已有 own key（数据语义）= 赋值语义（覆盖+通知）；带 get/set = 描述符语义——getter `this = 代理`、体内读字段注册依赖，setter 写入经 Wrap set 陷阱通知。显式目标写入永不触发 root 链穿透。
+- **$mod 二级对象树**：模块 `$mod`（本地条目）→ root 链 → `manager.globals`（全局层，per-page `Wrap({})`）。本地 miss + 全局命中 → 读穿透（响应式）；赋值写穿透（全局命中写全局、都没有建本地私有）；`$mod.define` 显式本地（可遮蔽全局同名键），`manager.define`（env.js 第二参 `all.define`）显式全局。框架内置件（scoped/$bus/$i18n/$t/fetch/restrictedFetch/define）装配期 define 锁只读。`__vhtml_dev.defines` 登记表（name/target/opts 摘要）。`manager.define` 在 env.js 装载期之外调用打 dev 警告（装载顺序不变式：组件编译恒晚于 env.js，先读 miss 后 define 的模板不重估）。
+
+### 变更（破坏性）
+- **addWrapper 整套机制删除**（module.js ~40 行 + loader 透传 + `entry.applied` 占位 + 三段时序注释）：跨模块共享从「逐模块复制引用」改为 globals 动态回落，时序窗口（晚注册漏注/双写/去重占位）机制性消失。aic/vbase/aiv/rses env.js 全部迁移（6 平台服务 + `$auth` → `all.define`；`$local`/`$err`/`$fetch` 等保持本地 define 不扩大共享面）。
+- **lockProperty 删除**：只读语义并入 define 描述符锁。
+- **router_prefix 兜底清理**：删除 aic/aiv/rses env.js 三处 `mod.router_prefix = mod.router_prefix || $mod.scoped` 兜底 wrapper（真实语义是压平到树根 scoped；view.js `!== undefined` 守卫使删除后自然回落自身 scoped）；`$router.router_prefix` getter 改名 `$router.prefix`（无别名）；`aic/agents/env.js` 的 `$mod.router_prefix`（/agents→/a 映射，全仓唯一真实设置者）保留；rses `loadModule("aiv")` 遗留路径删除（aiv 已并入 aic）。
+
+### 修复
+- define-on-existing-key 遇 Object.is 相同值时 set 陷阱早退导致内置件锁未生效：内置件改在 raw 对象装配期 define（纯语义），wrap 后再绑 `define` 自身。
 
 ### 新增
 - **响应式系统全新重写（破坏性）**：Effect handle（对象身份）取代全局数字索引——`Watch` 返回不透明 handle，`Cancel` O(1) 幂等，依赖表改为 `Set` 天然去重，伪回调漏洞与槽位膨胀结构性消失。两阶段 flush + 变更门控：重求值后按 equality 比较（缺省 `Object.is`），变了才调回调；框架内部恒跑型订阅（v-for reconcile）传 `equality: null` 豁免。`batch(fn)` 原语：深度计数器挂起通知、归零按 listeners×key 去重单次通知，数组变异方法（splice/shift/unshift/sort/reverse/copyWithin/fill）在 get 陷阱自动返回 batch 包装（per-proxy 缓存、函数身份稳定），sort 比较器窗口内对其他对象的写入延迟到 batch 结束。级联防护：单帧 flush 10 轮上限，超限调度层 throw（不被单 watcher 隔离吞掉）并附 effect 链诊断，`__vhtml_dev.cascadeErrors` 可查。`document.hidden` 时 setTimeout 双通道兜底 + visibilitychange 强制 flush。

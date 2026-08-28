@@ -139,7 +139,7 @@ export class RouterView {
   get history() { return this.#history.slice() }
   get navigation() { return this.#nav }
   get affectsDocument() { return this.#nav?.affectsDocument !== false }
-  get router_prefix() { return this.#routerPrefix }
+  get prefix() { return this.#routerPrefix }
   get path_prefix() { return this.#routePathPrefix }
   get component_prefix() { return this.#routeComponentPrefix }
   get fixed_params() { return { ...this.#fixedParams } }
@@ -225,7 +225,7 @@ export class RouterView {
 
   resolveNavigationPrefixInfo(runtime) {
     if (this.#routerPrefix) {
-      return { value: this.#routerPrefix, source: '$router.router_prefix', raw: this.#routerPrefix }
+      return { value: this.#routerPrefix, source: '$router.prefix', raw: this.#routerPrefix }
     }
     const mod = runtime?.$mod || runtime || null
     if (mod?.router_prefix !== undefined) {

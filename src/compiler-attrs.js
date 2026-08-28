@@ -52,7 +52,7 @@ function runtimeScoped(runtime) {
 function debugAnchor(_runtime, router, message, detail = undefined) {
   logDebug('anchor', message, detail, {
     modulePath: router?.modulePath || '',
-    routerPrefix: router?.router_prefix || '',
+    routerPrefix: router?.prefix || '',
   })
 }
 
@@ -142,7 +142,7 @@ function resolveAnchorHref(rawUrl, runtime, dom, options = {}) {
     resolved,
     persistTarget: options.persistTarget === true,
     hasRouter: !!router,
-    routerPrefix: router?.router_prefix || '',
+    routerPrefix: router?.prefix || '',
     currentFullPath: router?.current?.fullPath || '',
     currentPath: router?.current?.path || '',
     text: dom?.textContent?.trim?.().slice(0, 80) || '',
@@ -232,7 +232,7 @@ function syncAnchorActive(dom) {
     rememberedBefore,
     target,
     hasRouter: !!router,
-    routerPrefix: router?.router_prefix || '',
+    routerPrefix: router?.prefix || '',
     currentFullPath: router?.current?.fullPath || '',
     currentPath: router?.current?.path || '',
     component: inst?.vsrc || '',

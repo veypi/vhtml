@@ -44,6 +44,11 @@
  *
  * - 函数属性读取不注册依赖（重赋值 $data 上的函数本身不触发 watcher，
  *   重估依赖函数体内读取的响应式字段——既有契约）。
+ *
+ * - defineProperty 原语（v0.10.1）：Object.defineProperty 的响应式增强，
+ *   $mod.define/all.define 底层。新装描述符接通知（key + '' 结构通道），
+ *   getter this = 代理；已有数据 key = 赋值语义；显式目标写入不触发
+ *   root 链穿透（define 本地可遮蔽 global 同名键）。
  */
 
 import { errorLog } from './errors.js'
@@ -278,6 +283,9 @@ const isProxy = Symbol('isProxy')
 export const DataID = Symbol('DataID')
 const rootObj = Symbol('root')
 
+// defineProperty 原语需要触及 Wrap 闭包内的 listeners/isArray：Wrap 时登记
+const proxyMeta = new WeakMap()  // proxy → { target, listeners, isArray }
+
 export function IsWrapped(data) {
   return Boolean(data && typeof data === 'object' && data[isProxy])
 }
@@ -437,7 +445,79 @@ export function Wrap(data, root = undefined) {
       return result
     },
   }
-  return new Proxy(data, handler)
+  const proxy = new Proxy(data, handler)
+  proxyMeta.set(proxy, { target: data, listeners, isArray })
+  return proxy
+}
+
+/**
+ * defineProperty — Object.defineProperty 的响应式增强公共原语（v0.10.1，
+ * $mod.define / all.define 的底层实现；对任意对象安全）。
+ *
+ * 语义分派：
+ * - 普通对象：纯 defineProperty 语义。默认值 configurable/writable/
+ *   enumerable 全为 true（可重复 define 覆盖——非锁属性谁后谁生效）。
+ * - Wrap proxy，带 get/set（描述符语义）：Object.defineProperty 安装，
+ *   经 proxy 读取时 Reflect.get 透传 receiver → getter this = 代理，
+ *   体内读字段注册依赖；写入经 Wrap set 陷阱调 setter 后通知。非
+ *   configurable 的旧键 → 原生 TypeError（先定义者不可覆盖）。
+ * - Wrap proxy，无 get/set（数据语义）：已有 own key = 赋值（代理 set：
+ *   覆盖+通知，锁属性 Reflect.set 返 false → 严格模式原生 TypeError）；
+ *   新 key = 描述符新装 + 通知（key 通道 + 对象 '' 结构通道）。
+ *
+ * define 是显式目标写入：永不触发 root 链穿透写。root（globals）有同名
+ * key 时新装本地条目遮蔽之——这正是 define 相对 `$mod.x = y` 的用途：
+ * 赋值会穿透到持有者，define 永远写调用方指定的目标。
+ */
+export function defineProperty(target, key, value, opts = {}) {
+  if (typeof key === 'symbol') throw new Error('defineProperty: symbol key not supported')
+  if (!target || typeof target !== 'object') throw new Error('defineProperty: target must be an object')
+  const meta = proxyMeta.get(target) || null
+  const raw = meta ? meta.target : target
+  const isAccessor = typeof opts.get === 'function' || typeof opts.set === 'function'
+  if (!meta) {
+    if (isAccessor) {
+      Object.defineProperty(raw, key, {
+        get: opts.get,
+        set: opts.set,
+        enumerable: opts.enumerable ?? true,
+        configurable: opts.configurable ?? true,
+      })
+    } else {
+      Object.defineProperty(raw, key, {
+        value,
+        writable: opts.writable ?? true,
+        enumerable: opts.enumerable ?? true,
+        configurable: opts.configurable ?? true,
+      })
+    }
+    return
+  }
+  const hadOwn = Object.prototype.hasOwnProperty.call(raw, key)
+  if (isAccessor || !hadOwn) {
+    const descriptor = isAccessor
+      ? {
+          get: opts.get,
+          set: opts.set,
+          enumerable: opts.enumerable ?? true,
+          configurable: opts.configurable ?? true,
+        }
+      : {
+          value,
+          writable: opts.writable ?? true,
+          enumerable: opts.enumerable ?? true,
+          configurable: opts.configurable ?? true,
+        }
+    batch(() => {
+      Object.defineProperty(raw, key, descriptor)
+      notify(meta.listeners, meta.isArray ? '' : key)
+      if (!meta.isArray && !hadOwn) notify(meta.listeners, '')
+    })
+    return
+  }
+  // 已有 own key 的数据语义 = 赋值（代理 set 全套语义：穿透分支因本地已有
+  // 该 key 不触发；锁属性返 false → ESM 严格模式原生 TypeError）
+  target[key] = value
 }
 
 // ====================================================================

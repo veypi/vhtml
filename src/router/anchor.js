@@ -71,7 +71,7 @@ export function syncRouterAnchor(anchor, router) {
     text: anchor.textContent?.trim?.().slice(0, 80) || '',
   }, {
     modulePath: router.modulePath || '',
-    routerPrefix: router.router_prefix || '',
+    routerPrefix: router.prefix || '',
   })
 }
 

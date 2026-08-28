@@ -106,8 +106,18 @@ Module-scoped context shared by all components under the same `scoped` prefix. N
 | `$t(key, params)` | translation shorthand |
 | `fetch(url, options)` | scoped fetch — relative and `/`-prefixed URLs auto-prepend `scoped` |
 | `restrictedFetch` | replaces `fetch` in `unsafe` mode — throws on http(s) URLs and cross-scoped paths |
+| `define(key, value, opts?)` | reactive-enhanced `Object.defineProperty` bound to this module (see below) |
 
 Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as custom keys on `$mod`.
+
+**Two-level tree + define (v0.10.1, addWrapper removed):** each `$mod` is a local entry tree with a root-chain fallback to a per-page global layer (`manager.globals`):
+
+- Read: local key wins; local miss + global hit → read through to the global entry (reactive — the global define notifies already-subscribed readers).
+- Write by assignment `$mod.x = y`: local hit → local write; local miss + global hit → writes through to the global entry (visible to every module); both miss → creates a local private entry. Assignment stays legal everywhere and equals `define` without opts.
+- `$mod.define(key, value, opts?)` = explicit **local** write: never falls through to the global layer, so it can shadow a global same-name entry (that is its purpose vs assignment). `manager.define(key, value, opts?)` (the `all` second argument of env.js) = explicit **global** write. Both accept `{ get, set, writable, configurable, enumerable }`; descriptor defaults are all `true` (repeated define = overwrite, last wins). Readonly = `{ writable: false, configurable: false }` — later assignment or re-define throws the native TypeError (no reserved-word list; the descriptor is the boundary). Accessors installed on a wrapped proxy get `this = proxy`, and getter bodies track reactive deps; setter writes notify watchers of the key.
+- Framework builtins (`scoped`, `$bus`, `$i18n`, `$t`, `fetch`, `restrictedFetch`, `define`) are locked readonly at assembly time — env.js assigning/redefining them fails fast.
+- Global entries must be defined while an `env.js` is loading (load-order invariant: components compile only after env.js completes, so templates never read a global before its define). `manager.define` outside env.js loading warns in dev — already-compiled templates that read-missed the key would not re-evaluate.
+- `__vhtml_dev.defines` registry lists every define: `{ name, target: '<scope>|$globals', opts }`.
 
 ### `$sys`
 
@@ -269,16 +279,18 @@ Loaded once per `scoped` prefix. Use for module-wide services, i18n, config:
 
 ```js
 export default async ($mod, manager) => {
-  $mod.config = await $mod.fetch('/config.json').then(r => r.json())
+  $mod.define('config', await $mod.fetch('/config.json').then(r => r.json()))
   $mod.$i18n.load(await $mod.fetch('/langs.json').then(r => r.json()))
 
   await manager.loadModule('/shared')          // preload a sub-module and wait for its env.js
   manager.addAlias('uikit', '/lib/ui-kit')     // <uikit-button> → /lib/ui-kit/button.html
+  manager.define('$auth', authService)         // global entry: every module reads it as $mod.$auth
 }
 ```
 
 - `manager.loadModule(subPath)` — preload a sub-module's `env.js`; `/`-prefixed = absolute, otherwise relative to the current scoped.
 - `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. Non-global aliases only register while an `env.js` is loading; aliases resolve only in non-root modules (`scoped` ≠ `''`).
+- `$mod.define(key, value, opts?)` / `manager.define(key, value, opts?)` — module-local vs global entries of the two-level `$mod` tree (semantics see the `$mod` section).
 
 Do NOT use `env.js` for route guards, per-page state, or component-local data.
 
@@ -356,7 +368,7 @@ Route record fields:
 - `:params` injects fixed values into `$router.params`, guard `to.params`, and `component(path, params)` functions; matched path params override same-key fixed params.
 - `history`: default = browser routing (`window.location` + `window.history`); `"memory"` = isolated virtual history starting at `initial`; any other value resolves a named history registered via `registerRouterHistory(name, history)`.
 - Multiple `<vrouter>` instances per page are allowed.
-- Navigation prefix priority: `$router.router_prefix` > initiating component `$mod.router_prefix` > initiating component `$mod.scoped`.
+- Navigation prefix priority: `$router.prefix` > initiating component `$mod.router_prefix` > initiating component `$mod.scoped`.
 - Route registration prefixes come from route-module `path_prefix` / `component_prefix`, not from `prefix`.
 - `@/path` bypasses router normalization and resolves to `/path`; `http(s)://` links are not intercepted.
 - `<a>` is intercepted only when compiled under a RouterView runtime, with automatic `active` attribute on path match.

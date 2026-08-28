@@ -225,10 +225,6 @@ class TemplateLoader {
     this.moduleManager.clear()
   }
 
-  addWrapper(wrapper) {
-    this.moduleManager.addWrapper(wrapper)
-  }
-
   async getModule(scoped) {
     return this.moduleManager.getModule(scoped)
   }
