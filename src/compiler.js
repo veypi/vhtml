@@ -11,7 +11,7 @@ import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
 import { watch } from './runtime-watch.js'
 import {
-  instanceOf, setInstance, metaOf,
+  instanceOf, setInstance, metaOf, peekMeta,
   createInstance,
   disposeRuntimeSubtree,
   getNodeScope,
@@ -437,7 +437,7 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
     return
   }
 
-  if (dom.hasAttribute('no-vhtml') || metaOf(dom).parsed) return
+  if (dom.hasAttribute('no-vhtml') || peekMeta(dom)?.parsed) return
 
   // <template> 元素：v-for 走多根编译，否则解包暴露子节点
   if (nodeName === 'template') {
@@ -445,12 +445,16 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
     if (vfortxt !== null) {
       dom.removeAttribute('v-for')
       compileVfor(vfortxt, dom, scopedData, activeRuntime, ctx)
-      metaOf(dom).parsed = true
+      // compileVfor 已把宿主替换为标记注释——不得再在移除后的节点上写 meta，
+      // 否则兑底清理误判有内容可清（与非 template 的 v-for 分支一致，不置 parsed）
       return
     }
     const src = dom.content || dom
     const childs = compileVif(Array.from(src.childNodes), scopedData, activeRuntime, ctx)
     dom.replaceWith(...childs)
+    // 解包移除 template 自身：入口检查/分支边界可能已给它挂上 meta/实例，
+    // 显式释放（子节点已移出，只清壳；无状态时幂等空转）
+    disposeRuntimeSubtree(dom)
     childs.forEach(c => compileNode(c, scopedData, activeRuntime, ctx, runtimeScope))
     return
   }

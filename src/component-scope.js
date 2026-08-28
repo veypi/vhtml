@@ -56,6 +56,9 @@ export class ComponentScope {
     this.intervals = new Set()
     this.lifecycle = { active: [], deactive: [], dispose: [] }
     this.state = 'created'
+    // watch 延迟队列（v0.10.3）：setup 期 props 绑定尚未发生，立即注册会读到
+    // 未绑定值；队列模式下注册入队，绑定完成后一次性排空（取代旧 50ms 定时器）
+    this.watchQueue = null
     // 异步挂载竞态令牌：await 边界 issue()/alive() 校验；dispose 时 kill()
     this.token = createGenToken()
     liveScopes.add(this)
@@ -69,6 +72,29 @@ export class ComponentScope {
 
   addWatcher(cancel) {
     return this.addCleanup(cancel)
+  }
+
+  // ---- watch 延迟队列（v0.10.3，取代 setup $watch 的 50ms 魔法延迟）----
+  // 队列模式下（setup 期间）注册入队，flushWatchQueue 一次性排空；
+  // 非队列模式立即执行（生命周期脚本等常规路径），两种路径同一机制。
+  beginWatchQueue() {
+    if (!this.watchQueue) this.watchQueue = []
+  }
+
+  queueWatch(register) {
+    if (typeof register !== 'function') return null
+    if (this.watchQueue) {
+      this.watchQueue.push(register)
+      return null
+    }
+    return register()
+  }
+
+  flushWatchQueue() {
+    const queue = this.watchQueue
+    if (!queue) return
+    this.watchQueue = null
+    for (const register of queue) register()
   }
 
   addEventListener(target, event, handler, options) {
@@ -149,7 +175,8 @@ export class ComponentScope {
 /** dev 警告：observer 兜底路径（v0.10.1 阶段 2）——依赖兜底的移除应收敛为显式 dispose */
 export function warnObserverFallback(node) {
   const tag = node.tagName?.toLowerCase() || 'node'
+  const cls = typeof node.className === 'string' && node.className ? `.${node.className.trim().split(/\s+/).join('.')}` : ''
   const vref = node.getAttribute?.('vref') || ''
   const vsrc = node.getAttribute?.('vsrc') || ''
-  console.warn(`[vhtml] disposed via observer fallback: <${tag}${vref ? ` vref='${vref}'` : ''}${vsrc ? ` vsrc='${vsrc}'` : ''}> — prefer explicit disposeNode() at the removal site`)
+  console.warn(`[vhtml] disposed via observer fallback: <${tag}${cls}${vref ? ` vref='${vref}'` : ''}${vsrc ? ` vsrc='${vsrc}'` : ''}> — prefer explicit disposeNode() at the removal site`)
 }

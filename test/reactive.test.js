@@ -304,3 +304,22 @@ test('mergeIntoProxy: non-mergeable inputs pass through untouched', () => {
   assert.equal(mergeIntoProxy(p.x, p.x), p.x, 'same DataID entity short-circuits')
   assert.deepEqual([...mergeIntoProxy(other, [1, 2])], [1, 2], 'array ← array rebuilds in place')
 })
+
+test('cascadeErrors registry is a capped ring (no unbounded growth)', async () => {
+  const reg = window.__vhtml_dev.cascadeErrors
+  const sentinel = { round: -1, message: 'sentinel', at: 0 }
+  reg.length = 0
+  reg.push(sentinel)
+  for (let i = 0; i < 60; i++) reg.push({ round: i, message: 'x', at: 0 })  // 60 + sentinel = 61 > 50
+  const p = Wrap({ n: 0 })
+  const origError = console.error
+  console.error = () => {}
+  const h = Watch(() => p.n, (v) => { p.n = v + 1 })
+  p.n = 1
+  await flush(300)
+  console.error = origError
+  Cancel(h)
+  assert.ok(reg.length <= 50, `capped at 50, got ${reg.length}`)
+  assert.equal(reg[reg.length - 1].message.includes('cascade limit exceeded'), true, 'new entry recorded after trim')
+  assert.equal(reg.includes(sentinel), false, 'oldest entries evicted')
+})

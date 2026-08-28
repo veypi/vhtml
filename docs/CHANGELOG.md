@@ -5,6 +5,33 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.10.0] - 2026-08-28
+
+### 新增
+- **响应式系统全新重写（破坏性）**：Effect handle（对象身份）取代全局数字索引——`Watch` 返回不透明 handle，`Cancel` O(1) 幂等，依赖表改为 `Set` 天然去重，伪回调漏洞与槽位膨胀结构性消失。两阶段 flush + 变更门控：重求值后按 equality 比较（缺省 `Object.is`），变了才调回调；框架内部恒跑型订阅（v-for reconcile）传 `equality: null` 豁免。`batch(fn)` 原语：深度计数器挂起通知、归零按 listeners×key 去重单次通知，数组变异方法（splice/shift/unshift/sort/reverse/copyWithin/fill）在 get 陷阱自动返回 batch 包装（per-proxy 缓存、函数身份稳定），sort 比较器窗口内对其他对象的写入延迟到 batch 结束。级联防护：单帧 flush 10 轮上限，超限调度层 throw（不被单 watcher 隔离吞掉）并附 effect 链诊断，`__vhtml_dev.cascadeErrors` 可查。`document.hidden` 时 setTimeout 双通道兜底 + visibilitychange 强制 flush。
+- **生命周期确定性**：公开 `disposeNode(el)` 销毁契约（谁移除 DOM 谁 dispose、幂等）；observer 降级为兜底并在真正清理时打 dev 警告（只警告 vhtml 模板衍生 DOM，三方库自管 DOM 静默回收）；`keepOnDetach` 实例字段取代 data-keep DOM 属性 hack；generation token 统一异步挂载竞态（await 边界 issue/alive 校验，嵌套异步段复用父票据）。
+- **路由导航状态机（破坏性）**：导航事务化——staging（守卫+页面游离构建）→ commit（同步原子切换），新导航令牌作废在途导航，被作废导航零可见副作用（不换页/不改地址/不跑生命周期）；同目标与已激活导航 no-op 吸收（单一决策点）。staging 期写入目标参数快照，作废/阻断/redirect 回滚到最近提交快照——新页面 setup/模板首次构建即可读到目标路由参数。layout 外壳所有权上移 RouterView（活性校验 + 引用计数回收）；页缓存显式 LRU（上限 8，per-RouterView 实例，OS 多窗口互不驱逐）；`router.js` 拆分为 `router/{util,history,matcher,anchor,page,view}` 六模块 + 门面。
+- **全局错误登记表**：新模块 `errors.js`（ring 100），`__vhtml_dev.errors` 为排障唯一聚合入口，编译/表达式/挂载/navigation 四类错误统一登记。
+
+### 变更
+- **set 陷阱纯替换（破坏性）**：深度合并（旧 copyBind）从写路径整体移除，迁为显式 `mergeIntoProxy` 由 v-for reconcile 位置键复用分支调用；写路径恢复字段级精确通知。数组元素整体赋值 `list[i] = {...}` 变为新身份（条目重建）而非原位合并。
+- **响应式契约简化（破坏性）**：「禁 splice、slice 拷贝再赋回」废除——数组变异方法安全且保留行身份；`deep`/`deepAccess` 删除——依赖只来自求值时的真实读取，props `:x` 改引用语义；root 链穿透读补注册本地 key 通道（修复旧追踪洞）。
+- **$watch 延迟队列**：删除 setup 内 $watch 的 50ms 魔法延迟——setup 期注册入队，props 绑定完成后统一排空（比 microtask 可靠）；生命周期脚本同机制，两条路径统一。
+- **错误暴露规则（破坏性）**：`$emit` 使用 DOM 内置事件名从 console.warn 改为 throw；compileCode 编译失败从返回 null（静默失效）改为 throw + 登记；组件挂载失败渲染可见错误占位（pre.vhtml-error）取代静默空白；未命中任何层的裸标识符按 key 去重打拼写警告（行为不变，错误可见）。
+- **unsafe 威胁模型定调**：unsafe 是「防误触层」而非安全边界（字符串字面量 `"x".constructor.constructor` 原理上可直达 Function，真隔离需 ShadowRealm/iframe）；$data/$mod/$sys 路径返回的函数统一过 safeFunction 堵住最常见的意外逃逸链，与 lockProperty 只读不可配置属性的 Proxy 不变式兼容。
+- **compileCode 注释剥离**改字符串感知扫描器，不再误剥 `"http://..."` 内的 `//`（isStatement 分类正确性）。
+- **导航 rejection 收口**：fire-and-forget 导航（锚点点击/redirect/守卫 next/dropPage 重建/history 监听）的页面加载失败统一登记进错误登记表，不再产生 unhandled rejection；直接 await `push()/replace()` 的调用方仍会收到 rejection。
+- 导航目标校验收紧：空目标非法（曾被 `new URL('', 当前地址)` 解析成当前路径，污染无 href 锚点的 href/active）；无 href 锚点（纯 @click）不再被注册 active 同步。
+
+### 修复
+- **嵌套异步段票据作废父段**：setupRef 内部另行 issue 会作废 parseRef 在途票据，导致全部含 `<script setup>` 的组件编译中止（模板体插入但插值不渲染）；修复为子段复用父段票据，契约写入 lifecycle.js 注释。
+- **disposeRuntimeSubtree 幂等契约破坏**：实例分支提前 return 跳过 DOM 子树遍历，纯元素后代 meta 残留使二次 dispose 返回 true；修复为统一「清实例树 + 清自身 + 遍历 DOM 后代」。
+- **staging 后同目标导航作废在途构建**：参数快照修复使构建页自身 setup 的 URL 同步 watcher 首轮回调发起同目标导航，领票即作废在途票据——push 跳转无反应、直开 `/a/:id` 无限构建循环卡死；修复为 issue 前同目标/已激活守卫。
+- **routes reload 泄漏 layout 外壳**：resetRoutes 整体丢弃缓存表前未销毁存活外壳实例（实例/watchers 泄漏）。
+- **挂载失败路径 scope 未销毁**：parseRef catch 只渲染占位未 dispose，已注册 props watchers 留待 observer 兜底；现走唯一销毁口。
+- **cascadeErrors 无界增长**：级联诊断 ring 上限 50。
+- **锚点拦截 head 加载崩溃**：模块在 <head> 加载时 document.body 不存在，延迟到 DOMContentLoaded 绑定。
+
 ## [0.9.2] - 2026-08-27
 
 ### 新增

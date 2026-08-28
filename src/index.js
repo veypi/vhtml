@@ -190,7 +190,12 @@ class VHTML {
     requestAnimationFrame(() => {
       if (node.isConnected) return
       if (disposeRuntimeSubtree(node)) {
-        warnObserverFallback(node)
+        // 警告只针对 vhtml 模板衍生 DOM（加载器打印的 vrefof / 模板 vref 标记）：
+        // 外部库/应用代码移除自管 DOM（可能携带 vhtml 残留状态）不是收敛目标，
+        // 静默清理即可，否则三方库操作 DOM 会产生大量噪音警告。清理本身恒执行（防泄漏）
+        if (node.hasAttribute?.('vrefof') || node.hasAttribute?.('vref')) {
+          warnObserverFallback(node)
+        }
       }
     })
   }

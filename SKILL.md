@@ -119,7 +119,7 @@ System variable pool, inherited from ancestor components via prototype chain.
 | `$emit(name, ...args)` | emit custom event to the parent's `@name` handler |
 | `$message` | global toast / dialog API |
 
-`$emit` event names must not collide with native DOM event names (`change`, `input`, `click`, ...): a parent's `@name` would attach as a native DOM listener and never receive the custom payload (the runtime prints a warning). Always pick non-built-in names.
+`$emit` event names must not collide with native DOM event names (`change`, `input`, `click`, ...): a parent's `@name` would attach as a native DOM listener and never receive the custom payload. Since v0.10.3 this **throws** (fail-fast) instead of warning. Always pick non-built-in names.
 
 ### `$router`
 
@@ -136,6 +136,8 @@ Nearest ancestor `<vrouter>` view, local to the current router subtree.
 | `addRoute(route)` / `addRoutes(routes)` / `resetRoutes()` | runtime route management |
 | `cachedPages()` | cached-page list for tab/page-management UIs: `{ key, title, path, fullPath, isActive, active(), del() }` |
 | `dropPage(key)` | destroy a cached page by cacheKey (dropping the active page remounts it ≈ refresh); returns `false` while the page is mid-mount |
+
+Navigation is transactional (v0.10.2): resolving stages the page off-tree, commit is one synchronous atomic switch; a new navigation supersedes the in-flight one. Two idempotence invariants: navigating to the **already-committed destination** or to the **same target as the in-flight navigation** is a no-op and never supersedes — so URL-sync patterns (`setParams`/`setQuery` inside a setup watcher) are safe even when they fire during the page's own first build. `current.params`/`current.query` are staged to the target snapshot before the build starts, so a page's setup reads its own route params on first build. Anchors without `href` (pure `@click` buttons) are not registered with the router and receive no `href`/`active`; an empty-string target is not a valid navigation (never resolves to the current path).
 
 ## URL Prefix Rules
 
@@ -174,6 +176,7 @@ Static imports are supported; relative paths resolve against the component's own
 - `.min.js` and `http://` imports are rejected with a warning — load external libraries via `<script>` tags instead.
 - `await import('path')` dynamic imports are supported.
 - In `unsafe` mode, all import statements are stripped.
+- `unsafe` is a **fat-finger guard, not a security boundary** (v0.10.3): functions reachable through `$data` / `$mod` / `$sys` and bare data reads are wrapped so `.constructor` / `__proto__` escape chains are blocked, but sandboxed code can still reach `Function` via string literals (`"x".constructor.constructor`) because primitives auto-box outside any proxy. Real isolation requires ShadowRealm/iframe-level solutions.
 
 ## Bindings
 
@@ -221,7 +224,13 @@ Static imports are supported; relative paths resolve against the component's own
 Helpers available in all script types:
 
 - `$node` — the current host DOM element.
-- `$watch(() => expr, (val) => { ... })` — reactive effect, auto-cleaned on dispose. In `<script setup>` registration is deferred ~50ms until the scope is ready; in other scripts it registers immediately.
+- `$watch(() => expr, (val) => { ... })` — reactive effect, auto-cleaned on dispose. In `<script setup>` registrations are queued and drained deterministically right after props binding completes (v0.10.3; the old 50ms timer is gone), so the first evaluation already sees bound props; in other scripts it registers immediately.
+
+### Disposal Contract (v0.10.1)
+
+- **Who removes DOM owns the dispose**: before externally removing an element that hosts vhtml runtime state (instances / bindings / metas), call `disposeNode(el)` (exported from `vhtml/component-instance.js`). It destroys the whole subtree's runtime state and is idempotent (returns `false` when there was nothing left to clean).
+- The framework already disposes explicitly at all internal removal points (`v-for` / `v-if` / `:vsrc` / `v-html` / `parseRef` replacement / page destroy). External `el.remove()` without `disposeNode` still gets collected by a MutationObserver **fallback**, but logs a dev warning (`disposed via observer fallback`) — treat that warning as a bug in the remover and switch to `disposeNode`. The warning is limited to vhtml-template-derived DOM (elements stamped with `vrefof`/`vref` by the loader/template); unmarked DOM (e.g. elements owned by third-party libraries that happen to carry vhtml state) is collected silently — cleanup always runs, only the warning is gated.
+- Route-cached pages survive removal via the instance field `keepOnDetach`. Since v0.10.3 it is declared through `parseRef` options (`{ keepOnDetach: true }`, used by the router) or set directly on the instance; the old `data-keep` DOM attribute channel is fully removed and no longer translates.
 
 ## Refs and Parent-to-Child Calls
 
@@ -450,6 +459,7 @@ Structural edits (insert / remove / reorder): either in-place mutators (`splice`
 3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — do state mutations from event handlers, timers, or rAF callbacks.
 4. Watcher callbacks only fire on value change (`Object.is` gate). If you need an always-run watcher, pass `{ equality: null }` to `$watch`.
 5. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds within one flush with a scheduler-level throw carrying the effect-chain diagnostic — check `window.__vhtml_dev.cascadeErrors`.
+6. Errors are exposed, never silent (v0.10.3 error contract): template compilation failures throw (bindings no longer die silently), a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space, and every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (ring buffer, newest last) with code preview and component location (`tag`/`vref`/`vsrc`). Undefined identifiers read inside sandboxed code warn once per name (spelling check).
 
 ## Debug
 

@@ -215,6 +215,16 @@ function syncAnchorActive(dom) {
   const persistedBefore = dom.getAttribute(ANCHOR_ROUTER_TARGET_ATTR)
   const rememberedBefore = anchorRouteTargets.get(dom) || ''
   const target = readAnchorRouteTarget(dom)
+  // 无 href 的锚点（纯 @click 按钮）不参与路由注册/同步：空目标会被解析成当前路径，
+  // 曾导致 href 被改写为当前页、所有按钮恒 active，点击被 already-active 短路吞掉。
+  // :href 动态绑定的首轮求值已经 remember 了目标，不受此分支影响。
+  if (!target) {
+    debugAnchor(runtime, router, 'anchor first compile skipped: no href', {
+      component: inst?.vsrc || '',
+      text: dom.textContent?.trim?.().slice(0, 80) || '',
+    })
+    return
+  }
   rememberAnchorRouteTarget(dom, target)
   debugAnchor(runtime, router, 'anchor first compile', {
     hrefBefore,

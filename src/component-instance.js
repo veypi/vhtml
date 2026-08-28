@@ -17,9 +17,11 @@ export class ComponentInstance {
     this.vforData = null
     this.slotOutletState = null
     this.unsafe = false
-    this._scriptError = null
-    // v0.10.1 阶段 3：路由缓存软断开标记（原 data-keep DOM 属性 hack，
-    // 由 parseRef 在实例创建时翻译，运行时判读不再依赖 DOM 属性）
+    // 组件级最近一次错误（v0.10.3 错误契约）：{ kind: 'compile'|'expression'|'mount', message, code? }
+    // 全局历史见 __vhtml_dev.errors（errors.js 登记表）
+    this._error = null
+    // 路由缓存软断开标记（由 parseRef options.keepOnDetach 设置，
+    // 运行时判读只走实例字段，不依赖任何 DOM 属性）
     this.keepOnDetach = false
   }
 }
@@ -54,6 +56,15 @@ export function metaOf(node) {
   let m = nodeMeta.get(node)
   if (!m) { m = {}; nodeMeta.set(node, m) }
   return m
+}
+
+/**
+ * meta 的非创建式读取：只读检查不得在节点上留下空 meta——
+ * 空 meta 会使「移除后未经 dispose」的节点在兑底清理时被误判为
+ * 有内容可清（触发假警告），也是驻留泄漏。
+ */
+export function peekMeta(node) {
+  return nodeMeta.get(node) || null
 }
 
 export function setNodeScope(node, runtime, scope) {
@@ -115,19 +126,23 @@ function disposeInstanceSubtree(instance) {
 /**
  * 销毁节点子树的运行时状态（实例/作用域/meta）。
  * 返回是否实际清理了内容（幂等：已销毁节点再次调用返回 false 且无副作用）。
+ * 实例分支不得提前返回：实例树只覆盖挂了实例的嵌套组件，纯元素后代的
+ * meta（parsed/vforData/slotOutletState 等）只能靠 DOM 子树遍历清到位，
+ * 否则幂等契约（再次调用返回 false）被残留 meta 破坏。
  */
 export function disposeRuntimeSubtree(node) {
   if (!node || node.nodeType !== 1) return false
   const instance = nodeInst.get(node)
+  let did = false
   if (instance) {
     disposeInstanceSubtree(instance)
-    return true
+    did = true
   }
-  let didPurge = purgeNodeState(node)
+  did = purgeNodeState(node) || did
   node.childNodes?.forEach(child => {
-    if (child.nodeType === 1) didPurge = disposeRuntimeSubtree(child) || didPurge
+    if (child.nodeType === 1) did = disposeRuntimeSubtree(child) || did
   })
-  return didPurge
+  return did
 }
 
 /**

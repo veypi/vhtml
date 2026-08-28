@@ -46,6 +46,8 @@
  *   重估依赖函数体内读取的响应式字段——既有契约）。
  */
 
+import { errorLog } from './errors.js'
+
 const listenStack = []   // 求值期栈：栈顶 = 当前正在注册依赖的 handle
 const dirty = new Set()  // 待 flush 的 handle（Set 去重，迭代中删除安全）
 let flushScheduled = false
@@ -55,6 +57,8 @@ let batchDepth = 0
 const batchedNotifies = new Map()
 
 const MAX_CASCADE_ROUNDS = 10
+// 级联诊断 ring 上限：反复级联的页面不该让观测层无限增长
+const MAX_CASCADE_ERRORS = 50
 
 // __vhtml_dev 观测层（最小版；10.1 扩展 scope 注册表与实例树）
 const devStats = { watches: 0, cancels: 0, flushes: 0 }
@@ -81,6 +85,9 @@ function flushUpdates() {
       // flushScheduled 已复位，后续写入可重新调度（错误登记表供 __vhtml_dev 排障）。
       const err = cascadeError(round)
       cascadeErrors.push({ round, message: err.message, at: Date.now() })
+      if (cascadeErrors.length > MAX_CASCADE_ERRORS) {
+        cascadeErrors.splice(0, cascadeErrors.length - MAX_CASCADE_ERRORS)
+      }
       throw err
     }
     const batch = [...dirty]
@@ -447,5 +454,9 @@ if (typeof window !== 'undefined' && !window.__vhtml_dev) {
       }
     },
     cascadeErrors,
+    // 全局错误登记表（errors.js，v0.10.3 错误契约）：编译/表达式/挂载四类
+    get errors() {
+      return errorLog
+    },
   }
 }

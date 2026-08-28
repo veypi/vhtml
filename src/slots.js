@@ -4,7 +4,7 @@
 
 import { Wrap, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
 import { Run } from './sandbox.js'
-import { instanceOf, metaOf, setNodeScope } from './component-instance.js'
+import { instanceOf, metaOf, peekMeta, setNodeScope } from './component-instance.js'
 import { watch } from './runtime-watch.js'
 import { getSharedTemplateNodes } from './source-cache.js'
 
@@ -68,7 +68,7 @@ function createSlotBindingData(dom, outletData, sourceData) {
 }
 
 function createOutletState(dom) {
-  const state = metaOf(dom).slotOutletState
+  const state = peekMeta(dom)?.slotOutletState
   if (state) return state
   const nextState = {
     fallbackTemplates: Array.from(dom.childNodes).map(n => sharedSlotTemplate(n, false)),

@@ -7,6 +7,23 @@
  * 变量查找优先级：$data → data → $mod → $sys → expose → execArgs → window(仅非 unsafe)
  */
 
+import { recordError, reportError } from './errors.js'
+
+// ============================================================
+// 编译上下文（表达式错误定位，v0.10.3）
+// ============================================================
+// 编译期由 parseRef/runScript 设置（组件 tag/vref/vsrc），buildErrorContext
+// 与未命中标识符警告取用。模块级单例：运行期错误发生时它代表「当时正在编译的组件」，
+// 可能为 null（组件外模板）或无关组件（事件回调期），仅作辅助定位线索。
+let compileContext = null
+
+/** 设置当前编译上下文；返回恢复函数（支持嵌套，调用方必须在 finally 恢复） */
+export function setCompileContext(ctx) {
+  const prev = compileContext
+  compileContext = ctx || null
+  return () => { compileContext = prev }
+}
+
 // ============================================================
 // API 分层
 // ============================================================
@@ -129,6 +146,40 @@ function safeFunction(fn) {
   return safe
 }
 
+function safeValue(value) {
+  return typeof value === 'function' ? safeFunction(value) : value
+}
+
+// Proxy 不变式：目标的只读不可配置数据属性，get 陷阱必须原值返回。
+// module.js lockProperty 把 $mod.$t/$bus/fetch 等锁成该形态，包装会抛 TypeError——
+// 此类属性不包（防误触让位于正确性）
+function wrapAllowed(target, key) {
+  if (!target || typeof target !== 'object') return true
+  const desc = Object.getOwnPropertyDescriptor(target, key)
+  return !(desc && !desc.configurable && !desc.writable)
+}
+
+// $data/$mod/$sys 的视图代理：只把函数成员包成 safeFunction（堵 .constructor 逃逸链），
+// 其余陷阱全部透传 target——经响应式代理的读取照常注册依赖，身份/枚举语义不变。
+// 注意：这是「防误触层」不是安全边界——字符串字面量 "x".constructor.constructor
+// 直达 Function（原始值自动装箱不走任何 proxy），真隔离需 ShadowRealm/iframe 级方案。
+const safeViewCache = new WeakMap()
+
+function safeView(target) {
+  if (!target || typeof target !== 'object') return target
+  let view = safeViewCache.get(target)
+  if (view) return view
+  view = new Proxy(target, {
+    get(t, key, receiver) {
+      const value = Reflect.get(t, key, receiver)
+      if (typeof value !== 'function') return value
+      return wrapAllowed(t, key) ? safeFunction(value) : value
+    },
+  })
+  safeViewCache.set(target, view)
+  return view
+}
+
 // ============================================================
 // 沙盒 Proxy 创建
 // ============================================================
@@ -157,18 +208,22 @@ export function createScopeProxy(data, runtime = {}, execArgs = {}, options = {}
       // 阻止原型链逃逸：constructor / __proto__
       if (key === 'constructor' || key === '__proto__') return undefined
 
-      if (key === '$data') return data
-      if (key === '$sys')  return runtimeSys
-      if (key === '$mod')  return runtimeMod
+      if (key === '$data') return safeView(data)
+      if (key === '$sys')  return safeView(runtimeSys)
+      if (key === '$mod')  return safeView(runtimeMod)
 
-      if (key in target) return Reflect.get(target, key, receiver)
+      if (key in target) {
+        const value = Reflect.get(target, key, receiver)
+        if (typeof value === 'function' && wrapAllowed(target, key)) return safeFunction(value)
+        return value
+      }
 
       if (runtimeMod && key in runtimeMod) {
         if (key === 'fetch' && unsafe) return runtimeMod.restrictedFetch
-        return runtimeMod[key]
+        return safeValue(runtimeMod[key])
       }
 
-      if (runtimeSys && key in runtimeSys) return runtimeSys[key]
+      if (runtimeSys && key in runtimeSys) return safeValue(runtimeSys[key])
 
       if (key in fallback) {
         const value = fallback[key]
@@ -177,14 +232,33 @@ export function createScopeProxy(data, runtime = {}, execArgs = {}, options = {}
         return value
       }
 
-      if (!unsafe) return windowValue(key)
+      if (!unsafe) {
+        const value = windowValue(key)
+        if (value === undefined) warnMissedIdentifier(key)
+        return value
+      }
 
+      warnMissedIdentifier(key)
       return undefined
     },
     set(target, key, newValue, receiver) {
       return Reflect.set(target, key, newValue, receiver)
     },
   })
+}
+
+// has 恒 true 使未声明标识符静默 undefined（拼写错误不可见）。
+// v0.10.3：任何层都未命中时按 key 去重打一次警告（不改默认行为）。
+const missedIdentifierKeys = new Set()
+
+function warnMissedIdentifier(key) {
+  if (typeof key === 'symbol') return
+  if (missedIdentifierKeys.has(key)) return
+  missedIdentifierKeys.add(key)
+  const ctx = compileContext
+  console.warn(
+    `[vhtml] sandbox: identifier "${key}" is not defined in data/$mod/$sys/window — reads as undefined (spelling?)` +
+    (ctx ? ` [${ctx.tag || 'component'}${ctx.vref ? ` vref='${ctx.vref}'` : ''}${ctx.vsrc ? ` ${ctx.vsrc}` : ''}]` : ''))
 }
 
 // ============================================================
@@ -224,13 +298,52 @@ function buildErrorContext(originCode, data, runtime, execArgs, label, error) {
     dataKeys: Object.keys(data || {}),
     runtimeKeys: Object.keys(runtime || {}),
     execArgKeys: Object.keys(execArgs || {}),
+    component: compileContext || undefined,
     message: error?.message || String(error),
     stack: error?.stack || '',
   }
 }
 
 function logError(originCode, data, runtime, execArgs, label, error) {
-  console.error(`${label} error`, buildErrorContext(originCode, data, runtime, execArgs, label, error))
+  const ctx = buildErrorContext(originCode, data, runtime, execArgs, label, error)
+  recordError({ kind: 'expression', ...ctx })
+  console.error(`${label} error`, ctx)
+}
+
+/** 字符串感知的注释剥离：仅供 isStatement 分类（旧正则会误剥 "http://..." 中的 //） */
+function stripComments(code) {
+  let out = ''
+  let i = 0
+  const n = code.length
+  while (i < n) {
+    const c = code[i]
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c
+      out += c
+      i++
+      while (i < n) {
+        const ch = code[i]
+        out += ch
+        if (ch === '\\') { out += code[i + 1] ?? ''; i += 2; continue }
+        i++
+        if (ch === quote) break
+      }
+      continue
+    }
+    if (c === '/' && code[i + 1] === '/') {
+      while (i < n && code[i] !== '\n') i++
+      continue
+    }
+    if (c === '/' && code[i + 1] === '*') {
+      i += 2
+      while (i < n && !(code[i] === '*' && code[i + 1] === '/')) i++
+      i += 2
+      continue
+    }
+    out += c
+    i++
+  }
+  return out
 }
 
 function compileCode(originCode, { async: isAsync, label } = {}) {
@@ -239,7 +352,7 @@ function compileCode(originCode, { async: isAsync, label } = {}) {
   if (fn) return fn
 
   const code = originCode.trim()
-  const cleanCode = code.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '').trim()
+  const cleanCode = stripComments(code).trim()
   const isStatement = /^(var|let|const|if|for|while|switch|try|throw|class|function|return|debugger)\b/.test(cleanCode)
   const wrap = (body) => `\nwith (sandbox) {\n${body}\n}`
   const Compiler = isAsync ? AsyncFunction : Function
@@ -259,13 +372,18 @@ function compileCode(originCode, { async: isAsync, label } = {}) {
     cachePut(cache, originCode, fn)
     return fn
   } catch (error) {
-    console.warn(`${label || 'compile'} error:`, originCode, '\n', error)
-    return null
+    // fail-fast：编译失败必须暴露（旧行为返回 null 使绑定无声失效）
+    reportError('compile', error?.message || String(error), {
+      label,
+      code: toPreview(originCode),
+      component: compileContext || undefined,
+      stack: error?.stack || '',
+    })
+    throw error
   }
 }
 
 function executeFn(fn, originCode, data, runtime, execArgs, options, label) {
-  if (!fn) return undefined
   try {
     return fn(createScopeProxy(data, runtime, execArgs, options))
   } catch (error) {
@@ -275,7 +393,6 @@ function executeFn(fn, originCode, data, runtime, execArgs, options, label) {
 }
 
 async function executeAsyncFn(fn, originCode, data, runtime, execArgs, options, label) {
-  if (!fn) return undefined
   try {
     return await fn(createScopeProxy(data, runtime, execArgs, options))
   } catch (error) {
