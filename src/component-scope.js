@@ -17,6 +17,8 @@
  *      'mount' | 'route' | 'visibility' | 'dispose'
  */
 
+import { createGenToken } from './lifecycle.js'
+
 // ---- 标签页可见性联动 ----
 // hidden：对所有当前 active 的 scope 触发 deactive（记入 visHiddenScopes）
 // visible：仅对 visHiddenScopes 中仍为 inactive 的 scope 补发 activate——
@@ -54,6 +56,8 @@ export class ComponentScope {
     this.intervals = new Set()
     this.lifecycle = { active: [], deactive: [], dispose: [] }
     this.state = 'created'
+    // 异步挂载竞态令牌：await 边界 issue()/alive() 校验；dispose 时 kill()
+    this.token = createGenToken()
     liveScopes.add(this)
     bindVisibilityLifecycle()
   }
@@ -125,6 +129,8 @@ export class ComponentScope {
     if (this.state === 'disposed') return
     liveScopes.delete(this)
     visHiddenScopes.delete(this)
+    // 作废全部在途异步段（generation token 契约：唯一销毁口单点收口）
+    this.token.kill()
     // 不变式 2：active 状态下被销毁，先补发 deactive 再执行 dispose
     if (this.state === 'active') {
       this.state = 'inactive'
@@ -138,4 +144,12 @@ export class ComponentScope {
     for (const id of this.intervals) window.clearInterval(id)
     this.intervals.clear()
   }
+}
+
+/** dev 警告：observer 兜底路径（v0.10.1 阶段 2）——依赖兜底的移除应收敛为显式 dispose */
+export function warnObserverFallback(node) {
+  const tag = node.tagName?.toLowerCase() || 'node'
+  const vref = node.getAttribute?.('vref') || ''
+  const vsrc = node.getAttribute?.('vsrc') || ''
+  console.warn(`[vhtml] disposed via observer fallback: <${tag}${vref ? ` vref='${vref}'` : ''}${vsrc ? ` vsrc='${vsrc}'` : ''}> — prefer explicit disposeNode() at the removal site`)
 }

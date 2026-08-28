@@ -108,7 +108,7 @@ test('object list: wholesale replacement with new objects rebuilds entries', asy
   app.destroy()
 })
 
-test('object list: index assignment merges into the existing proxy (copyBind)', async () => {
+test('object list: index assignment replaces the entry (v0.10.0 pure-replacement semantics)', async () => {
   const { app, host } = await mount(
     `<ul><li v-for="o in list">{{ o.name }}</li></ul>`,
     { list: [{ id: 1, name: 'n1' }, { id: 2, name: 'n2' }] },
@@ -120,8 +120,10 @@ test('object list: index assignment merges into the existing proxy (copyBind)', 
 
   const after = [...host.querySelectorAll('li')]
   assert.deepEqual(after.map((n) => n.textContent), ['merged', 'n2'])
-  assert.equal(before[0], after[0], 'identity kept — DOM reused')
-  assert.equal(app._data.list[0].id, 100, 'fields merged in place')
+  // v0.10.0：set 纯替换 —— 新对象 = 新 DataID = 条目重建（渲染等价）。
+  // 旧 copyBind 原位 merge 保 DOM 身份的行为已删（行为快照见 copybind.test.js）
+  assert.notEqual(before[0], after[0], 'fresh identity rebuilds DOM')
+  assert.equal(app._data.list[0].id, 100)
   app.destroy()
 })
 

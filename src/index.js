@@ -8,10 +8,11 @@
 
 import { createRenderContext } from './renderer.js'
 import { templateLoader } from './loader.js'
-import { disposeRuntimeSubtree } from './component-instance.js'
-import { createRuntimeContext } from './module.js'
+import { disposeRuntimeSubtree, instanceOf } from './component-instance.js'
+import { createRuntimeContext, RUNTIME } from './module.js'
 import { EnsureWrap } from './reactive.js'
 import { createMemoryHistory, registerRouterHistory } from './router.js'
+import { warnObserverFallback } from './component-scope.js'
 
 class VHTML {
   static _globalStyled = false
@@ -33,7 +34,6 @@ class VHTML {
     this._ctx = null
     this._observer = null
     this._delayCache = []
-    this._pendingDisposals = new WeakMap()
     this._moSuspended = false
     this._moPendingAdded = []
     this._moPendingRemoved = []
@@ -82,7 +82,6 @@ class VHTML {
       disposeRuntimeSubtree(this._el)
     }
     this._delayCache.length = 0
-    this._pendingDisposals = new WeakMap()
     this._moPendingAdded.length = 0
     this._moPendingRemoved.length = 0
     this._mounted = false
@@ -95,7 +94,7 @@ class VHTML {
   parseDom(dom, data = {}, runtime = {}) {
     if (!this._ctx) return
     data = EnsureWrap(data)
-    const activeRuntime = runtime?.$mod || runtime?.$sys ? runtime : this._runtime
+    const activeRuntime = runtime?.[RUNTIME] ? runtime : this._runtime
     this._ctx.ensureBoundary(dom, data, activeRuntime)
     this._ctx.compileNode(dom, data, activeRuntime, this._ctx)
   }
@@ -106,7 +105,7 @@ class VHTML {
   async parseRaw(dom, data = {}, runtime = {}, code = '') {
     if (!this._ctx) return
     data = EnsureWrap(data)
-    const activeRuntime = runtime?.$mod || runtime?.$sys || runtime?.scoped !== undefined ? runtime : this._runtime
+    const activeRuntime = runtime?.[RUNTIME] ? runtime : this._runtime
     return this._ctx.parseRaw(dom, data, activeRuntime, code)
   }
 
@@ -157,7 +156,6 @@ class VHTML {
       for (const mutation of mutationsList) {
         for (let node of mutation.addedNodes) {
           if (node.nodeType === 1) {
-            this._cancelPendingDisposal(node)
             this._runVdelay(node)
             node.querySelectorAll('*[vdelay]').forEach(n => this._runVdelay(n))
           }
@@ -180,27 +178,21 @@ class VHTML {
     }
   }
 
-  _cancelPendingDisposal(node) {
-    if (!node || node.nodeType !== 1) return
-    const timer = this._pendingDisposals.get(node)
-    if (timer) { cancelAnimationFrame(timer); this._pendingDisposals.delete(node) }
-    node.querySelectorAll?.('*').forEach(child => {
-      const childTimer = this._pendingDisposals.get(child)
-      if (childTimer) { cancelAnimationFrame(childTimer); this._pendingDisposals.delete(child) }
-    })
-  }
-
+  // v0.10.1 阶段 2：observer 降级为兜底——取消启发式（_cancelPendingDisposal/
+  // _pendingDisposals）已删，rAF 时的 isConnected 检查本身就是「同帧移回」判据；
+  // 兜底真正清理到内容时打 dev 警告，让依赖兜底的移除路径可发现并收敛为零
+  // （显式 dispose 过的节点再次进入此处是幂等空转，不警告）
   _scheduleDisposeNodeScope(node) {
     if (!node || node.nodeType !== 1) return
-    if (node.hasAttribute?.('data-keep')) return
-    this._cancelPendingDisposal(node)
-    const timer = requestAnimationFrame(() => {
-      this._pendingDisposals.delete(node)
-      if (!node.isConnected) {
-        disposeRuntimeSubtree(node)
+    // 阶段 3：keepOnDetach 实例字段判读（原 data-keep 属性 hack 已废，
+    // 属性仅在实例创建前作为信号存在，parseRef 翻译后即移除）
+    if (instanceOf(node, false)?.keepOnDetach) return
+    requestAnimationFrame(() => {
+      if (node.isConnected) return
+      if (disposeRuntimeSubtree(node)) {
+        warnObserverFallback(node)
       }
     })
-    this._pendingDisposals.set(node, timer)
   }
 
   _flushMOPending() {
@@ -208,7 +200,6 @@ class VHTML {
     const removed = this._moPendingRemoved.splice(0)
     for (let node of added) {
       if (node.nodeType === 1) {
-        this._cancelPendingDisposal(node)
         this._runVdelay(node)
         node.querySelectorAll('*[vdelay]').forEach(n => this._runVdelay(n))
       }

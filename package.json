@@ -18,7 +18,7 @@
     "dev": "vite build --watch --mode development",
     "preview": "vite preview",
     "prepublishOnly": "npm run build",
-    "test": "node --test"
+    "test": "node --max-old-space-size=1024 --test"
   },
   "keywords": [
     "javascript",

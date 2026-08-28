@@ -18,6 +18,9 @@ export class ComponentInstance {
     this.slotOutletState = null
     this.unsafe = false
     this._scriptError = null
+    // v0.10.1 阶段 3：路由缓存软断开标记（原 data-keep DOM 属性 hack，
+    // 由 parseRef 在实例创建时翻译，运行时判读不再依赖 DOM 属性）
+    this.keepOnDetach = false
   }
 }
 
@@ -88,13 +91,13 @@ export function detachInstance(instance) {
 }
 
 function purgeNodeState(node) {
-  if (!node) return
+  if (!node) return false
   const instance = nodeInst.get(node)
   if (instance) {
     detachInstance(instance)
     nodeInst.delete(node)
   }
-  nodeMeta.delete(node)
+  return nodeMeta.delete(node) || Boolean(instance)
 }
 
 function disposeInstanceSubtree(instance) {
@@ -109,15 +112,30 @@ function disposeInstanceSubtree(instance) {
   }
 }
 
+/**
+ * 销毁节点子树的运行时状态（实例/作用域/meta）。
+ * 返回是否实际清理了内容（幂等：已销毁节点再次调用返回 false 且无副作用）。
+ */
 export function disposeRuntimeSubtree(node) {
-  if (!node || node.nodeType !== 1) return
+  if (!node || node.nodeType !== 1) return false
   const instance = nodeInst.get(node)
   if (instance) {
     disposeInstanceSubtree(instance)
-    return
+    return true
   }
-  purgeNodeState(node)
+  let didPurge = purgeNodeState(node)
   node.childNodes?.forEach(child => {
-    if (child.nodeType === 1) disposeRuntimeSubtree(child)
+    if (child.nodeType === 1) didPurge = disposeRuntimeSubtree(child) || didPurge
   })
+  return didPurge
+}
+
+/**
+ * 公开销毁契约（v0.10.1 阶段 1）：disposeRuntimeSubtree 的语义化导出。
+ * 不变式：谁移除 DOM 谁负责 dispose；dispose 幂等（已销毁节点再次调用无副作用）。
+ * 框架内部移除点（v-for/v-if/:vsrc/v-html/parseRef 替换/Page.destroy）已全部
+ * 显式调用；外部移除（el.remove()）由 MutationObserver 兜底回收并打 dev 警告。
+ */
+export function disposeNode(el) {
+  return disposeRuntimeSubtree(el)
 }

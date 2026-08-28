@@ -58,9 +58,10 @@ function createSlotBindingData(dom, outletData, sourceData) {
   const scope = instanceOf(dom)?.scope
   const watcherIds = []
   bindAttrs.forEach(attr => {
+    // v0.10.0：删 deep —— 替换时 watcher 触发，深层传播靠共享 proxy 本身
     const watcherId = watch(scope, () => outletData[attr], (value) => {
       slotData[attr] = value
-    }, { deep: true })
+    })
     watcherIds.push(watcherId)
   })
   return { data: slotData, cleanup: () => watcherIds.forEach(id => Cancel(id)) }

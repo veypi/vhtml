@@ -8,7 +8,7 @@
 import { Wrap, EnsureWrap } from './reactive.js'
 import { Run, AsyncRun } from './sandbox.js'
 import utils from './utils.js'
-import { createRuntimeContext } from './module.js'
+import { createRuntimeContext, RUNTIME } from './module.js'
 import { parseImports } from './imports.js'
 import { registerScriptLifecycle } from './lifecycle.js'
 import { templateLoader } from './loader.js'
@@ -45,7 +45,8 @@ export { createSlotContents, parseSlots } from './slots.js'
 export async function parseRaw(dom, data, runtime, code, ctx) {
   data = EnsureWrap(data || {})
   const tmpId = `_${Math.random().toString(36).slice(2)}`
-  const activeRuntime = (runtime?.$mod || runtime?.$sys || runtime?.scoped !== undefined)
+  // RUNTIME symbol 显式标记（取代 $mod/$sys/scoped 鸭子判定）
+  const activeRuntime = (runtime && runtime[RUNTIME])
     ? runtime
     : instanceOf(dom)?.runtime || runtime || {}
   const target = await templateLoader.parseUI(code, activeRuntime, tmpId)
@@ -72,6 +73,12 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   setInstance(dom, instance)
   instance.unsafe = isUnsafe
   instance.scope = new ComponentScope(dom)
+  // v0.10.1 阶段 3：data-keep 属性翻译为实例字段（router 在 parseRef 之前
+  // setAttribute，实例此刻才存在；翻译后即移除，运行时判读不再依赖 DOM 属性）
+  if (dom.hasAttribute('data-keep')) {
+    instance.keepOnDetach = true
+    dom.removeAttribute('data-keep')
+  }
   dom.setAttribute('vparsing', '')
   // 兜底清理：仅当元素上没有新实例接管（自己被替换/销毁）时才移除 vparsing，
   // 避免误删新实例的解析标记；异常或竞态提前退出时组件不会永久隐藏。
@@ -86,10 +93,16 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   const parentRef = dom.closest(`*[vref='${refOf}']`)
   if (parentRef) runtime = instanceOf(parentRef)?.runtime
 
+  // v0.10.1 阶段 5：generation token 统一竞态契约。scope.dispose 是唯一销毁口
+  // （显式销毁/parseRef 替换都经它 kill()），await 边界统一 alive() 校验，
+  // 取代逐点 instanceOf(dom,false)!==instance 检查
+  const token = instance.scope.token
+  const ticket = token.issue()
+
   if (!target && vsrc) {
     if (!vsrc.endsWith('.html')) vsrc = `${vsrc}.html`
     target = await templateLoader.fetchUI(vsrc, runtime, isUnsafe)
-    if (instanceOf(dom, false) !== instance) {
+    if (!token.alive(ticket)) {
       // 竞态：实例已被替换/销毁（如路由竞态 dispose），提前退出，finally 兜底清理
       return
     }
@@ -114,7 +127,7 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   instance.vsrc = vsrc
 
   const originData = await setupRef(dom, data, parentRuntime, target, instance, singleMode, ctx)
-  if (instanceOf(dom, false) !== instance) {
+  if (!token.alive(ticket)) {
     return
   }
   ctx.suspendMO?.()
@@ -156,6 +169,9 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
     if (inst?.unsafe) {
       console.warn(`unsafe component "${target.url}" contains <script setup>, imports and external modules are blocked`)
     }
+    // 异步段令牌（v0.10.1 阶段 5）：parseImports/AsyncRun 两处 await 边界统一校验
+    const token = instance.scope.token
+    const ticket = token.issue()
     script = await parseImports(script, originData, componentRuntime, target.url, inst?.unsafe)
     await AsyncRun(script, originData, componentRuntime, {
       $node: dom,
@@ -168,6 +184,7 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
         else setTimeout(register, 50)
       },
     }, sandboxOptions)
+    if (!token.alive(ticket)) return originData
     inst = instanceOf(dom, false)
     if (!inst) return originData
   }
@@ -219,13 +236,15 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
       dom.removeAttribute(`:${localKey}`)
       delete originData[key]
       if (expr) {
-        watch(scope, () => Run(expr, data, parentRuntime), () => {
-          originData[key] = Run(expr, data, parentRuntime)
-        }, { deep: true })
+        // v0.10.0：删 deep —— 求值路径读取即注册，深层传播靠共享 proxy 本身；
+        // 变更门控（Object.is）下天然引用语义，回调直接消费阶段一求值结果
+        watch(scope, () => Run(expr, data, parentRuntime), (value) => {
+          originData[key] = value
+        })
       } else {
-        watch(scope, () => data[key], () => {
-          originData[key] = data[key]
-        }, { deep: true })
+        watch(scope, () => data[key], (value) => {
+          originData[key] = value
+        })
       }
     }
 

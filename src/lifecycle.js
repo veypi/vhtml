@@ -1,8 +1,40 @@
 /*
- * lifecycle.js — 生命周期脚本执行
+ * lifecycle.js — 生命周期脚本执行与代际令牌
  */
 import { Watch, Cancel } from './reactive.js'
 import { AsyncRun, Run } from './sandbox.js'
+
+// ====================================================================
+// generation token — 异步挂载统一竞态契约（v0.10.1 阶段 5）
+//
+// 每个组件 scope 持有一个 token；每次跨越 await 的异步段开始时 issue()
+// 领票，异步返回后 alive(ticket) 校验。scope.dispose（唯一销毁口）kill()
+// 作废全部在途票，后续 await 返回即走确定性清理路径。
+// 与 v0.10.2 导航状态机是同一机制：本模块导出，路由层直接复用，不得另造一版。
+// ====================================================================
+
+export function createGenToken() {
+  let generation = 0
+  let killed = false
+  return {
+    /** 开启新的异步段：递增代际，旧票全部作废；返回本段票据 */
+    issue() {
+      generation += 1
+      return generation
+    },
+    /** 校验票据是否仍在当前代际且未整体作废 */
+    alive(ticket) {
+      return !killed && ticket === generation
+    },
+    /** 永久作废（scope.dispose 调用；幂等） */
+    kill() {
+      killed = true
+    },
+    get killed() {
+      return killed
+    },
+  }
+}
 
 function createScriptContext(dom, inst, reason) {
   return {

@@ -420,9 +420,15 @@ vhtml i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 
 Keys starting with `_` (`_err.40100`, `_theme.dark`) are maintained manually in langs.json: scan skips them for missing/unused checks, `--autoremove` never deletes them. Use for dynamic keys referenced via concatenation, variables, or function args (not exact string literals).
 
-## Reactivity Contract & Pitfalls
+## Reactivity Contract & Pitfalls (v0.10.0)
 
-vhtml reactivity = Proxy dep-tracking + rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's own evaluation are **never notified** (feedback-loop guard).
+vhtml reactivity = Proxy dep-tracking + two-phase rAF-batched flush. Nested objects are wrapped **lazily, only when read through a proxy**; writes during a watcher's own evaluation are **never notified** (feedback-loop guard).
+
+**Change gate**: before invoking a watcher callback, the new value is compared with the previous one (`Object.is` by default) — the callback fires only when the value actually changed. `equality: null` opt-out exists for always-run subscriptions (used internally by v-for reconcile). Known boundary: a template expression that returns a fresh reference on every evaluation (e.g. `items.filter(...)`) always passes the gate — avoid allocating inside template expressions.
+
+**Pure-replacement writes**: assigning to a proxied key replaces the value outright — no deep merge. `d.x = { a: 1 }` installs a fresh proxy with a fresh identity (deep merge only happens inside v-for position-key reuse via `mergeIntoProxy`).
+
+**Array mutators**: `splice / shift / unshift / sort / reverse / copyWithin / fill` on a reactive array are batch-wrapped — all their notifications collapse into one flush; `push / pop` notify per raw set (still deduped within a frame). In-place mutation is safe and keeps v-for row identity for position-keyed rows.
 
 ### v-for item identity (no `:key`)
 
@@ -430,18 +436,20 @@ v-for tracks items automatically; there is no `:key` attribute (it compiles as a
 
 | list content | cache identity | update behavior |
 | ------------ | -------------- | --------------- |
-| object items | the item object itself (a `DataID` symbol stamped on first reactive wrap) | mutate fields via the proxy → in-place patch, DOM kept · `list[i] = {...}` → merged into the existing item proxy (identity & DOM kept) · wholesale `list = [new objects]` → all entries destroyed & rebuilt (correct, but loses transient state like focus) |
+| object items | the item object itself (a `DataID` symbol stamped on first reactive wrap) | mutate fields via the proxy → in-place patch, DOM kept · `list[i] = {...}` → fresh identity → entry destroyed & rebuilt (v0.10.0: pure replacement, no merge) · wholesale `list = [new objects]` → all entries destroyed & rebuilt (correct, but loses transient state like focus) |
 | objects without `DataID` (e.g. fresh objects returned on every call of a function source like `v-for="tr in tracks()"`) | array position | same shape (equal top-level key set) → merged in place, DOM kept · shape change → entry destroyed & rebuilt (stale bindings are never evaluated against the mismatched item) |
 | primitive items (string/number) | array position | value changes patch in place, DOM kept |
 | same object twice in one list | — | both entries bind the same record; avoid |
 
-Structural edits (insert / remove / reorder): copy the array (`slice()` / spread), mutate the copy, assign it back — kept items retain identity, so their DOM is preserved and physically re-ordered. Never `splice` a reactive array proxy directly (the set trap merges shifted items into each other); `push` is safe.
+Structural edits (insert / remove / reorder): either in-place mutators (`splice` / `unshift` / `sort` — batch-wrapped, safe since v0.10.0) or copy-then-assign (`slice()` / spread + assign back); kept items retain identity, so their DOM is preserved and physically re-ordered.
 
 ### Other rules
 
 1. Mutating a nested object through a held **raw reference** (`msg.text = x` after `const msg = {...}`) bypasses the proxy set trap — no update (same as Vue's toRaw hazard). Always write via the proxy path: `d.list[i].text = x`.
 2. For streaming/animation (typewriter, count-up): drive from top-level scalar `$data` props, not nested object fields; lists should be append-only immutable records.
 3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — do state mutations from event handlers, timers, or rAF callbacks.
+4. Watcher callbacks only fire on value change (`Object.is` gate). If you need an always-run watcher, pass `{ equality: null }` to `$watch`.
+5. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds within one flush with a scheduler-level throw carrying the effect-chain diagnostic — check `window.__vhtml_dev.cascadeErrors`.
 
 ## Debug
 

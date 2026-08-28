@@ -195,6 +195,22 @@ const syncCache = new Map()
 const AsyncFunction = Object.getPrototypeOf(async function() {}).constructor
 const asyncCache = new Map()
 
+// LRU 上限：模板表达式有限，但 AI 动态 parseRaw 的代码串单调增长
+// （v0.10.0 缓存治理：Map 迭代序=插入序，get 重插实现 touch）
+const MAX_CODE_CACHE = 512
+function cacheGet(cache, key) {
+  if (!cache.has(key)) return undefined
+  const fn = cache.get(key)
+  cache.delete(key)
+  cache.set(key, fn)
+  return fn
+}
+function cachePut(cache, key, fn) {
+  if (cache.has(key)) cache.delete(key)
+  cache.set(key, fn)
+  if (cache.size > MAX_CODE_CACHE) cache.delete(cache.keys().next().value)
+}
+
 function toPreview(value, maxLength = 400) {
   if (typeof value !== 'string') return ''
   const text = value.trim()
@@ -219,7 +235,7 @@ function logError(originCode, data, runtime, execArgs, label, error) {
 
 function compileCode(originCode, { async: isAsync, label } = {}) {
   const cache = isAsync ? asyncCache : syncCache
-  let fn = cache.get(originCode)
+  let fn = cacheGet(cache, originCode)
   if (fn) return fn
 
   const code = originCode.trim()
@@ -233,14 +249,14 @@ function compileCode(originCode, { async: isAsync, label } = {}) {
   if (!isStatement) {
     try {
       fn = tryCompile(`return (\n${code}\n)`)
-      cache.set(originCode, fn)
+      cachePut(cache, originCode, fn)
       return fn
     } catch (_) {}
   }
 
   try {
     fn = tryCompile(code)
-    cache.set(originCode, fn)
+    cachePut(cache, originCode, fn)
     return fn
   } catch (error) {
     console.warn(`${label || 'compile'} error:`, originCode, '\n', error)

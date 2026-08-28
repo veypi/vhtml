@@ -84,6 +84,9 @@ export function createSystemContext(parent = null, initial = {}) {
   return sys
 }
 
+// runtime 显式标记（取代鸭子类型判定 $mod/$sys/scoped）
+export const RUNTIME = Symbol('vhtmlRuntime')
+
 export function createRuntimeContext(parent = null, mod = null, initialSys = {}) {
   const parentSys = parent?.$sys || null
   const runtimeMod = mod || parent?.$mod || null
@@ -91,6 +94,7 @@ export function createRuntimeContext(parent = null, mod = null, initialSys = {})
     $sys: createSystemContext(parentSys, initialSys),
     $mod: EnsureWrap(runtimeMod),
   }
+  runtime[RUNTIME] = true
   if (!Object.prototype.hasOwnProperty.call(initialSys || {}, '$router')) {
     const inheritedRouter = parentSys?.$router
     const routerView = inheritedRouter?.__routerView || inheritedRouter

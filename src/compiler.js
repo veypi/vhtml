@@ -5,7 +5,7 @@
  * 结构指令和根节点分发。属性/事件编译在 compiler-attrs.js。
  */
 
-import { Wrap, DataID, EnsureWrap, Cancel } from './reactive.js'
+import { Wrap, DataID, EnsureWrap, Cancel, mergeIntoProxy } from './reactive.js'
 import { Run } from './sandbox.js'
 import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
@@ -280,8 +280,11 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
         entry = { startMark: itemStart, endMark: itemEnd, data: itemData, textCleanups }
         cache[ck] = entry
       } else if (entry.data) {
-        // 更新已有条目的数据（callback 期写入，通知不被反馈守卫吞掉）
-        entry.data[valueName] = value
+        // 位置键复用：mergeIntoProxy 保持行身份（原 copyBind 的 merge 语义，
+        // v0.10.0 从响应式 set 陷阱迁入 reconcile，作为实现细节）；
+        // 同 DataID 实体 / 标量 / 形状互异均返回原值直接替换。
+        // callback 期写入（listenStack 空）通知不被反馈守卫吞掉
+        entry.data[valueName] = mergeIntoProxy(entry.data[valueName], value)
         if (indexName) entry.data[indexName] = normalizeVforIndex(key)
       }
 
@@ -290,7 +293,9 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     }
   }
 
-  watch(parentScope, collect, reconcile)
+  // equality: null —— 数组原地变异（splice/shift/...）后列表引用不变，
+  // 变更门控（Object.is）会错误门掉，恒跑型订阅必须豁免
+  watch(parentScope, collect, reconcile, { equality: null, debug: `v-for ${vfortxt}` })
 }
 
 export function compileVif(nodes, data, runtime, ctx) {
