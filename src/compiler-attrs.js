@@ -73,7 +73,7 @@ function resolveScopedUrl(rawUrl, runtime, scoped) {
   rawUrl = sanitizeUrl(rawUrl)
   if (rawUrl.startsWith('@')) return rawUrl.slice(1)
   if (/^https?:\/\//.test(rawUrl)) return rawUrl
-  if (rawUrl.startsWith('//')) return rawUrl
+  if (rawUrl.startsWith('//') || rawUrl.startsWith('blob:')) return rawUrl
   if (scoped === undefined) scoped = runtimeScoped(runtime)
   if (scoped && isRelativeHref(rawUrl)) {
     const minDepth = scoped.split('/').filter(s => s).length

@@ -18,7 +18,7 @@ import { prepareStaticUrlAttrs } from './compiler-attrs.js'
 function normalizeFetchUrl(url, scoped = '') {
   if (!url || url === '/') return resolveScopedUrl('/', scoped)
   if (url.startsWith('@')) return url.slice(1)
-  if (/^https?:\/\//.test(url)) return url
+  if (/^https?:\/\//.test(url) || url.startsWith('blob:')) return url
   if (!url.startsWith('/')) return resolveScopedUrl(`/${url}`, scoped)
   return resolveScopedUrl(url, scoped)
 }

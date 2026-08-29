@@ -41,7 +41,7 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
     let resolvedUrl = url
     if (url.startsWith('@')) {
       resolvedUrl = url.slice(1)
-    } else if (!/^https?:\/\//.test(url) && !url.startsWith('//')) {
+    } else if (!/^https?:\/\//.test(url) && !url.startsWith('//') && !url.startsWith('blob:')) {
       resolvedUrl = url.startsWith('/') ? `${scoped}${url}` : `${scoped}/${url}`
     }
     return fetch(resolvedUrl, options)
