@@ -815,8 +815,9 @@ export class RouterView {
       modulePath: this.modulePath,
     })
     let buildResult
+    let layoutEntry = null
     try {
-      const layoutEntry = await this.#ensureLayoutEntry(to.layout, this.runtime)
+      layoutEntry = await this.#ensureLayoutEntry(to.layout, this.runtime)
       if (!isCurrent()) { page.destroy(); return null }
       buildResult = await page.build(this.runtime, layoutEntry)
     } catch (error) {
@@ -827,6 +828,19 @@ export class RouterView {
         modulePath: this.modulePath,
         error,
       })
+      if (!this.#currentPage) {
+        // 首 mount（无在显页面）：降级为错误盒页照常 commit——初始 deep link
+        // 组件 404 不再抛穿杀整个应用（白屏 = 视觉静默空白）；错误暴露走
+        // 红盒 + warn + errors 登记表。在应用内导航失败仍走下方抛穿：
+        // #swallowNav 登记吃掉、当前页保持不变。
+        if (!isCurrent()) { page.destroy(); return null }
+        reportError('navigation', error?.message || String(error), {
+          ...this.#logContext(),
+          stack: error?.stack || '',
+        })
+        page.buildError(layoutEntry)
+        return { page, fromCache: false, to, cacheKey: null }
+      }
       page.destroy()
       throw error
     }

@@ -246,6 +246,27 @@ export class Page {
     return { built: true };
   }
 
+  /**
+   * 首 mount 失败的降级页（view 侧仅在无在显页面时调用）：不抛穿——错误盒
+   * 页面照常 commit，布局外壳照常挂载。初始 deep link 组件 404 若抛穿杀整个
+   * 应用 = 白屏，即视觉静默空白，违反错误暴露契约；错误仍三处可见：红盒、
+   * console warn、errors 登记表。
+   */
+  buildError(layoutEntry = null) {
+    this.dom = document.createElement("div");
+    this.dom.setAttribute("vsrc", this.htmlPath);
+    const box = document.createElement("div");
+    box.style.cssText =
+      "display:block;padding:8px 12px;margin:4px 0;" +
+      "background:#fef2f2;border:1px solid #f87171;border-radius:4px;" +
+      "color:#991b1b;font-size:13px;line-height:1.4;";
+    box.textContent = `[Load Error] ${this.htmlPath}`;
+    this.dom.appendChild(box);
+    this._meta.title = "Load Error";
+    this.layoutEntry = layoutEntry;
+    return { built: true };
+  }
+
   updateTitle() {
     this.clearTitleWatchers();
     if (!this._meta.title) return;

@@ -343,7 +343,7 @@ Route record fields:
 | `component` | required. HTML path or `(path, params) => url`; `params` includes fixed `:params` values plus matched route params |
 | `layout` | layout name → `/layout/{name}.html`; layouts should expose a default `<vslot>` for the page outlet |
 | `redirect` | string, `{ path, params, query, hash }`, or `(matchedRoute) => target` |
-| `error_redirect` | fallback when the component fails to load |
+| `error_redirect` | fallback when the component fails to load（未配置时：应用内导航失败保留当前页 + 错误登记；首 mount 失败降级为可见错误盒页 commit，不白屏杀应用） |
 | `meta` | arbitrary metadata, exposed on `$router.current.meta` |
 | `children` | nested routes; child paths relative to parent; children inherit parent layout/meta |
 | `cacheKey` | `false` (no cache) · string (shared instance) · `(matchedRoute) => key` · default: path-based, query/hash excluded (query changes update router state, page DOM kept) |
@@ -480,7 +480,7 @@ Structural edits (insert / remove / reorder): either in-place mutators (`splice`
 2. For streaming/animation (typewriter, count-up): drive from top-level scalar `$data` props, not nested object fields; lists should be append-only immutable records.
 3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — mutate state from event handlers, timers, or rAF callbacks instead.
 4. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds in one refresh, throwing an error — check `window.__vhtml_dev.cascadeErrors` for the effect chain.
-5. Errors are exposed, never silent: template compilation failures throw; a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space; every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (newest last) with code preview and component location. Undefined identifiers read inside sandboxed code warn once per name (spelling check).
+5. Errors are exposed, never silent: template compilation failures throw; a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space; every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (newest last) with code preview and component location. Undefined identifiers read inside sandboxed code warn once per name (spelling check). Router page-load failure: in-app navigation keeps the current page and records the error; initial mount (no current page) commits a visible `[Load Error]` box page instead of rejecting the whole mount (white screen = visual silence) — route-level `error_redirect` overrides both.
 
 #### Compile stats (`__vhtml_dev.compileStats`)
 

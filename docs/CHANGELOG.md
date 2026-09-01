@@ -5,6 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [Unreleased]
+
+### 新增
+- **`SpaConfig(router, uiFS)`**：导出 SPA 壳的 `ufs.WithSpa` 三元配置（root.html 名、内容、scoped resolver），供"文件优先 + 目录/缺失对浏览器导航成壳"协商语义的 UFS handler 直接挂载（首个用途：aic `/fs/cloud` 文件服务——其 FS 是用户 UFS，壳内容必须显式传入，content=nil 会让 handler 去用户 UFS 找 root.html 必失败）。`SPAHandler` 是其成品 handler 封装（行为不变，仍含 env 响应头）。调用约定同 SPAHandler：须 UI 属主包直接调用（debug 按调用方目录磁盘直读）；壳内容在配置构建时一次性读入，debug 下改 root.html 需重启才反映到该挂载点
+
+### 修复
+- **首 mount 页面加载失败白屏杀全站**：组件 404 时 `Page.build` 抛穿 → `#stageNavigation` 重抛 → `mount()` rejection 无人接 → 整个应用白屏（视觉静默空白，恰违错误暴露契约）。修：无在显页面（首 mount）时降级为错误盒页照常 commit（`Page.buildError`——`[Load Error] <htmlPath>` 红盒 + 布局外壳挂载 + `errors` 登记表 `navigation` 项 + console warn），应用存活；在应用内导航失败语义不变（保留当前页 + 登记表，`#swallowNav` 吞 rejection）。`error_redirect` 优先级高于该降级。实测场景：aic skill 包页面客户端子路由刷新（/skills/{id}/abs）组件 miss 不再白屏
+
 ## [0.10.4] - 2026-08-31
 
 ### 新增

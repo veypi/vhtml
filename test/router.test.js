@@ -402,3 +402,24 @@ test('redirect to missing page: swallowed into error registry, no unhandled reje
   assert.match(navErr.message, /load page failed/)
   app.destroy()
 })
+
+test('initial mount to missing page: error-box page committed, no white screen', async () => {
+  const { errorLog } = await import('../src/errors.js')
+  // 初始 deep link 组件 404（挂载即 miss）：mount 不抛穿杀应用（白屏 = 视觉
+  // 静默空白）——降级错误盒页照常 commit，布局外壳在、错误三处暴露。
+  const routes = [
+    ...ROUTES,
+    { path: '/boot-missing', component: '/pg/missing', layout: 'default' },
+  ]
+  const { app, host, view } = await createRouter('/boot-missing', routes)
+  await flush()
+  assert.ok(host.querySelector('.lay'), 'layout shell mounted around error box')
+  const box = host.querySelector('[vsrc="/pg/missing.html"]')
+  assert.ok(box, 'error page committed with vsrc marker')
+  assert.match(box.textContent, /\[Load Error\] \/pg\/missing\.html/, 'error box visible')
+  assert.equal(view.current.fullPath, '/boot-missing', 'bad deep link URL committed (visible + copyable)')
+  const navErr = errorLog.find((e) => e.kind === 'navigation')
+  assert.ok(navErr, 'mount failure recorded in registry')
+  assert.match(navErr.message, /load page failed/)
+  app.destroy()
+})
