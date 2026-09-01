@@ -5,6 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.10.4] - 2026-08-31
+
+### 新增
+- **`SPAHandler`（WrapUI 抽离）**：壳 handler（root.html 模板 + scoped 注入 + env 响应头 + embed 内容哈希 etag）原封在 `WrapUI` 闭包内，动态文件路由无法复用；现抽为导出 `SPAHandler(router, uiFS, args...)`，`WrapUI` 委托之（行为不变）。调用约定同 WrapUI：须 UI 属主包直接调用（debug 磁盘直读取调用方目录）。用途：aic/skills 包文件路由与 SPA 页面同址，文档导航直达 .html 时由包文件路由回落壳（组件 loader 带 X-No-Fallback 重取走原样分支）
+
+### 修复
+- **embed 前端 ETag 陈旧缓存（生产 304 假命中发旧内容）**：go:embed 文件 mtime 恒为零，vigo 默认 etag（size+mtime）退化为纯尺寸函数——文件同尺寸修改后 If-None-Match 仍命中旧 etag，304 返回旧缓存（embed 部署升级后浏览器不更新，实测中招）。修复：init 新增 `embedETags()`——启动对 embed FS 全量 Walk 计算 sha1 内容哈希表（map[路径]quoted-etag，文件本在内存成本可忽略），经 vigo 新增 `WithETagCache` 注入 Handler；vhtml 自路由与 `WrapUI` embed 分支两处接入。debug 磁盘分支不注入（mtime 真实且需随编辑实时变化，注入反而冻住 etag）。依赖 vigo ufs 同步修复（resolveSpa etag 改内容哈希）
+
 ## [0.10.3] - 2026-08-29
 
 ### 变更（破坏性）
