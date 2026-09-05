@@ -37,6 +37,10 @@ class VHTML {
     this._moSuspended = false
     this._moPendingAdded = []
     this._moPendingRemoved = []
+    // 暴露运行时所使用的模板加载器（单例）：宿主页面经 window.$vhtml.templateLoader
+    // 拿到与内部一致的对象做 clearScoped/scopeOf（生产 bundle 与 debug src 图双形态
+    // 同一实例；直接 import /vhtml/loader.js 在生产是另一份模块实例，清不到本缓存）
+    this.templateLoader = templateLoader
     this.ready = options.autoMount === false ? Promise.resolve(this) : this.mount()
   }
 

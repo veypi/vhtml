@@ -23,6 +23,28 @@ function normalizeFetchUrl(url, scoped = '') {
   return resolveScopedUrl(url, scoped)
 }
 
+/**
+ * scoped 前缀匹配器（clearScoped 用）。prefix 经 normalizeScoped 规范化后，
+ * key 命中条件：精确等于 prefix、位于 prefix 目录下、或同形态挂在本源 origin
+ * 下（模板缓存键存在 origin 相对路径与绝对 URL 两种形态）。文件级 prefix
+ * （.../x.html）剥 .html 后同时匹配描述符级键（vref/URL 去 .html 形态）。
+ * 匹配恒以整段边界（精确或后跟 '/'）收束——/pkg/a 不撞 /pkg/a2。
+ */
+function scopedPrefixMatcher(prefix) {
+  const p = normalizeScoped(prefix || '')
+  if (!p) return () => true
+  const forms = p.endsWith('.html') ? [p, p.slice(0, -5)] : [p]
+  const origin = typeof window !== 'undefined' && window.location ? window.location.origin : ''
+  return (key) => {
+    if (!key || typeof key !== 'string') return false
+    for (const f of forms) {
+      if (key === f || key.startsWith(f + '/')) return true
+      if (origin && (key === origin + f || key.startsWith(origin + f + '/'))) return true
+    }
+    return false
+  }
+}
+
 class CacheStore {
   constructor() {
     this.templates = new Map()
@@ -101,6 +123,29 @@ class ResourceLoader {
       }
       else if (nodeName === 'title') descriptor.title = node.innerText
     }
+  }
+
+  /**
+   * 按前缀回收 head 中由 loadStyle 注入的 <style vref> 节点并清去重集。
+   * 样式文本内联于模板描述符，模块刷新后必须真移除——旧节点否则永久驻留
+   * 并与新样式叠加冲突。link/script 是 URL 寻址的外部资源（浏览器缓存语义，
+   * 同 URL 内容不变），去重集仍有效，不做移除/清空。
+   */
+  clearScopedStyles(matches) {
+    for (const node of document.head.querySelectorAll('style[vref]')) {
+      if (matches(node.getAttribute('vref'))) node.remove()
+    }
+    for (const key of [...this.loadedStyles]) {
+      const sep = key.indexOf('::')
+      const vref = sep === -1 ? key : key.slice(0, sep)
+      if (matches(vref)) this.loadedStyles.delete(key)
+    }
+  }
+
+  /** 全清样式（clear() 用）：移除全部 vref 样式节点并清空去重集 */
+  clearStyles() {
+    for (const node of document.head.querySelectorAll('style[vref]')) node.remove()
+    this.loadedStyles.clear()
   }
 }
 
@@ -218,11 +263,36 @@ class TemplateLoader {
     this.cache = new CacheStore()
     this.resourceLoader = new ResourceLoader()
     this.parser = new TemplateParser(this.resourceLoader)
+    // 缓存代次：clear/clearScoped 时 +1。在途 fetch 捕获起始代次，完成写回前
+    // 比对——代次已变说明中途被清，结果丢弃，防旧描述符回流缓存。
+    this._epoch = 0
   }
 
   clear() {
+    this._epoch++
     this.cache.clear()
+    this.resourceLoader.clearStyles()
     this.moduleManager.clear()
+  }
+
+  /**
+   * clearScoped(prefix) — 按 scoped 前缀使模板缓存失效（v0.10.5）：
+   * 清理 templates/pending 中前缀命中的条目、回收 head 命中样式、并委托
+   * moduleManager 清同前缀模块上下文。语义 = invalidation 非 HMR：已存活
+   * 实例/已缓存路由页照旧运行旧代码，生效对象是之后的一切加载。
+   * reload = clearScoped + 重新构建（路由页重新导航即重建）。
+   */
+  clearScoped(prefix) {
+    const matches = scopedPrefixMatcher(prefix)
+    this._epoch++
+    for (const key of [...this.cache.templates.keys()]) {
+      if (matches(key)) this.cache.templates.delete(key)
+    }
+    for (const key of [...this.cache.pending.keys()]) {
+      if (matches(key)) this.cache.pending.delete(key)
+    }
+    this.resourceLoader.clearScopedStyles(matches)
+    this.moduleManager.clearScoped(prefix)
   }
 
   async getModule(scoped) {
@@ -238,7 +308,10 @@ class TemplateLoader {
   }
 
   async fetchFile(url) {
-    const response = await withTimeout(fetch(url, { headers: { 'X-No-Fallback': '1' } }), FETCH_TIMEOUT, `fetch ${url}`)
+    // cache: 'no-cache' = 与服务端协商（etag/Last-Modified），不直接吃浏览器缓存——
+    // 否则 clearScoped 清了描述符缓存，重建时仍被 HTTP 缓存层喂旧文件（reload 失效
+    // 的第二层根因）；304 由服务端 etag 消化，冷缓存 fetch 成本不增
+    const response = await withTimeout(fetch(url, { headers: { 'X-No-Fallback': '1' }, cache: 'no-cache' }), FETCH_TIMEOUT, `fetch ${url}`)
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
     return response.text()
   }
@@ -249,18 +322,38 @@ class TemplateLoader {
     return this.parser.parse(text, descriptorModule, descriptorUrl, unsafe)
   }
 
+  /**
+   * 查询 url 对应已缓存描述符所属模块的 scoped（未缓存返回 null）。
+   * 与 fetchUI 同一键公式（normalizeFetchUrl + runtime 模块路径），供 reload 前
+   * 按模块根定位 clearScoped 前缀——文件级清会漏包内子组件，模块级清才是刷新语义。
+   * 双键查找：先按传入 runtime 的模块路径，再试裸路径——fetch 发起方的模块路径
+   * （vrouter 宿主）与页面解析后的运行时 scoped（响应头模块根）常不一致，单键
+   * 反查必 miss（曾致 reload 退回文件级清、子组件旧样式残留）。
+   */
+  scopeOf(url, runtime = {}) {
+    const keys = [
+      normalizeFetchUrl(url, getModulePath(runtime)),
+      normalizeFetchUrl(url, ''),
+    ]
+    for (const key of keys) {
+      const scoped = this.cache.templates.get(key)?.scoped
+      if (scoped !== undefined && scoped !== null) return scoped
+    }
+    return null
+  }
+
   async fetchUI(url, runtime = {}, unsafe = false) {
     const fetchUrl = normalizeFetchUrl(url, getModulePath(runtime))
     if (this.cache.templates.has(fetchUrl)) return this.cache.templates.get(fetchUrl)
     if (this.cache.pending.has(fetchUrl)) return this.cache.pending.get(fetchUrl)
-    const pending = this.doFetchUI(fetchUrl, unsafe)
+    const pending = this.doFetchUI(fetchUrl, unsafe, this._epoch)
     this.cache.pending.set(fetchUrl, pending)
     return pending.finally(() => this.cache.pending.delete(fetchUrl))
   }
 
-  async doFetchUI(fetchUrl, unsafe = false) {
+  async doFetchUI(fetchUrl, unsafe = false, epoch = this._epoch) {
     try {
-      const response = await withTimeout(fetch(fetchUrl, { headers: { 'X-No-Fallback': 1 } }), FETCH_TIMEOUT, `fetch ${fetchUrl}`)
+      const response = await withTimeout(fetch(fetchUrl, { headers: { 'X-No-Fallback': 1 }, cache: 'no-cache' }), FETCH_TIMEOUT, `fetch ${fetchUrl}`)
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
       const scopedHeaders = this.readScopedHeaders(response)
       const responseScoped = normalizeScoped(scopedHeaders.scoped || '')
@@ -270,12 +363,12 @@ class TemplateLoader {
       const text = await withTimeout(response.text(), FETCH_TIMEOUT, `read ${fetchUrl}`)
       const descriptorUrl = fetchUrl.endsWith('.html') ? fetchUrl.slice(0, -5) : fetchUrl
       const descriptor = await this.parser.parse(text, descriptorModule, descriptorUrl, unsafe)
-      this.cache.templates.set(fetchUrl, descriptor)
+      if (epoch === this._epoch) this.cache.templates.set(fetchUrl, descriptor)
       return descriptor
     } catch (error) {
       const fallbackModule = await this.moduleManager.getModule('')
       const descriptor = this.parser.create404Descriptor(fetchUrl, fallbackModule, error)
-      this.cache.templates.set(fetchUrl, descriptor)
+      if (epoch === this._epoch) this.cache.templates.set(fetchUrl, descriptor)
       return descriptor
     }
   }

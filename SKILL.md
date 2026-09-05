@@ -291,6 +291,25 @@ export default async ($mod, manager) => {
 - `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. Non-global aliases only register while an `env.js` is loading; aliases resolve only in non-root modules (`scoped` ≠ `''`).
 - `$mod.define(key, value, opts?)` / `manager.define(key, value, opts?)` — module-local vs shared entries (semantics see the `$mod` section).
 
+## Cache & refresh
+
+`templateLoader` (from the vhtml runtime) keeps per-URL template descriptors and per-module contexts. A module that changed on disk can be invalidated at runtime without a full page reload:
+
+```js
+import { templateLoader } from '/vhtml/src/loader.js'   // or: window.$vhtml.templateLoader
+
+templateLoader.clearScoped('/skills/local/mypkg')   // drop caches whose URL/scoped starts with the prefix
+templateLoader.clear()                              // drop everything (login / user switch)
+```
+
+- `clearScoped(prefix)` purges: template descriptors + in-flight fetches under the prefix, injected `<style vref>` nodes under the prefix, and module contexts/aliases registered for matching scopes (`prefix` exactly, or `prefix/…`; `/a` never collides with `/a2`). An absolute-URL prefix targets that origin; a file-level prefix (`…/x.html`) also matches descriptor-level keys (`…/x`); an empty prefix matches everything.
+- Prefer the instance ref (`window.$vhtml.templateLoader`) when the host page runs the bundled build — a direct `/vhtml/src/loader.js` import creates a second, independent loader instance in production.
+- `scopeOf(url, runtime)` returns the module root (`descriptor.scoped`) of a cached descriptor, or null. Dual-key lookup: the fetch initiator's module path (vrouter host) and the bare path are both tried — the page's own runtime `scoped` (response-header module root) usually differs from the fetch key formula, and a single-key reverse lookup misses silently (file-level fallback then leaks sibling components/styles). Reload flows use it to widen a page refresh to its whole module scope: `clearScoped(scopeOf(pageHtml, viewRuntime) ?? pageHtml)`.
+- Semantics = **invalidation, not HMR**: instances and router-cached pages that are already alive keep running the old code; everything loaded afterwards builds from fresh sources. `reload` = `clearScoped` + revisit the route (page cache rebuild).
+- Not purged, by design: `compile.js` / `source-cache.js` entries (content-addressed — a changed file naturally misses and recompiles) and head `<script>`/`<link>` nodes (URL-addressed; the browser already caches them by URL).
+- In-flight fetches started before the clear are guarded by a cache epoch: their results are discarded instead of being written back into the purged cache.
+- Template fetches are sent with `cache: 'no-cache'`: they revalidate against the server (etag/Last-Modified) instead of being served by the browser's HTTP cache. Without this, a cleared descriptor rebuilds from a stale HTTP-cached body — the HTTP cache is a second layer under the descriptor cache, and clearing only the top layer leaves reloads serving old files. `no-cache` revalidates; the etag turns unchanged files into cheap 304s.
+
 Do NOT use `env.js` for route guards, per-page state, or component-local data.
 
 ## `routes.js`

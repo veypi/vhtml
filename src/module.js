@@ -219,6 +219,32 @@ export class ModuleContextManager {
     defineRegistry.length = 0
   }
 
+  /**
+   * clearScoped(prefix) — 按 scoped 前缀失效模块上下文（v0.10.5）：
+   * 删除 modMap/_aliasMap 中「精确等于 prefix 或位于其下」的条目，
+   * 使后续 getModule 重建模块上下文。globals/_globalAliases/defineRegistry
+   * 是全局层，不属于任何 scoped，不在此清理。文件级 prefix（.../x.html）
+   * 自动剥 .html 按所在目录模块匹配。已存活实例持有的旧 $mod 引用不受
+   * 影响（invalidation 语义，非 HMR——组件级 HMR 已定档不做）。
+   */
+  clearScoped(prefix) {
+    let p = normalizeScoped(prefix || '')
+    if (p.endsWith('.html')) p = p.slice(0, -5)
+    // 空前缀 = 全部模块上下文（与 loader 侧 match-all 对齐；globals/
+    // defineRegistry 是全局层仍不动，须清它们用 clear()）
+    if (!p) {
+      this.modMap.clear()
+      this._aliasMap.clear()
+      return
+    }
+    for (const key of [...this.modMap.keys()]) {
+      if (key === p || key.startsWith(p + '/')) this.modMap.delete(key)
+    }
+    for (const key of [...this._aliasMap.keys()]) {
+      if (key === p || key.startsWith(p + '/')) this._aliasMap.delete(key)
+    }
+  }
+
   async getModule(scoped = '') {
     const normalizedScoped = normalizeScoped(scoped || '')
     let entry = this.modMap.get(normalizedScoped)

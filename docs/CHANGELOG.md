@@ -8,9 +8,12 @@
 ## [Unreleased]
 
 ### 新增
+- **`clearScoped(prefix)` 按 scoped 前缀清缓存**：模块磁盘内容变更后运行时刷新——不清页面、不整站 reload。`templateLoader.clearScoped(prefix)` 清模板描述符/在途 fetch/head 注入样式（`style[vref]` 节点真移除，旧实现永久驻留）/同前缀模块上下文与别名；前缀匹配整段边界（`/a` 不撞 `/a2`），支持绝对 URL scoped 与本源 origin 双键形态，文件级 prefix（`…/x.html`）兼容描述符级键，空前缀 = 全部。语义 = invalidation 非 HMR：已存活实例照旧运行，之后加载用新源；reload = clearScoped + 重访路由。另有 epoch 守卫：clear 时在途 fetch 完成的结果丢弃，不回流缓存。`manager.clearScoped` 为模块层对应物（modMap/_aliasMap 前缀清除，空前缀 = 全部模块上下文；globals 是全局层不动）。`clear()` 全清补上原缺失的样式回收
+- **`templateLoader.scopeOf(url, runtime)` + `VHTML` 实例暴露 `templateLoader`**：reload 流按模块根刷新——`scopeOf` 反查已缓存描述符的 `scoped`（未缓存返回 null），调用方 `clearScoped(scopeOf(...) ?? url)` 即整包页面+子组件全失效（文件级清漏子组件）；**双键查找**（runtime 模块路径键 + 裸路径键）——fetch 发起方模块路径（vrouter 宿主）与页面解析后 runtime scoped（响应头模块根）常不一致，单键公式拼双前缀键必 miss（4000 实测：reload 退回文件级清、子组件旧样式残留，本修复验证通过）；实例属性 `window.$vhtml.templateLoader` 让宿主页面拿到与运行时同一单例（生产 bundle 直接 import `/vhtml/src/loader.js` 是另一份独立模块实例，清不到本缓存）
 - **`SpaConfig(router, uiFS)`**：导出 SPA 壳的 `ufs.WithSpa` 三元配置（root.html 名、内容、scoped resolver），供"文件优先 + 目录/缺失对浏览器导航成壳"协商语义的 UFS handler 直接挂载（首个用途：aic `/fs/cloud` 文件服务——其 FS 是用户 UFS，壳内容必须显式传入，content=nil 会让 handler 去用户 UFS 找 root.html 必失败）。`SPAHandler` 是其成品 handler 封装（行为不变，仍含 env 响应头）。调用约定同 SPAHandler：须 UI 属主包直接调用（debug 按调用方目录磁盘直读）；壳内容在配置构建时一次性读入，debug 下改 root.html 需重启才反映到该挂载点
 
 ### 修复
+- **模板 fetch 吃浏览器 HTTP 缓存致 reload 失效（clearScoped 第二层根因）**：描述符缓存清掉后，重建 fetch 不带 cache 选项，被浏览器启发式缓存直接喂旧文件（实测：改盘上 skill 文件 → clearScoped + dropPage → 页面仍是旧内容；同 URL `cache:'no-store'` 拉取则含新内容）。修：`fetchFile`/`fetchUI` 的 fetch 统一加 `cache:'no-cache'`——与服务端协商（etag/Last-Modified），不直接吃本地缓存；未变更 304 由服务端 etag 消化，成本不增
 - **首 mount 页面加载失败白屏杀全站**：组件 404 时 `Page.build` 抛穿 → `#stageNavigation` 重抛 → `mount()` rejection 无人接 → 整个应用白屏（视觉静默空白，恰违错误暴露契约）。修：无在显页面（首 mount）时降级为错误盒页照常 commit（`Page.buildError`——`[Load Error] <htmlPath>` 红盒 + 布局外壳挂载 + `errors` 登记表 `navigation` 项 + console warn），应用存活；在应用内导航失败语义不变（保留当前页 + 登记表，`#swallowNav` 吞 rejection）。`error_redirect` 优先级高于该降级。实测场景：aic skill 包页面客户端子路由刷新（/skills/{id}/abs）组件 miss 不再白屏
 
 ## [0.10.4] - 2026-08-31
