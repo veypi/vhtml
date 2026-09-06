@@ -89,6 +89,39 @@ test('clearScoped 委托 moduleManager 清同前缀模块上下文与别名', ()
   assert.ok(!moduleContextManager._aliasMap.has('/skills/local/a'))
 })
 
+test('clearScoped keepLive：清描述符/pending 但保留模块上下文与样式节点', () => {
+  const rl = templateLoader.resourceLoader
+  seedTemplates()
+  templateLoader.cache.pending.set('/skills/local/a/pending-x', Promise.resolve(1))
+  rl.loadStyle('.a{color:red}', '/skills/local/a/index')
+  moduleContextManager.modMap.set('/skills/local/a', { mod: {} })
+  moduleContextManager._aliasMap.set('/skills/local/a', { x: '/y' })
+  const epochBefore = templateLoader._epoch
+  templateLoader.clearScoped('/skills/local/a', { keepLive: true })
+  // 描述符与在途照清、代次照增
+  assert.ok(!templateLoader.cache.templates.has(T))
+  assert.ok(!templateLoader.cache.pending.has('/skills/local/a/pending-x'))
+  assert.equal(templateLoader._epoch, epochBefore + 1)
+  // 上下文/别名/样式节点与去重集全保留（存活页面服务连续、不掉样式）
+  assert.ok(moduleContextManager.modMap.has('/skills/local/a'))
+  assert.ok(moduleContextManager._aliasMap.has('/skills/local/a'))
+  assert.equal(document.head.querySelectorAll('style[vref]').length, 1)
+  assert.equal(rl.loadedStyles.size, 1)
+})
+
+test('clearScoped keepLive 空前缀：描述符全清，上下文与样式仍保留', () => {
+  const rl = templateLoader.resourceLoader
+  seedTemplates()
+  rl.loadStyle('.a{color:red}', '/skills/local/a/index')
+  moduleContextManager.modMap.set('', { mod: {} })
+  moduleContextManager.modMap.set('/skills/local/a', { mod: {} })
+  templateLoader.clearScoped('', { keepLive: true })
+  assert.equal(templateLoader.cache.templates.size, 0)
+  assert.ok(moduleContextManager.modMap.has(''))
+  assert.ok(moduleContextManager.modMap.has('/skills/local/a'))
+  assert.equal(document.head.querySelectorAll('style[vref]').length, 1)
+})
+
 test('epoch 守卫：在途 fetch 完成后不得把旧描述符写回缓存', async () => {
   let resolveFetch
   let fetchInit = null

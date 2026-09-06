@@ -12,13 +12,16 @@ import { withTimeout } from './utils.js'
 // 网络操作超时（ms）：服务端 accept 后不响应时兜底，避免组件永久卡在 vparsing
 const FETCH_TIMEOUT = 10000
 const SCRIPT_TIMEOUT = 15000
-import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch } from './module.js'
+import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch, bumpImportEpoch } from './module.js'
 import { prepareStaticUrlAttrs } from './compiler-attrs.js'
 
 function normalizeFetchUrl(url, scoped = '') {
   if (!url || url === '/') return resolveScopedUrl('/', scoped)
   if (url.startsWith('@')) return url.slice(1)
   if (/^https?:\/\//.test(url) || url.startsWith('blob:')) return url
+  // data: 走 resolveScopedUrl：module 版对非 / 开头路径原样返回（fetch 层与 blob: 同语义），
+  // 模板属性层（compiler-attrs 版）在 sanitizeUrl 拦截 data:text/html 后才透传
+  if (url.startsWith('data:')) return resolveScopedUrl(url, scoped)
   if (!url.startsWith('/')) return resolveScopedUrl(`/${url}`, scoped)
   return resolveScopedUrl(url, scoped)
 }
@@ -270,27 +273,39 @@ class TemplateLoader {
 
   clear() {
     this._epoch++
+    bumpImportEpoch()
     this.cache.clear()
     this.resourceLoader.clearStyles()
     this.moduleManager.clear()
   }
 
   /**
-   * clearScoped(prefix) — 按 scoped 前缀使模板缓存失效（v0.10.5）：
+   * clearScoped(prefix, opts) — 按 scoped 前缀使模板缓存失效（v0.10.5）：
    * 清理 templates/pending 中前缀命中的条目、回收 head 命中样式、并委托
    * moduleManager 清同前缀模块上下文。语义 = invalidation 非 HMR：已存活
    * 实例/已缓存路由页照旧运行旧代码，生效对象是之后的一切加载。
    * reload = clearScoped + 重新构建（路由页重新导航即重建）。
+   *
+   * opts.keepLive：只清描述符/在途 fetch/穿透令牌，保留模块上下文与 style
+   * 节点。适用场景 = 有存活持有的 scope（如根模块：layout 等常驻实例把 $os
+   * 类服务注册在根上下文上、其 style 节点属于不被重建的存活页面——全清会
+   * 导致服务丢失与全站掉样式）。样式去重键是 vref::CSS文本 内容寻址：CSS
+   * 变更会追加新节点（居后胜出），未变更去重命中不重复注入，保留旧节点
+   * 基本无副作用（边角：新 CSS 删除了某条规则时旧节点残留该规则）。
+   * 页面树整体 dispose 的 scope（如 skill 页 reload）勿用——要重跑 env.js
+   * 刷新 langs/配置，且无存活持有。
    */
-  clearScoped(prefix) {
+  clearScoped(prefix, opts = {}) {
     const matches = scopedPrefixMatcher(prefix)
     this._epoch++
+    bumpImportEpoch()
     for (const key of [...this.cache.templates.keys()]) {
       if (matches(key)) this.cache.templates.delete(key)
     }
     for (const key of [...this.cache.pending.keys()]) {
       if (matches(key)) this.cache.pending.delete(key)
     }
+    if (opts.keepLive) return
     this.resourceLoader.clearScopedStyles(matches)
     this.moduleManager.clearScoped(prefix)
   }

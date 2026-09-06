@@ -1,4 +1,4 @@
-import { getModulePath } from './module.js'
+import { getModulePath, withImportBust } from './module.js'
 import { withTimeout } from './utils.js'
 
 function resolvePath(relativePath, currentPath) {
@@ -94,6 +94,9 @@ export async function parseImports(code, data = {}, runtime = {}, src = '', unsa
     if (!url.startsWith('http')) {
       url = resolvePath(url, normalizedSrc)
       url = `${window.location.origin}${url}`
+      // 穿透令牌在重写时烘焙进代码：清缓存后描述符重取、代码重编译，
+      // 烘焙值恒为当前代次；旧编译产物属于旧实例（invalidation 语义）
+      url = withImportBust(url)
     }
     codeCopy = codeCopy.replace(match[0], `await import('${url}')`)
   }
@@ -114,7 +117,7 @@ export async function parseImports(code, data = {}, runtime = {}, src = '', unsa
     try {
       const moduleUrl = toAbsoluteModuleUrl(modulePath, scoped, normalizedSrc)
       const binding = parseImportBindings(match[1], match[0])
-      const module = await withTimeout(import(moduleUrl), 10000, `import ${moduleUrl}`)
+      const module = await withTimeout(import(withImportBust(moduleUrl)), 10000, `import ${moduleUrl}`)
       await injectImportedModule(binding, module, data)
     } catch (error) {
       console.error(`模块加载失败 (${match[0]}):`, error.message)

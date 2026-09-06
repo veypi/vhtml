@@ -13,6 +13,22 @@ import I18n from './i18n.js'
 
 // ---- define 登记表（__vhtml_dev.defines） ----
 
+// ESM 缓存穿透令牌：浏览器原生模块表按完整 URL 缓存、无任何 API 可驱逐，
+// clearScoped/clear 管不到它。令牌随清缓存递增，import 点（imports.js 静态/
+// 动态、env.js）在令牌非 0 时给 URL 追加 ?__ve={n}——新 URL 即新模块表条目，
+// 强制走网络重取（服务端对 query 无感，etag 协商仍生效）。跨令牌同模块并存
+// 两个实例（旧页面实例持旧引用），与 invalidation 语义一致，不是 HMR。
+let importEpoch = 0
+export function bumpImportEpoch() { importEpoch++ }
+export function withImportBust(url) {
+  if (!importEpoch) return url
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url
+  // 外部 http(s)（CDN 三方库）不穿透；同源绝对 URL（env.js、动态 import 的
+  // origin 绝对化产物）照常穿透
+  if (/^https?:\/\//.test(url) && typeof window !== 'undefined' && window.location && !url.startsWith(window.location.origin)) return url
+  return url + (url.includes('?') ? '&' : '?') + '__ve=' + importEpoch
+}
+
 const defineRegistry = []
 const summarizeOpts = (opts = {}) =>
   ['get', 'set', 'writable', 'configurable', 'enumerable']
@@ -41,7 +57,7 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
     let resolvedUrl = url
     if (url.startsWith('@')) {
       resolvedUrl = url.slice(1)
-    } else if (!/^https?:\/\//.test(url) && !url.startsWith('//') && !url.startsWith('blob:')) {
+    } else if (!/^https?:\/\//.test(url) && !url.startsWith('//') && !url.startsWith('blob:') && !url.startsWith('data:')) {
       resolvedUrl = url.startsWith('/') ? `${scoped}${url}` : `${scoped}/${url}`
     }
     return fetch(resolvedUrl, options)
@@ -53,6 +69,8 @@ export function createModuleContext(scoped, sharedLocale, initial = {}, broadcas
         resolvedUrl = url.slice(1)
       } else if (/^https?:\/\//.test(url)) {
         throw new Error(`fetch: external URL blocked in unsafe mode: ${url}`)
+      } else if (url.startsWith('data:')) {
+        // data: 透传（与 mod.fetch/loader 同语义：非网络资源，不 scope 不拦截）
       } else if (!url.startsWith('/')) {
         resolvedUrl = scoped ? `${scoped}/${url}` : `/${url}`
       } else if (scoped && !url.startsWith(scoped + '/') && url !== scoped) {
@@ -347,7 +365,7 @@ export class ModuleContextManager {
     const envUrl = `${base}/env.js`
     this._loadingStack.push(mod)
     try {
-      const envModule = await withTimeout(import(envUrl), 10000, `import ${envUrl}`)
+      const envModule = await withTimeout(import(withImportBust(envUrl)), 10000, `import ${envUrl}`)
       if (typeof envModule.default === 'function') {
         await envModule.default(mod, this)
       }

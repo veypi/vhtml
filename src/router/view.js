@@ -4,7 +4,7 @@
  */
 
 import { Wrap } from '../reactive.js'
-import { createRuntimeContext, getModulePath, normalizeScoped, resolveScopedUrl, resolveScope } from '../module.js'
+import { createRuntimeContext, getModulePath, normalizeScoped, resolveScopedUrl, resolveScope, withImportBust } from '../module.js'
 import { isRouterNavigableHref } from '../url.js'
 import { debug as logDebug, warn as logWarn } from '../debug.js'
 import { reportError } from '../errors.js'
@@ -1065,7 +1065,7 @@ export class RouterView {
       routesSourceType: isInlineRoutes ? typeof source : 'url',
     }))
     try {
-      const rawRoutesModule = isInlineRoutes ? await source : await import(routesUrl)
+      const rawRoutesModule = isInlineRoutes ? await source : await import(withImportBust(routesUrl))
       const routeModule = await normalizeRoutesModule(rawRoutesModule, {
         $mod: this.runtime?.$mod || null,
         router: this,
