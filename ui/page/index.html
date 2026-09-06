@@ -57,6 +57,8 @@
     filter: blur(80px);
     opacity: 0.3;
     z-index: -1;
+    /* 提层提示：transform 动画走合成器线程，避免主线程每帧样式重算 */
+    will-change: transform, opacity;
     animation: orbFloat 8s ease-in-out infinite;
   }
 
@@ -123,6 +125,8 @@
     height: 6px;
     border-radius: 50%;
     background: var(--accent-500);
+    /* 提层提示：opacity/transform 动画走合成器线程（主线程零样式重算） */
+    will-change: transform, opacity;
     animation: pulse 2s ease-in-out infinite;
   }
 
