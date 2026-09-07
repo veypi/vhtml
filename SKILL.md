@@ -78,6 +78,11 @@ Attributes on a component tag map to the child's `$data` keys (auto camelCase �
 | `v:score="score"` | two-way binding |
 | `disabled` (bare) | boolean `true` when the key exists in child `$data` |
 
+`v:` 双向绑定支持嵌套路径（`v:value="user.nickname"`、`v:value="settings['app.name']"`），
+绑定按**惰性路径链**解析：每次读写从根数据沿路径求值，中间对象被整体赋值替换
+（如 `user = await fetch()`) 后绑定依然跟随新对象。含变量键/函数/运算的复杂表达式
+回退到求值时刻的对象引用语义（旧行为）。
+
 ### `$data` Declaration Rules (`<script setup>`)
 
 - Bare assignment (`count = 0`, `save = () => {}`) and ESM imports register on `$data` — public, accessible from template bindings, refs, and parent imperative calls.
