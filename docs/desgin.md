@@ -163,7 +163,7 @@ node.$mod   // → instance.runtime.$mod
 
 ### ComponentScope
 
-生命周期管理：`cleanups` 清理列表、`timers`/`intervals` Set、`lifecycle` hook 数组（active/deactive/dispose）。
+生命周期管理（v0.11）：phase 状态机（setup/building/mounted/disposed）+ active 子态、tryMount 资格制挂载、reconcileActivity 激活单决策点、`cleanups` 清理列表、`timers`/`intervals` Set、`lifecycle` hook 数组（mount/active/deactive/dispose）。
 
 `setTimeout`/`setInterval`/`addEventListener` 自动注册到 scope，dispose 时自动清理。
 
@@ -247,7 +247,7 @@ RouterView 内部统一使用 `/` 开头的绝对路径。routes 表按 `path_pr
 
 `<a>` 在编译时绑定最近的 RouterView，全局 click 拦截只处理已经绑定 RouterView 的链接。
 
-每页 `Page` 有 `mount/deactive/active/destroy` 生命周期，layout 通过 vslot outlet 承载 page。
+每页 `Page` 有 `build/attach/activate/deactive/destroy` 生命周期（游离 staging 构建 → commit 接入 → 路由当前性维护），layout 通过 vslot outlet 承载 page。
 
 ## 源码结构
 
