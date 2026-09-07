@@ -141,12 +141,119 @@ const EventsList = [
   'visibilitychange'
 ];
 
-function BindInputDomValue(dom, data, key, watch, scope) {
+/**
+ * 不能作为 v: 表达式根标识符的名字：JS 字面量与保留字。
+ * 旧 Proxy 求值对这类名字是 warn 放弃（findLastAccess 返回空），
+ * 静态链解析必须保持同等拒绝，避免静默绑到 data['true'] 等键。
+ */
+const RESERVED_HEADS = new Set([
+  // 字面量
+  'true', 'false', 'null', 'undefined', 'NaN', 'Infinity',
+  // 关键字/未来保留字（表达式位置非法）
+  'var', 'let', 'const', 'function', 'class', 'if', 'else', 'for', 'while',
+  'do', 'switch', 'case', 'break', 'continue', 'return', 'throw', 'new',
+  'delete', 'typeof', 'instanceof', 'in', 'of', 'void', 'yield', 'await',
+  'this', 'super', 'import', 'export', 'extends', 'default', 'with',
+  'enum', 'static', 'implements', 'interface', 'package', 'private',
+  'protected', 'public', 'debugger', 'arguments', 'eval', 'get', 'set',
+])
+
+/**
+ * 静态解析 v: 双向绑定表达式为路径链（纯函数，无副作用）。
+ * 支持形态：a.b.c / a['b.c'] / a["b.c"] / list[0].name
+ * 返回值：路径链数组；无法静态解析（变量键、函数、运算等）返回 null，
+ * 调用方回退到 findLastAccess 的 Proxy 求值（旧语义，行为不变）。
+ */
+export function parseAccessChain(code) {
+  const s = (code || '').trim()
+  if (!s) return null
+  const chain = []
+  const ident = /^[A-Za-z_$][A-Za-z0-9_$]*/
+  const head = ident.exec(s)
+  if (!head || RESERVED_HEADS.has(head[0])) return null
+  chain.push(head[0])
+  let i = head[0].length
+  while (i < s.length) {
+    const rest = s.slice(i)
+    if (rest.startsWith('.')) {
+      const m = ident.exec(rest.slice(1))
+      if (!m) return null
+      if (m[0] === '__proto__') return null // 原型链键：仅静态链，不再落入 getPath/setPath
+      chain.push(m[0])
+      i += 1 + m[0].length
+    } else if (rest.startsWith('[')) {
+      // 字符串字面量键（含点号，如 settings['app.name']）或数字索引
+      if (rest[1] === "'" || rest[1] === '"') {
+        const quote = rest[1]
+        let j = 2
+        let str = ''
+        while (j < rest.length) {
+          const ch = rest[j]
+          // 遇 \ 不静态解析（JS 转义表与手写解析器不一致），回退旧 new Function 求值语义
+          if (ch === '\\') return null
+          if (ch === quote) break
+          str += ch
+          j++
+        }
+        if (j >= rest.length || rest[j + 1] !== ']') return null
+        if (str === '__proto__') return null
+        chain.push(str)
+        i += j + 2
+      } else {
+        const m = /^\d+/.exec(rest.slice(1))
+        if (!m) return null
+        chain.push(Number(m[0]))
+        i += 1 + m[0].length
+        if (s[i] !== ']') return null
+        i++
+      }
+    } else {
+      return null
+    }
+  }
+  return chain
+}
+
+/**
+ * 沿路径链从根对象取值；任一中间节点缺失返回 undefined（不抛）。
+ */
+export function getPath(root, chain) {
+  let cur = root
+  for (const k of chain) {
+    if (cur == null) return undefined
+    cur = cur[k]
+  }
+  return cur
+}
+
+/**
+ * 沿路径链向根对象写值；中间节点缺失时 no-op（不创建对象、不抛），
+ * 与旧语义（args.data 缺失即 warn 放弃）对齐。
+ */
+export function setPath(root, chain, value) {
+  if (!chain || chain.length === 0) return false
+  let cur = root
+  for (let i = 0; i < chain.length - 1; i++) {
+    if (cur == null) return false
+    cur = cur[chain[i]]
+  }
+  if (cur == null) return false
+  cur[chain[chain.length - 1]] = value
+  return true
+}
+
+function BindInputDomValue(dom, bind, watch, scope) {
   const element = typeof dom === 'string' ? document.querySelector(dom) : dom;
 
   if (!element) {
     console.error('DOM元素未找到');
     return;
+  }
+  // bind = { root, chain }（惰性路径链，对象整体替换后依然有效）
+  //     或 { data, key }（复杂表达式 fallback：旧语义，绑定解析时刻的对象）
+  const getValue = () => bind.chain ? getPath(bind.root, bind.chain) : bind.data[bind.key]
+  const setValue = (v) => {
+    if (bind.chain) { setPath(bind.root, bind.chain, v) } else { bind.data[bind.key] = v }
   }
   const bindWatch = (target, callback) => {
     return watch(target, callback)
@@ -178,7 +285,7 @@ function BindInputDomValue(dom, data, key, watch, scope) {
     case 'week':
     case 'hidden':
     case 'textarea':
-      bindWatch(() => data[key], (value) => {
+      bindWatch(getValue, (value) => {
         if (value === undefined) {
           element.value = ''
         } else {
@@ -186,26 +293,26 @@ function BindInputDomValue(dom, data, key, watch, scope) {
         }
       })
       bindEvent('input', function() {
-        data[key] = this.value;
+        setValue(this.value);
       });
       break;
     case 'checkbox':
       bindWatch(function() {
-        element.checked = !!data[key];
+        element.checked = !!getValue();
       });
       bindEvent('change', function() {
-        data[key] = this.checked;
+        setValue(this.checked);
       });
       break;
     // 单选框
     case 'radio':
       // 初始化
       bindWatch(() => {
-        element.checked = element.value === data[key];
+        element.checked = element.value === getValue();
       })
       bindEvent('change', function() {
         if (this.checked) {
-          data[key] = this.value;
+          setValue(this.value);
         }
       });
       break;
@@ -214,7 +321,7 @@ function BindInputDomValue(dom, data, key, watch, scope) {
     case 'select-one':
     case 'select-multiple':
       bindWatch(() => {
-        let newValue = data[key]
+        let newValue = getValue()
         if (element.multiple) {
           const values = Array.isArray(newValue) ? newValue : [];
           for (let i = 0; i < element.options.length; i++) {
@@ -234,10 +341,10 @@ function BindInputDomValue(dom, data, key, watch, scope) {
               selectedValues.push(this.options[i].value);
             }
           }
-          data[key] = selectedValues;
+          setValue(selectedValues);
         } else {
           // 单选
-          data[key] = this.value;
+          setValue(this.value);
         }
       });
       break;
@@ -335,4 +442,4 @@ export function withTimeout(promise, ms, label = 'operation') {
   })
 }
 
-export default { CamelToKebabCase, EventsList, BindInputDomValue, SetAttr, AddClicker, withTimeout }
+export default { CamelToKebabCase, EventsList, BindInputDomValue, SetAttr, AddClicker, withTimeout, parseAccessChain, getPath, setPath }

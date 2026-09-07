@@ -288,18 +288,31 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
       dom.removeAttribute(`v:${localKey}`)
       if (!expr) expr = key
       const args = ctx.findLastAccess?.(expr, data)
-      if (!args || !args.key || args.data === undefined) {
+      if (!args || (!args.chain && !args.key) || (args.data === undefined && !args.chain)) {
         console.warn(`not find bind variables: ${expr}`)
         return
       }
-      if (args.data[args.key] !== undefined && args.data[args.key] !== null) {
+      // v: 绑定经惰性路径链解析 —— 读写每次从根 data 沿链求值，
+      // 中间对象被整体替换（v0.10.0 纯替换语义）后绑定仍跟随新对象（修复
+      // profile.html 等 user = await fetchUser() 场景的写回丢失）；复杂表达式
+      // 回退旧语义（解析时刻对象引用 + 末段 key），行为不变。
+      const read = () => (args.chain ? utils.getPath(args.root, args.chain) : args.data[args.key])
+      const write = (v) => {
+        if (args.chain) {
+          utils.setPath(args.root, args.chain, v)
+        } else {
+          args.data[args.key] = v
+        }
+      }
+      const initial = read()
+      if (initial !== undefined && initial !== null) {
         delete originData[key]
       }
-      watch(scope, () => args.data[args.key], () => {
-        originData[key] = args.data[args.key]
+      watch(scope, read, (value) => {
+        originData[key] = value
       })
       watch(scope, () => originData[key], () => {
-        args.data[args.key] = originData[key]
+        write(originData[key])
       })
     }
   })

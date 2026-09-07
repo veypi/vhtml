@@ -332,9 +332,11 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
   }
   if (name.startsWith('v:')) {
     const args = ctx?.findLastAccess?.(value, data)
-    if (args && args.data && args.key) {
+    const ok = args && ((args.chain && args.root !== undefined) || (args.data && args.key))
+    if (ok) {
+      // bind 支持 { root, chain }（惰性路径链）与 { data, key }（旧语义 fallback）
       return utils.BindInputDomValue(
-        dom, args.data, args.key,
+        dom, args,
         (target, callback) => watch(scope, target, callback),
         scope,
       )
