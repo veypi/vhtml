@@ -533,7 +533,7 @@ export class RouterView {
   #isLayoutCacheAlive(entry) {
     if (!entry?.dom) return false
     const inst = instanceOf(entry.dom, false)
-    return Boolean(inst) && inst.scope?.state !== 'disposed'
+    return Boolean(inst) && inst.scope?.phase !== 'disposed'
   }
 
   #getCachedLayout(layout) {
@@ -549,7 +549,9 @@ export class RouterView {
   /**
    * 取或建 layout 缓存条目（resolving 阶段调用）。
    * 新建与页面内容一样在游离 staging 完成，commit 接入活动树；
-   * 被作废导航新建的条目留在缓存中供后续导航复用。
+   * 被作废导航新建的条目留在缓存中供后续导航复用——其 plain script
+   * 在后续导航 commit 的 tryMount 树遍历时才执行（挂载钩子资格制，
+   * 未接入文档前永不执行），缓存未提交的外壳无脚本副作用。
    */
   async #ensureLayoutEntry(layout, runtime) {
     if (!layout) return null

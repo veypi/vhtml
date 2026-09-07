@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.11.0] - 2026-09-08
+
+### 变更（破坏性）
+- **组件生命周期重新设计（状态机显式化）**：实例状态机 `setup → building → mounted → disposed`，`active` 为叠加在 mounted 上的布尔子态。核心修复 = v0.10.0 导航 staging 化引入的语义漂移：plain `<script>` 与 `active('mount')` 此前在「构建完成」触发（页面游离构建时宿主未连接），现统一收口到 **`tryMount()` 资格制迁移**——`building ∧ 宿主已接入文档` 才执行 plain script 并做激活判定。契约上下文无关：路由页（staging 构建）与动态组件（原地构建）的脚本都保证 `$node.isConnected === true`。挂载钩子两个触发源：`Page.attach()` 树遍历 flush（确定性主路径）+ 新增 `connection.js` 窄连接观察（仅 pending 时挂 MO，覆盖外部游离宿主插入/嵌套路由 staging commit 等框架外接入点）。作废导航零脚本副作用（脚本从未执行，setup 外部副作用不回滚，框架托管资源经 dispose 回收）
+- **激活资格单一决策点 `reconcileActivity(reason)`**：`active ⟺ mounted ∧ connected ∧ 路由分支当前 ∧ 文档可见`。路由（`setRouteCurrent` 树维护）/连接/可见性任一变化重算资格做迁移；取代 visHiddenScopes 集合追踪（旧机制覆盖不了 hidden 期间首次 mounted 的组件，复显漏激活）
+- **scope 公开面改名**：`scope.state`（'created/active/inactive/disposed'）→ `scope.phase`（'setup/building/mounted/disposed'）+ `scope.active` 布尔；`scope.activate()/deactive()` 移除（迁移唯一入口 `tryMount()` + `reconcileActivity()`/`setRouteCurrent()`）
+- **`@mounted` 事件整套机制删除**（init 时代遗留，生命周期重设计后冗余，全仓零使用）：`compiler-attrs.js` mounted 分支、`index.js` `_onMountedRun`/`vdelay`/`_delayCache`、`lifecycle.js` `runMountedHandler` 全部移除；VHTML 实例 MO 不再处理 addedNodes（只保留 removedNodes 销毁兜底）；`slots.js` owner 未就绪重试迁移到 `whenConnected`（一次性登记取代常驻重试，修复重复接入叠加 watcher 的旧缺陷；接入后仍无 owner 显式警告）
+
+### 修复
+- **dispose 抗错强化**：cleanup/生命周期回调逐个 try/catch 隔离，单个抛错进错误登记表（kind='lifecycle'）不阻断剩余回收（旧实现 `cleanups.splice(0)` 循环会被异常打断）；disposed 后 `addCleanup` 立即执行（异步脚本善后注册不泄漏）；dispose 撤销 whenConnected 登记
+
+### 契约成文（SKILL.md Script Types 章节重写）
+- 跨实例无顺序保证（子组件异步挂载，两个时代皆然）；同实例 plain 先于 active
+- 调用序非完成序：plain → active 不等待脚本内 await
+- `$refs` 弱保证（慢子组件可能未就绪，访问需判空）
+- 测试 `test/lifecycle_mount.test.js` 7 用例：staging 页 connected 断言、作废导航零执行、缓存重入 active(route)、v-if 双上下文一致、hidden commit 的 script/active 分离、dispose 抗错、disposed 后 cleanup 立即执行
+
 ## [Unreleased]
 
 ### 新增

@@ -253,7 +253,8 @@ RouterView 内部统一使用 `/` 开头的绝对路径。routes 表按 `path_pr
 
 ```
 src/
-├── index.js       # Vhtml 入口类（MutationObserver、vdelay、挂载/销毁）
+├── index.js       # Vhtml 入口类（MutationObserver 销毁兜底、挂载/销毁）
+├── connection.js  # 节点接入文档一次性通知（tryMount 兼底触发源）
 ├── sandbox.js     # 沙盒执行引擎（with + Proxy）
 ├── reactive.js    # 响应式系统（Wrap/Watch/rAF 批量更新）
 ├── compiler.js    # DOM 编译器（指令、插值、组件引用）

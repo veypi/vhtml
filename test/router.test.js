@@ -378,10 +378,10 @@ test('routes reload disposes previous layout instances (no shell leak)', async (
   const layoutDom = host.querySelector('.lay')
   const layoutInst = instanceOf(layoutDom)   // 实例挂在 layout 根（body 包装）上，.lay 是其子级
   assert.ok(layoutInst, 'layout instance attached')
-  assert.equal(layoutInst.scope.state, 'active')
+  assert.equal(layoutInst.scope.active, true)
   setRouterRoutesSource(vr, { routes: ROUTES })
   await flush()
-  assert.equal(layoutInst.scope.state, 'disposed', 'old layout disposed on routes reload')
+  assert.equal(layoutInst.scope.phase, 'disposed', 'old layout disposed on routes reload')
   assert.ok(host.querySelector('.lay'), 'new layout mounted after reload')
   app.destroy()
 })

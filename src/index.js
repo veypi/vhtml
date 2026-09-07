@@ -2,7 +2,7 @@
  * vhtml — 框架入口
  * Copyright (C) 2024 veypi <i@veypi.com>
  *
- * VHTML 类管理框架生命周期：全局样式、MutationObserver、vdelay、
+ * VHTML 类管理框架生命周期：全局样式、MutationObserver（销毁兜底）、
  * ctx 组装、DOM 编译与销毁。
  */
 
@@ -33,9 +33,7 @@ class VHTML {
     this._mounted = false
     this._ctx = null
     this._observer = null
-    this._delayCache = []
     this._moSuspended = false
-    this._moPendingAdded = []
     this._moPendingRemoved = []
     // 暴露运行时所使用的模板加载器（单例）：宿主页面经 window.$vhtml.templateLoader
     // 拿到与内部一致的对象做 clearScoped/scopeOf（生产 bundle 与 debug src 图双形态
@@ -63,7 +61,6 @@ class VHTML {
     this._startObserver()
 
     this._ctx = createRenderContext({
-      onMountedRun: this._onMountedRun.bind(this),
       suspendMO: this._suspendMO.bind(this),
       resumeMO: this._resumeMO.bind(this),
     })
@@ -85,8 +82,6 @@ class VHTML {
     if (this._el) {
       disposeRuntimeSubtree(this._el)
     }
-    this._delayCache.length = 0
-    this._moPendingAdded.length = 0
     this._moPendingRemoved.length = 0
     this._mounted = false
     this._ctx = null
@@ -152,34 +147,17 @@ class VHTML {
     this._observer = new MutationObserver((mutationsList) => {
       if (this._moSuspended) {
         for (const mutation of mutationsList) {
-          this._moPendingAdded.push(...mutation.addedNodes)
           this._moPendingRemoved.push(...mutation.removedNodes)
         }
         return
       }
       for (const mutation of mutationsList) {
-        for (let node of mutation.addedNodes) {
-          if (node.nodeType === 1) {
-            this._runVdelay(node)
-            node.querySelectorAll('*[vdelay]').forEach(n => this._runVdelay(n))
-          }
-        }
         for (let node of mutation.removedNodes) {
           this._scheduleDisposeNodeScope(node)
         }
       }
     })
     this._observer.observe(this._el, config)
-  }
-
-  _runVdelay(d) {
-    if (!d.isConnected) return
-    const delay = d.getAttribute('vdelay')
-    if (delay !== null) {
-      const fc = this._delayCache[delay]
-      if (fc) fc(d)
-      else console.error('delay not found:', delay, d)
-    }
   }
 
   // v0.10.1 阶段 2：observer 降级为兜底——取消启发式（_cancelPendingDisposal/
@@ -205,14 +183,7 @@ class VHTML {
   }
 
   _flushMOPending() {
-    const added = this._moPendingAdded.splice(0)
     const removed = this._moPendingRemoved.splice(0)
-    for (let node of added) {
-      if (node.nodeType === 1) {
-        this._runVdelay(node)
-        node.querySelectorAll('*[vdelay]').forEach(n => this._runVdelay(n))
-      }
-    }
     for (let node of removed) {
       this._scheduleDisposeNodeScope(node)
     }
@@ -225,21 +196,9 @@ class VHTML {
   _resumeMO() {
     if (!this._moSuspended) return
     this._moSuspended = false
-    if (this._moPendingAdded.length > 0 || this._moPendingRemoved.length > 0) {
+    if (this._moPendingRemoved.length > 0) {
       this._flushMOPending()
     }
-  }
-
-  _onMountedRun(dom, cb, once = true) {
-    if (once) {
-      if (dom.isConnected) { cb(dom); return }
-      const did = this._delayCache.push((d) => { d.removeAttribute('vdelay'); cb(d) })
-      dom.setAttribute('vdelay', did - 1)
-      return
-    }
-    if (dom.isConnected) cb(dom)
-    const did = this._delayCache.push(cb)
-    dom.setAttribute('vdelay', did - 1)
   }
 }
 

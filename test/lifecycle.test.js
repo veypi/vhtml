@@ -93,7 +93,7 @@ test('external el.remove() of unmarked DOM: collected silently, no warning', asy
   console.warn = origWarn
 
   assert.equal(instanceOf(child, false), null, 'instance purged via fallback')
-  assert.equal(inst.scope.state, 'disposed', 'scope disposed via fallback')
+  assert.equal(inst.scope.phase, 'disposed', 'scope disposed via fallback')
   const fallbackWarns = warns.filter((w) => w.includes('observer fallback'))
   assert.equal(fallbackWarns.length, 0, 'unmarked DOM removal is silent (third-party noise gate)')
   app.destroy()
@@ -141,13 +141,13 @@ test('keepOnDetach: node survives removal, reactivates after re-insertion', asyn
 
   box.remove()             // 缓存页软断开形态
   await settleMO()
-  assert.equal(inst.scope.state !== 'disposed', true, 'keepOnDetach survives observer fallback')
+  assert.equal(inst.scope.phase !== 'disposed', true, 'keepOnDetach survives observer fallback')
   assert.equal(instanceOf(box, false), inst, 'instance kept')
 
   host.querySelector('div').append(box)   // 重插
   await settleMO()
-  inst.scope.activate(box, 'route')       // 路由重入语义
-  assert.equal(inst.scope.state, 'active')
+  inst.scope.setRouteCurrent(true, 'route')  // 路由重入语义（v0.11）
+  assert.equal(inst.scope.active, true)
   app.destroy()
 })
 

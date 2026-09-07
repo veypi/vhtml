@@ -261,7 +261,7 @@ test('mount failure renders a visible error placeholder instead of blank', async
   assert.ok(pre, 'placeholder rendered')
   assert.match(pre.textContent, /\[vhtml\]/)
   assert.equal(instance._error?.kind, 'mount', 'instance error carries mount kind')
-  assert.equal(instance.scope.state, 'disposed', 'failed mount disposes the new scope (props watchers cleaned, async segments killed)')
+  assert.equal(instance.scope.phase, 'disposed', 'failed mount disposes the new scope (props watchers cleaned, async segments killed)')
   const kinds = errorLog.slice(before).map((e) => e.kind)
   assert.ok(kinds.includes('compile'), 'compile error recorded at the source')
   assert.ok(kinds.includes('mount'), 'mount error recorded in parseRef catch')

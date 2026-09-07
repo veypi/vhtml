@@ -2,7 +2,7 @@
  * lifecycle.js — 生命周期脚本执行与代际令牌
  */
 import { Watch, Cancel } from './reactive.js'
-import { AsyncRun, Run, setCompileContext } from './sandbox.js'
+import { AsyncRun, setCompileContext } from './sandbox.js'
 
 // ====================================================================
 // generation token — 异步挂载统一竞态契约（v0.10.1 阶段 5）
@@ -108,10 +108,8 @@ export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime, sa
     scope?.onDispose(run)
     return
   }
-  run()
-}
-
-export function runMountedHandler(dom, data, runtime, expression) {
-  let callback = Run(expression, data, runtime)
-  if (typeof callback === 'function') callback(dom)
+  // plain script = mounted 迁移钩子（v0.11）：入挂载队列，tryMount 资格满足时
+  // 执行（宿主已接入文档）；无 scope 的退化路径立即执行
+  if (scope) scope.onMount(run)
+  else run()
 }

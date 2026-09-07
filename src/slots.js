@@ -7,6 +7,7 @@ import { Run } from './sandbox.js'
 import { instanceOf, metaOf, peekMeta, setNodeScope } from './component-instance.js'
 import { watch } from './runtime-watch.js'
 import { getSharedTemplateNodes } from './source-cache.js'
+import { whenConnected } from './connection.js'
 
 function cloneNodes(nodes) {
   return (nodes || []).map(node => node.cloneNode(true))
@@ -135,8 +136,16 @@ export function parseSlots(dom, data, runtime, ctx) {
   }
   const owner = resolveSlotOwner(dom)
   if (!owner) {
-    ctx.onMountedRun?.(dom, (node) => {
-      parseSlots(node, data, runtime, ctx)
+    // owner 未就绪（宿主树尚未接入文档等场景）：接入后重试。一次性登记取代
+    // 旧 vdelay 常驻重试——旧语义下每次重连都会重跑 parseSlots 叠加 watcher，
+    // 一次性登记 + outlet 状态缓存（peekMeta）天然幂等。接入后仍找不到 owner
+    // 属模板结构错误，显式警告不静默。
+    whenConnected(dom, (node) => {
+      if (resolveSlotOwner(node)) {
+        parseSlots(node, data, runtime, ctx)
+      } else {
+        console.warn('[vhtml] vslot outlet owner not found after connect:', node)
+      }
     })
     return dom
   }

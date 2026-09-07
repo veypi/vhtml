@@ -220,20 +220,36 @@ Static imports are supported; relative paths resolve against the component's own
 
 - Text interpolation: function values are auto-invoked, object values are auto-`JSON.stringify`-ed.
 - Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
-- Special events: `@mounted` (node inserted into DOM), `@outerclick` (click outside the element).
+- Special events: `@outerclick` (click outside the element).
 - `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
 - `v-for` has **no `:key` attribute** — item identity is tracked automatically (objects by reference, primitives by position). A `:key` on a v-for node compiles as a plain inert attribute; delete it.
 - Always initialize list variables in `<script setup>`: `items = []`.
 
 ## Script Types
 
-| type | when it runs |
-| ------ | ------------- |
-| `<script setup>` | once at instance creation, before DOM compilation |
-| `<script>` | once after DOM compilation, before first activation |
-| `<script active>` | on entering live-in-page state: mount, cached route re-entry, browser tab visible again. Handler receives `$reason`: `'mount' \| 'route' \| 'visibility'` |
-| `<script deactive>` | on leaving live-in-page state but staying alive: route cached, tab hidden; also fired before `dispose` when disposed while active (`$reason: 'dispose'`) |
-| `<script dispose>` | when the instance is destroyed (`v-if` removal, page unload) |
+Lifecycle contract (v0.11): every hook's guarantee is **context-independent** — identical whether the component is a routed page (built in detached staging, committed atomically) or dynamically inserted (`v-if`/`v-for`, built in place).
+
+Instance state machine: `setup → building → mounted → disposed`, with an `active` boolean layered on `mounted`:
+
+```
+active ⟺ mounted ∧ connected ∧ route-branch current ∧ document visible
+```
+
+| type | when it runs | guarantees | forbidden |
+| ------ | ------------- | ---------- | --------- |
+| `<script setup>` | once at instance creation, before DOM compilation | `$data` ready; target route params snapshot readable | accessing DOM structure / `$refs` / connection state |
+| `<script>` | once at the mounted transition: own subtree compiled AND host connected to the document | `$node.isConnected === true`; own template compiled | assuming activation (use `active` for that) |
+| `<script active>` | on every activation: first mount, cached route re-entry, tab visible again | connected + current route + visible; `$reason`: `'mount' \| 'route' \| 'visibility'` | — |
+| `<script deactive>` | on leaving the active state: route cached, tab hidden; also fired before `dispose` when disposed while active (`$reason: 'dispose'`) | paired with every active period | — |
+| `<script dispose>` | when the instance is destroyed (`v-if` removal, page unload) | watchers/timers/cleanups are being collected | — |
+
+Rules of the contract:
+
+- **No cross-instance ordering guarantee.** Child components mount asynchronously (`parseRef` is not awaited); hooks of different instances fire in each instance's own readiness order. Within one instance, `<script>` always runs before the first `active`.
+- **Call order, not completion.** `<script>` → `active` guarantees invocation order only; an `await` inside a script does not block the tree.
+- **Aborted navigation = zero script side effects.** During route staging, pages/layouts build detached; scripts never run on the detached tree. If the navigation is aborted, the build product is discarded with no plain/active script ever having executed (setup already ran — its *external* side effects like fetches are not rolled back; framework-managed resources like watchers are collected via dispose).
+- **`$refs` is a weak guarantee.** A slow async child may not be mounted when the parent's `<script>` runs; guard `$refs.x` access.
+- Any state can transition straight to `disposed`; `dispose` is idempotent and reentrant-safe; a throwing cleanup is logged to the error registry without blocking the rest; `addCleanup` on a disposed scope runs immediately.
 
 Helpers available in all script types:
 

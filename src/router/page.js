@@ -37,22 +37,32 @@ export function normalizeLayoutUrl(layout) {
 
 // ---- 生命周期辅助 ----
 
-export function runRuntimeTreeLifecycle(root, method, reason) {
-  if (!root || typeof method !== "string") return;
+/** 树遍历（实例树，visited 防环）。 */
+function walkInstanceTree(root, fn) {
   const rootInstance = instanceOf(root);
-  if (rootInstance) {
-    const visited = new Set();
-    const runInstance = (instance) => {
-      if (!instance || visited.has(instance)) return;
-      visited.add(instance);
-      const host = instance.host;
-      if (host) instance.scope?.[method]?.(host, reason);
-      instance.children.forEach((child) => runInstance(child));
-    };
-    runInstance(rootInstance);
-    return;
-  }
-  instanceOf(root)?.scope?.[method]?.(root, reason);
+  if (!rootInstance) return;
+  const visited = new Set();
+  const walk = (instance) => {
+    if (!instance || visited.has(instance)) return;
+    visited.add(instance);
+    fn(instance);
+    instance.children.forEach((child) => walk(child));
+  };
+  walk(rootInstance);
+}
+
+/** 路由分支当前性树维护：commit 换页时旧页 false / 新页 true，激活资格重算。 */
+export function setRouteCurrentTree(root, current, reason) {
+  walkInstanceTree(root, (instance) => {
+    instance.scope?.setRouteCurrent(current, reason);
+  });
+}
+
+/** commit 接入后的确定性挂载 flush：树上仍处于 building 的 scope 依次 tryMount。 */
+function tryMountTree(root) {
+  walkInstanceTree(root, (instance) => {
+    instance.scope?.tryMount();
+  });
 }
 
 // ---- Page ----
@@ -190,21 +200,26 @@ export class Page {
       const contentInst = instanceOf(this.dom, false);
       if (layoutInst && contentInst)
         attachChildInstance(layoutInst, contentInst);
-      return;
+    } else {
+      if (this.dom && !this.dom.isConnected) {
+        this.node.innerHTML = "";
+        this.node.append(this.dom);
+      }
+      this.instance.host = this.dom;
+      const contentInst = instanceOf(this.dom, false);
+      if (contentInst) attachChildInstance(instanceOf(this.node), contentInst);
     }
-    if (this.dom && !this.dom.isConnected) {
-      this.node.innerHTML = "";
-      this.node.append(this.dom);
-    }
-    this.instance.host = this.dom;
-    const contentInst = instanceOf(this.dom, false);
-    if (contentInst) attachChildInstance(instanceOf(this.node), contentInst);
+    // 挂载 flush（v0.11）：接入活动树后树遍历 tryMount——游离 staging 期
+    // 积累的 building 态 scope 在此确定性迁移（plain script + active 判定），
+    // 已 mounted 的（缓存页重入）幂等空转
+    tryMountTree(this.node);
   }
 
   /**
    * resolving 阶段：解析页面组件到游离 DOM。
    * 不触碰活动树——被作废的导航直接丢弃 build 产物即可，不会污染当前
-   * 显示；@mounted 类事件由 commit 接入后的 MutationObserver 触发。
+   * 显示；plain script / active 等挂载钩子由 commit 接入后的 tryMount
+   * 树遍历补迁移（接入前脚本零执行，作废零脚本副作用）。
    * 返回 { redirect }（error_redirect 命中）或 { built: true }。
    */
   async build(runtime, layoutEntry = null) {
@@ -360,12 +375,12 @@ export class Page {
     else this.clearTitleWatchers();
     this.attach();
     if (!this._meta.didInitialActivation) {
+      // 首次激活：attach 的 tryMount 树遍历已完成 mounted 迁移与激活判定
+      //（reason='mount'），不再补发 route 激活
       this._meta.didInitialActivation = true;
       return;
     }
-    this.roots().forEach((root) =>
-      runRuntimeTreeLifecycle(root, "activate", "route"),
-    );
+    this.roots().forEach((root) => setRouteCurrentTree(root, true, "route"));
   }
 
   deactive(opts = {}) {
@@ -373,7 +388,7 @@ export class Page {
     if (!this._meta.didInitialActivation) return;
     const skipLayout = opts?.skipLayout ?? false;
     if (skipLayout && this.layoutDom && this.dom) {
-      runRuntimeTreeLifecycle(this.dom, "deactive", "route");
+      setRouteCurrentTree(this.dom, false, "route");
       // 只断开与父实例的连接（保留子树），不能用 detachInstance 因为
       // detachInstance 会清空 children 破坏子树，导致 reactivate 时遍历失败
       const inst = instanceOf(this.dom, false);
@@ -384,7 +399,7 @@ export class Page {
       return;
     }
     this.roots().forEach((root) => {
-      runRuntimeTreeLifecycle(root, "deactive", "route");
+      setRouteCurrentTree(root, false, "route");
       // 同上：软断开，保留子树
       const inst = instanceOf(root, false);
       if (inst?.parent) {

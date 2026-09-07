@@ -141,6 +141,8 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   if (!token.alive(ticket)) {
     return
   }
+  // 阶段迁移：setup 完成 → building（模板编译与子组件挂载）
+  instance.scope?.markBuilding()
   ctx.suspendMO?.()
 
   if (singleMode) {
@@ -157,7 +159,10 @@ export async function parseRef(vsrc, dom, data, runtime, target, optsOrCtx, ctx)
   ctx.resumeMO?.()
 
   mountRef(dom, originData, componentRuntime, target, ctx)
-  instance.scope?.activate(dom, 'mount')
+  // 挂载迁移唯一入口（v0.11）：资格满足（宿主已接入文档）即 mounted 并执行
+  // plain script；游离 staging 构建时宿主未连接，经 whenConnected 兜底或
+  // Page.attach 树遍历在 commit 接入后补迁移——脚本绝不在游离期执行
+  instance.scope?.tryMount()
   } catch (error) {
     // 解析/编译异常：报错并确保 MO 恢复，避免 MutationObserver 永久挂起；
     // 静默空白是最恶劣的失败形态——渲染可见错误占位（v0.10.3 错误契约）

@@ -3,7 +3,7 @@
  * Copyright (C) 2024 veypi <i@veypi.com>
  *
  * 提供 createRenderContext 组装 compiler ↔ component ↔ router 之间的 ctx 胶水对象。
- * 无全局副作用：MO、vdelay、样式注入由 Vhtml 实例管理。
+ * 无全局副作用：MO、样式注入由 Vhtml 实例管理。
  */
 
 import { $router } from './router.js'
@@ -64,14 +64,13 @@ export { watch } from './runtime-watch.js'
 
 /**
  * 创建渲染上下文（ctx 胶水对象）。
- * helpers 由 Vhtml 实例注入：{ onMountedRun, suspendMO, resumeMO }
+ * helpers 由 Vhtml 实例注入：{ suspendMO, resumeMO }
  */
 export function createRenderContext(helpers) {
-  const { onMountedRun, suspendMO, resumeMO } = helpers
+  const { suspendMO, resumeMO } = helpers
   const ctx = {
     watch,
     findLastAccess,
-    onMountedRun,
     suspendMO,
     resumeMO,
     compileNode,

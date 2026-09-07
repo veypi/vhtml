@@ -1,50 +1,54 @@
 /*
- * component-scope.js — 组件作用域与生命周期清理
+ * component-scope.js — 组件作用域与生命周期状态机
  *
- * 生命周期语义（重新设计）：
- *   active   = 组件进入"活在当前可见页面"状态：挂载完成、路由缓存页重新切入、
- *              浏览器标签页由隐藏变回可见
- *   deactive = 暂时离开该状态但实例存活：路由页面被缓存、标签页隐藏
- *   dispose  = 永久销毁（v-if 移除、页面销毁、显式 dispose）
+ * 生命周期状态机（v0.11 重设计）：
  *
- * 状态机：created → active ⇄ inactive → disposed
+ *   phase:  setup → building → mounted → disposed
+ *   active: 叠加在 mounted 之上的布尔子态（active ⇄ inactive）
+ *
+ *   setup    实例创建、setup 脚本执行（不保证 DOM 编译完成/已连接）
+ *   building 模板编译与子组件挂载进行中
+ *   mounted  单向闩：自身编译完成且宿主已接入文档，plain script 执行一次
+ *   disposed 唯一销毁口，任意阶段可直达
+ *
+ *   active ⟺ mounted ∧ connected ∧ 路由分支当前 ∧ 文档可见
+ *
+ *   激活资格三元（路由/连接/可见性）任一变化都经 reconcileActivity 单一
+ *   决策点重算资格并做迁移，状态机层面幂等（重复触发源归一）。
+ *
  * 不变式：
- *   1. activate 仅在 非active→active 转换时触发，deactive 仅在 active→inactive
- *      转换时触发——状态机层面幂等，重复触发源（路由+可见性叠加等）被归一
- *   2. 每个 active 周期必然配对一次 deactive：active 状态下被 dispose 时先补发
+ *   1. 每个 active 周期必然配对一次 deactive：active 下被 dispose 先补发
  *      deactive（reason='dispose'），活跃期资源释放可集中在 deactive
- *   3. 生命周期回调签名 fn(host, reason)，reason ∈
+ *   2. 生命周期回调签名 fn(host, reason)，reason ∈
  *      'mount' | 'route' | 'visibility' | 'dispose'
+ *   3. 回调与 cleanup 逐个隔离执行：单个抛错进错误登记表，不阻断剩余回收
+ *   4. disposed 后 addCleanup 立即执行（异步脚本善后注册的资源不泄漏）
  */
 
 import { createGenToken } from './lifecycle.js'
+import { cancelConnected, whenConnected } from './connection.js'
+import { reportError } from './errors.js'
+
+function runGuarded(fn, host, reason) {
+  try {
+    fn(host, reason)
+  } catch (error) {
+    reportError('lifecycle', error?.message || String(error), { stack: error?.stack || '' })
+  }
+}
 
 // ---- 标签页可见性联动 ----
-// hidden：对所有当前 active 的 scope 触发 deactive（记入 visHiddenScopes）
-// visible：仅对 visHiddenScopes 中仍为 inactive 的 scope 补发 activate——
-// 路由缓存停用的 scope（state=inactive）不在集合内，不会被误激活；
-// 后台期间被路由重新激活的（state=active）也不会被重复补发。
-// 直接遍历注册表而非组件树：路由缓存软断开（inst.parent=null）会破坏树结构
+// visibilitychange 时对所有存活 scope 重算激活资格（reconcile 幂等：
+// 路由缓存停用/未挂载/已退场的 scope 资格不满足，自然不迁移）。
+// 遍历注册表而非组件树：路由缓存软断开（inst.parent=null）会破坏树结构。
 const liveScopes = new Set()
-const visHiddenScopes = new Set()
 let visibilityBound = false
 
 function bindVisibilityLifecycle() {
   if (visibilityBound || typeof document === 'undefined' || !document.addEventListener) return
   visibilityBound = true
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      for (const scope of liveScopes) {
-        if (scope.state !== 'active') continue
-        visHiddenScopes.add(scope)
-        scope.deactive(scope.host, 'visibility')
-      }
-      return
-    }
-    for (const scope of visHiddenScopes) {
-      if (scope.state === 'inactive') scope.activate(scope.host, 'visibility')
-    }
-    visHiddenScopes.clear()
+    for (const scope of liveScopes) scope.reconcileActivity('visibility')
   })
 }
 
@@ -54,8 +58,14 @@ export class ComponentScope {
     this.cleanups = []
     this.timers = new Set()
     this.intervals = new Set()
-    this.lifecycle = { active: [], deactive: [], dispose: [] }
-    this.state = 'created'
+    this.lifecycle = { mount: [], active: [], deactive: [], dispose: [] }
+    this.phase = 'setup'
+    this.active = false
+    // 路由分支当前性：RouterView 树遍历经 setRouteCurrent 维护；
+    // 非路由组件恒 true（无路由祖先即视为当前）
+    this._routeCurrent = true
+    // 连接兜底登记幂等标记（tryMount 未连接时只登记一次）
+    this._awaitingConnection = false
     // watch 延迟队列（v0.10.3）：setup 期 props 绑定尚未发生，立即注册会读到
     // 未绑定值；队列模式下注册入队，绑定完成后一次性排空（取代旧 50ms 定时器）
     this.watchQueue = null
@@ -66,7 +76,13 @@ export class ComponentScope {
   }
 
   addCleanup(cleanup) {
-    if (typeof cleanup === 'function') this.cleanups.push(cleanup)
+    if (typeof cleanup !== 'function') return cleanup
+    // 不变式 4：disposed 后立即执行（异步段善后注册不堆积泄漏）
+    if (this.phase === 'disposed') {
+      runGuarded(cleanup, this.host)
+      return cleanup
+    }
+    this.cleanups.push(cleanup)
     return cleanup
   }
 
@@ -124,6 +140,24 @@ export class ComponentScope {
     if (this.intervals.has(id)) { this.intervals.delete(id); window.clearInterval(id) }
   }
 
+  // ---- 阶段迁移 ----
+
+  /** setup 完成、进入模板编译（parseRef 调用）。 */
+  markBuilding() {
+    if (this.phase === 'setup') this.phase = 'building'
+  }
+
+  onMount(fn) {
+    if (typeof fn !== 'function') return
+    // mounted 闩已落：迟到的注册（如挂载后动态注入的脚本）立即执行
+    if (this.phase === 'mounted') {
+      runGuarded(fn, this.host, 'mount')
+      return
+    }
+    if (this.phase === 'disposed') return
+    this.lifecycle.mount.push(fn)
+  }
+
   onActive(fn) {
     if (typeof fn === 'function') this.lifecycle.active.push(fn)
   }
@@ -136,35 +170,73 @@ export class ComponentScope {
     if (typeof fn === 'function') this.lifecycle.dispose.push(fn)
   }
 
-  activate(context, reason) {
-    // 幂等：仅在 非active→active 转换时触发（layout 复用、路由+可见性叠加等
-    // 重复触发源都被归一；历史上 layout 组件每次页面 re-entry 被重复 activate）
-    if (this.state === 'active' || this.state === 'disposed') return
-    this.state = 'active'
-    for (const fn of this.lifecycle.active) fn(context, reason)
+  /**
+   * 挂载迁移唯一入口（资格制）：
+   *   资格 = phase=building ∧ 宿主已接入文档
+   * 满足 → phase=mounted、执行 plain script 队列、重算激活资格；
+   * 未连接 → 经 whenConnected 登记兜底（Page.attach 树遍历是确定性主路径，
+   * 本兜底覆盖外部插入/嵌套路由 staging 等框架外接入点）。
+   */
+  tryMount() {
+    if (this.phase !== 'building') return false
+    const host = this.host
+    if (host && !host.isConnected) {
+      if (!this._awaitingConnection) {
+        this._awaitingConnection = true
+        whenConnected(host, () => {
+          this._awaitingConnection = false
+          this.tryMount()
+        })
+      }
+      return false
+    }
+    this.phase = 'mounted'
+    // plain script 与 active('mount') 同实例顺序保证：先 script 后激活判定
+    for (const fn of this.lifecycle.mount.splice(0)) runGuarded(fn, host, 'mount')
+    this.reconcileActivity('mount')
+    return true
   }
 
-  deactive(context, reason) {
-    // 幂等：仅在 active→inactive 转换时触发
-    if (this.state !== 'active') return
-    this.state = 'inactive'
-    for (const fn of this.lifecycle.deactive) fn(context, reason)
+  /**
+   * 激活资格单一决策点：active ⟺ mounted ∧ connected ∧ 路由当前 ∧ 文档可见。
+   * 路由（setRouteCurrent）/连接（tryMount、外部经重新调用）/可见性
+   * （visibilitychange）任一变化触发重算；迁移幂等。
+   */
+  reconcileActivity(reason) {
+    if (this.phase !== 'mounted') return
+    const host = this.host
+    const connected = host ? host.isConnected : true
+    const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+    const eligible = this._routeCurrent && connected && visible
+    if (eligible === this.active) return
+    this.active = eligible
+    const handlers = eligible ? this.lifecycle.active : this.lifecycle.deactive
+    for (const fn of handlers) runGuarded(fn, host, reason)
+  }
+
+  /** 路由分支当前性维护（RouterView 树遍历调用）。 */
+  setRouteCurrent(current, reason) {
+    this._routeCurrent = Boolean(current)
+    this.reconcileActivity(reason)
   }
 
   dispose(context) {
-    if (this.state === 'disposed') return
+    if (this.phase === 'disposed') return
     liveScopes.delete(this)
-    visHiddenScopes.delete(this)
+    if (this.host) cancelConnected(this.host)
     // 作废全部在途异步段（generation token 契约：唯一销毁口单点收口）
     this.token.kill()
-    // 不变式 2：active 状态下被销毁，先补发 deactive 再执行 dispose
-    if (this.state === 'active') {
-      this.state = 'inactive'
-      for (const fn of this.lifecycle.deactive) fn(context, 'dispose')
+    // 不变式 1：active 状态下被销毁，先补发 deactive
+    if (this.active) {
+      this.active = false
+      for (const fn of this.lifecycle.deactive) runGuarded(fn, context, 'dispose')
     }
-    this.state = 'disposed'
-    for (const fn of this.lifecycle.dispose) fn(context)
-    for (const cleanup of this.cleanups.splice(0)) cleanup()
+    this.phase = 'disposed'
+    // 未执行的 mount 队列直接丢弃（staging 作废零脚本副作用）
+    this.lifecycle.mount.length = 0
+    for (const fn of this.lifecycle.dispose) runGuarded(fn, context)
+    // 不变式 3：单个 cleanup 抛错不阻断剩余回收
+    for (const cleanup of this.cleanups.splice(0)) runGuarded(cleanup, context)
     for (const id of this.timers) window.clearTimeout(id)
     this.timers.clear()
     for (const id of this.intervals) window.clearInterval(id)

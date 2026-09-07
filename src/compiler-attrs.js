@@ -6,7 +6,6 @@ import { Wrap } from './reactive.js'
 import { Run } from './sandbox.js'
 import moduleContextManager from './module.js'
 import utils from './utils.js'
-import { runMountedHandler } from './lifecycle.js'
 import { isRelativeHref } from './url.js'
 import { instanceOf } from './component-instance.js'
 import { watch } from './runtime-watch.js'
@@ -425,12 +424,6 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
   const evtMap = { self: false, prevent: false, stop: false }
   const evt = actionName[0]
 
-  if (evt === 'mounted') {
-    ctx?.onMountedRun?.(dom, (node) => {
-      runMountedHandler(node, data, runtime, value)
-    }, false)
-    return
-  }
   if (evt === 'outerclick') {
     const func = (event) => {
       const cb = Run(value, data, runtime, { $event: event })
