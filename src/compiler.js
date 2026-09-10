@@ -104,11 +104,23 @@ export function compileTextNode(dom, data, runtime, scope, cleanups) {
   dom.nodeValue = parts.join('')
 }
 
+/*
+ * 区域扫尾统一处置：元素释放运行时子树；结构标记注释执行其 teardown
+ *（取消链/reconcile watcher 与分支级资源）。标记注释随区域拆除被一并
+ * 移除时，其 watcher 注册在祖先 scope 上、不随元素 dispose 回收——不
+ * 显式取消即成僵尸：依赖再变时对脱落标记 insertBefore 崩溃
+ *（回归契约见 vif_zombie.test.js）。
+ */
+function disposeSweptNode(n) {
+  if (n.nodeType === 1) disposeRuntimeSubtree(n)
+  else if (n.nodeType === 8) peekMeta(n)?.teardown?.()
+}
+
 function clearVforRange(startMark, endMark) {
   let n = startMark.nextSibling
   while (n && n !== endMark) {
     const next = n.nextSibling
-    if (n.nodeType === 1) disposeRuntimeSubtree(n)
+    disposeSweptNode(n)
     n.remove()
     n = next
   }
@@ -123,7 +135,7 @@ function removeVforItem(entry) {
   let n = entry.startMark.nextSibling
   while (n && n !== entry.endMark) {
     const next = n.nextSibling
-    if (n.nodeType === 1) disposeRuntimeSubtree(n)
+    disposeSweptNode(n)
     n.remove()
     n = next
   }
@@ -182,13 +194,23 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const cache = Object.create(null)
   const parentScope = instanceOf(vforStart.parentNode)?.scope
 
-  parentScope?.addCleanup(() => {
+  // 拆除幂等双路径：scope dispose（宿主销毁）与 vforEnd 标记扫尾（外层区
+  // 域拆除连带）共用同一 teardown；tornDown 旗标防重入，Cancel 本身幂等。
+  // watchId 在尾部注册时回填（Watch 注册即同步首评，reconcile 依赖下方闭包就绪）
+  let watchId = null
+  let tornDown = false
+  const teardown = () => {
+    if (tornDown) return
+    tornDown = true
+    Cancel(watchId)
     Object.keys(cache).forEach(key => {
       removeVforItem(cache[key])
       delete cache[key]
     })
     clearVforRange(vforStart, vforEnd)
-  })
+  }
+  parentScope?.addCleanup(teardown)
+  metaOf(vforEnd).teardown = teardown
 
   const createItemData = (key, value) => {
     // 迭代变量与索引都必须是本地 key（Wrap 的 set 会穿透 root 链，
@@ -303,7 +325,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
 
   // equality: null —— 数组原地变异（splice/shift/...）后列表引用不变，
   // 变更门控（Object.is）会错误门掉，恒跑型订阅必须豁免
-  watch(parentScope, collect, reconcile, { equality: null, debug: `v-for ${vfortxt}` })
+  watchId = watch(parentScope, collect, reconcile, { equality: null, debug: `v-for ${vfortxt}` })
 }
 
 export function compileVif(nodes, data, runtime, ctx) {
@@ -325,7 +347,7 @@ export function compileVif(nodes, data, runtime, ctx) {
       let n = startMark.nextSibling
       while (n && n !== endMark) {
         const next = n.nextSibling
-        if (n.nodeType === 1) disposeRuntimeSubtree(n)
+        disposeSweptNode(n)
         n.remove()
         n = next
       }
@@ -352,7 +374,7 @@ export function compileVif(nodes, data, runtime, ctx) {
     }
 
     const parentScope = instanceOf(startMark.parentNode)?.scope
-    watch(parentScope, () => Run(ifExpr, data, runtime), (targetIndex) => {
+    const chainWatchId = watch(parentScope, () => Run(ifExpr, data, runtime), (targetIndex) => {
       // 表达式求值失败（Run 捕获异常返回 undefined）时归一为 -1，
       // 按无命中分支处理，避免非法下标进入 showBranch 崩溃中断整个 flush
       if (typeof targetIndex !== 'number' || Number.isNaN(targetIndex)) targetIndex = -1
@@ -361,6 +383,15 @@ export function compileVif(nodes, data, runtime, ctx) {
       showBranch(targetIndex)
       activeIndex = targetIndex
     })
+
+    // 标记扫尾连带取消：endMark 被外层区域拆除一并移除时，本链 watcher 随
+    // 祖先 scope 存活即成僵尸（对脱落 endMark insertBefore 崩溃）；Cancel
+    // 与 textCleanups 均幂等，与 scope dispose 路径并存安全
+    metaOf(endMark).teardown = () => {
+      Cancel(chainWatchId)
+      branchTextCleanups.forEach(fn => fn())
+      branchTextCleanups = []
+    }
 
     chain = null
   }
