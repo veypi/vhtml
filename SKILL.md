@@ -49,6 +49,8 @@ Component file shape:
 </html>
 ```
 
+A component file must be a **complete HTML document** (`<!DOCTYPE html>` + `html/head/body`, with `<script setup>` inside or after `<body>`). A bare fragment starting with `<template>` / `<style>` / `<script>` is parsed by DOMParser rules that strand those tags in `<head>`: setup never runs and the component renders blank — and the loader then reports a misleading `Failed to load external script: <module-dir>/` 404. That error pointing at a package directory URL is the telltale sign of this mistake.
+
 ### Styles
 
 Component styles are automatically scoped to the component's DOM subtree; `@keyframes` names are isolated per component.
@@ -78,10 +80,11 @@ Attributes on a component tag map to the child's `$data` keys (auto camelCase �
 | `v:score="score"` | two-way binding |
 | `disabled` (bare) | boolean `true` when the key exists in child `$data` |
 
-`v:` 双向绑定支持嵌套路径（`v:value="user.nickname"`、`v:value="settings['app.name']"`），
-绑定按**惰性路径链**解析：每次读写从根数据沿路径求值，中间对象被整体赋值替换
-（如 `user = await fetch()`) 后绑定依然跟随新对象。含变量键/函数/运算的复杂表达式
-回退到求值时刻的对象引用语义（旧行为）。
+`v:` two-way bindings support nested paths (`v:value="user.nickname"`, `v:value="settings['app.name']"`).
+The binding resolves as a **lazy path chain**: every read/write walks the path from the root
+data, so after an intermediate object is replaced wholesale (e.g. `user = await fetch()`) the
+binding follows the new object. Complex expressions (variable keys, function calls, operators)
+fall back to evaluation-time reference semantics (legacy behavior).
 
 ### `$data` Declaration Rules (`<script setup>`)
 
@@ -147,6 +150,8 @@ Nearest ancestor `<vrouter>` view, local to the current router subtree.
 | `params` / `query` | shortcuts to `current.params` / `current.query` |
 | `setQuery(patch, opts?)` / `setParams(patch, opts?)` | merge/replace then navigate; `opts: { mode: 'replace' \| 'push', merge }` |
 | `onChange(fn)` | subscribe to route changes, returns unsubscribe function |
+| `title` | resolved view title: instance name from route `nav.instances` matched by params (preferred) else the page's `<title>`; also written to the vrouter host element's `__title` property. Browser-history views sync it to `document.title`; virtual (memory) views never touch `document.title` |
+| `onTitleChange(fn)` | subscribe to resolved-title changes, returns unsubscribe function |
 | `addRoute(route)` / `addRoutes(routes)` / `resetRoutes()` | runtime route management |
 | `cachedPages()` | cached-page list for tab/page-management UIs: `{ key, title, path, fullPath, isActive, active(), del() }` |
 | `dropPage(key)` | destroy a cached page by cacheKey (dropping the active page remounts it ≈ refresh); returns `false` while the page is mid-mount |
@@ -222,6 +227,7 @@ Static imports are supported; relative paths resolve against the component's own
 - Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
 - Special events: `@outerclick` (click outside the element).
 - `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
+- All `v-if` / `v-else-if` / `v-else` branches are compiled up front: binding expressions inside an **inactive** branch still evaluate within the same flush. Never let an inner expression dereference state that switches between `null` and a value across branches (`!x.length` throws when `x` is `null`, and the interrupted flush can leave the branch half-mounted) — keep cross-branch state at a constant type (boolean flag + always-an-array), not a null/value switch.
 - `v-for` has **no `:key` attribute** — item identity is tracked automatically (objects by reference, primitives by position). A `:key` on a v-for node compiles as a plain inert attribute; delete it.
 - Always initialize list variables in `<script setup>`: `items = []`.
 
@@ -255,6 +261,8 @@ Helpers available in all script types:
 
 - `$node` — the current host DOM element.
 - `$watch(() => expr, (val) => { ... })` — reactive watcher, auto-cleaned on dispose. In `<script setup>` the first evaluation runs after props are bound, so it already sees the incoming prop values; in other script types it starts immediately.
+
+**Scope isolation:** each script block is its own scope — `const` / `let` / `function` declared in one block are **not** visible in any other block of the same file. Cross-block state must go through `$data` (bare assignment in setup) or a module singleton (`$mod.define` or an imported JS module).
 
 ### Disposal Contract
 
@@ -384,8 +392,9 @@ Route record fields:
 | `component` | required. HTML path or `(path, params) => url`; `params` includes fixed `:params` values plus matched route params |
 | `layout` | layout name → `/layout/{name}.html`; layouts should expose a default `<vslot>` for the page outlet |
 | `redirect` | string, `{ path, params, query, hash }`, or `(matchedRoute) => target` |
-| `error_redirect` | fallback when the component fails to load（未配置时：应用内导航失败保留当前页 + 错误登记；首 mount 失败降级为可见错误盒页 commit，不白屏杀应用） |
+| `error_redirect` | fallback when the component fails to load (when unset: an in-app navigation failure keeps the current page and records the error; an initial-mount failure commits a visible error-box page instead of white-screening the app) |
 | `meta` | arbitrary metadata, exposed on `$router.current.meta` |
+| `nav` | navigation metadata for launcher-style trees: `{ name, icon, keywords, instances }`. `instances` (async fn returning `[{ params, name, ... }]`) is also the vrouter **instance-title source**: on commit the view resolves it and matches items by route params — a hit overrides the page `<title>` (static `nav.name` category labels never do) |
 | `children` | nested routes; child paths relative to parent; children inherit parent layout/meta |
 | `cacheKey` | `false` (no cache) · string (shared instance) · `(matchedRoute) => key` · default: path-based, query/hash excluded (query changes update router state, page DOM kept) |
 
@@ -412,7 +421,7 @@ Route record fields:
 - Route registration prefixes come from route-module `path_prefix` / `component_prefix`, not from `prefix`.
 - `@/path` bypasses router normalization and resolves to `/path`; `http(s)://` links are not intercepted.
 - `<a>` is intercepted only when compiled under a RouterView runtime, with automatic `active` attribute on path match.
-- Virtual routers inject bare `location` / `history` into `$sys`; outside a virtual router those names fall through to `window`. Virtual histories do not update `document.title`.
+- Virtual routers inject bare `location` / `history` into `$sys`; outside a virtual router those names fall through to `window`. Virtual histories do not update `document.title` (their resolved `title` only lands on the host element's `__title`).
 - Debug logging: `localStorage.debug`.
 
 ## `$bus`
@@ -466,6 +475,8 @@ vhtml i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 ### Reserved keys (`_` prefix)
 
 Keys starting with `_` (`_err.40100`, `_theme.dark`) are maintained manually in langs.json: scan skips them for missing/unused checks, `--autoremove` never deletes them. Use for dynamic keys referenced via concatenation, variables, or function args (not exact string literals).
+
+Caution: `scan` detects references by static `$t('key')` literal matching — keys used via concatenation or variables look unused. Treat the unreferenced report as a lead only: before any `--autoremove` deletion, text-search the sources for dynamic references (or keep such keys under the `_` prefix, which autoremove never touches).
 
 ## Web Components: No Interop
 
@@ -522,6 +533,7 @@ Structural edits (insert / remove / reorder): either in-place mutators (`splice`
 3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — mutate state from event handlers, timers, or rAF callbacks instead.
 4. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds in one refresh, throwing an error — check `window.__vhtml_dev.cascadeErrors` for the effect chain.
 5. Errors are exposed, never silent: template compilation failures throw; a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space; every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (newest last) with code preview and component location. Undefined identifiers read inside sandboxed code warn once per name (spelling check). Router page-load failure: in-app navigation keeps the current page and records the error; initial mount (no current page) commits a visible `[Load Error]` box page instead of rejecting the whole mount (white screen = visual silence) — route-level `error_redirect` overrides both.
+6. Only plain objects and arrays are proxied — `Node` / `Date` / `RegExp` / `Event` and class instances are already excluded. To keep a plain object raw (a large static structure, an object handed to a third-party library, or one compared by identity), set `__noproxy: true` on it and the reactive system returns it unproxied.
 
 #### Compile stats (`__vhtml_dev.compileStats`)
 
