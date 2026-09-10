@@ -127,6 +127,64 @@ export class RouterView {
   // 最近一次提交的路由快照：staging 中间态被作废/阻断时回滚到此（而非
   // 导航进入时的 current —— 那可能已是前一个在途导航写入的中间态）
   #lastCommitted = null
+  // vrouter 标题（双源）：路由注册 title（字符串/函数/async 函数，函数收 params，
+  // 优先）→ 页面 <title>（兜底）。系统 vrouter（affectsDocument）同步 document.title；
+  // 所有 vrouter 都写宿主 DOM 对象 __title 属性（OS 窗口名等外部消费），支持订阅。
+  #title = ''
+  #routeTitle = ''
+  #pageTitle = ''
+  #titleSeq = 0
+  #titleListeners = new Set()
+
+  get title() { return this.#title }
+
+  // 汇总生效标题并落定三处出口（DOM 属性 / document.title / 订阅者）
+  #applyTitle() {
+    const t = this.#routeTitle || this.#pageTitle
+    if (t === this.#title) return
+    this.#title = t
+    if (this.instance?.host) this.instance.host.__title = t
+    if (this.affectsDocument) document.title = t
+    for (const fn of this.#titleListeners) fn(t)
+  }
+
+  // 路由源：导航 commit 时结算——路由节点的 nav.instances 按当前 params 匹配
+  // 出实例名（实例路由的 name 由此自然带出；launcher 同一份 instances 数据）。
+  // 无实例源/未命中/解析失败 → 清空路由源（落页面 <title>）；seq 作废旧导航迟到结果。
+  #setRouteTitle(matchedRoute) {
+    const instances = matchedRoute?.route?.nav?.instances
+    const seq = ++this.#titleSeq
+    const finish = (name) => {
+      if (seq !== this.#titleSeq) return
+      this.#routeTitle = typeof name === 'string' ? name.trim() : ''
+      this.#applyTitle()
+    }
+    if (typeof instances !== 'function') {
+      finish('')
+      return
+    }
+    const params = matchedRoute?.params || {}
+    const $mod = this.runtime?.$mod || {}
+    Promise.resolve()
+      .then(() => instances({ $mod, params }))
+      .then((items) => {
+        const hit = (items || []).find((it) => it?.params
+          && Object.entries(it.params).every(([k, v]) => params[k] === v))
+        finish(hit ? (hit.name || '') : '')
+      })
+      .catch(() => finish(''))
+  }
+
+  // 页面源：Page.updateTitle 回写（页面 <title>，含 {{}} 动态 watcher 更新）
+  setPageTitle(str) {
+    this.#pageTitle = String(str || '').trim()
+    this.#applyTitle()
+  }
+
+  onTitleChange(fn) {
+    this.#titleListeners.add(fn)
+    return () => this.#titleListeners.delete(fn)
+  }
 
   constructor() {
     this.instance = createInstance(null, null, 'router-view')
@@ -392,6 +450,7 @@ export class RouterView {
       redirect: route.redirect,
       error_redirect: route.error_redirect,
       meta: route.meta || {},
+      nav: route.nav || null,   // 路由节点导航元数据（name/icon/keywords/instances；instances 是 vrouter title 的实例名源）
       children: route.children || [],
       matcher: new RouteMatcher(routePath),
       layout: route.layout || '',
@@ -432,6 +491,9 @@ export class RouterView {
     this.#pageCache = new Map()
     this.#layoutCache = new Map()
     this.activePage = null
+    this.#routeTitle = ''
+    this.#pageTitle = ''
+    this.#applyTitle()
   }
 
   /**
@@ -869,6 +931,7 @@ export class RouterView {
     }
     if (cacheKey && !fromCache) this.#pageCache.set(cacheKey, page)
     page.activate()
+    this.#setRouteTitle(matchedRoute)   // 路由注册名优先于页面 <title>（page.activate 已回写页面源）
     this.#trimPageCache()
     this.activePage = page
     if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)

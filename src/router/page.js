@@ -282,12 +282,18 @@ export class Page {
     return { built: true };
   }
 
+  // 页面 <title> 回写 ownerView（setPageTitle）：view 按路由注册名优先结算，
+  // 并由 view 决定出口（虚拟 vrouter 只落宿主 __title；系统 vrouter 同步 document.title）。
   updateTitle() {
     this.clearTitleWatchers();
-    if (!this._meta.title) return;
+    const view = this.ownerView;
+    if (!this._meta.title) {
+      view?.setPageTitle("");
+      return;
+    }
     const title = this._meta.title.trim();
     if (!title.includes("{{")) {
-      document.title = title;
+      view?.setPageTitle(title);
       return;
     }
     const target = this.dom || this.layoutDom;
@@ -314,13 +320,13 @@ export class Page {
           else if (typeof value === "object" && value)
             value = JSON.stringify(value);
           parts[partIndex] = value;
-          document.title = parts.join("");
+          view?.setPageTitle(parts.join(""));
         });
         this._meta.titleWatchers.push(watchId);
       }
     }
     parts.push(title.slice(nextStart));
-    document.title = parts.join("");
+    view?.setPageTitle(parts.join(""));
   }
 
   clearTitleWatchers() {
@@ -371,8 +377,7 @@ export class Page {
   }
 
   activate() {
-    if (this.ownerView?.affectsDocument) this.updateTitle();
-    else this.clearTitleWatchers();
+    this.updateTitle();   // 所有 vrouter 都结算标题（出口由 view 按 affectsDocument 决定）
     this.attach();
     if (!this._meta.didInitialActivation) {
       // 首次激活：attach 的 tryMount 树遍历已完成 mounted 迁移与激活判定

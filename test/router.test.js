@@ -423,3 +423,58 @@ test('initial mount to missing page: error-box page committed, no white screen',
   assert.match(navErr.message, /load page failed/)
   app.destroy()
 })
+
+// ---- vrouter title（双源：路由 nav.name 优先，页面 <title> 兜底；
+//      虚拟 vrouter 只落宿主 __title，不碰 document.title）----
+TEMPLATES['/pg/t1.html'] = `<!DOCTYPE html><html><head><title>Page One</title></head><body><div class="pg-t1">t1</div></body></html>`
+TEMPLATES['/pg/t2.html'] = `<!DOCTYPE html><html><head><title>Page Two</title></head><body><div class="pg-t2">t2</div></body></html>`
+const TITLE_ROUTES = [
+  { path: '/t1', component: '/pg/t1' },
+  { path: '/t2', component: '/pg/t2' },
+]
+
+test('vrouter title: page <title> 落 view.title + 宿主 __title，memory history 不碰 document.title', async () => {
+  document.title = 'keep-me'
+  const { app, vr, view } = await createRouter('/t1', TITLE_ROUTES)
+  await flush()
+  assert.equal(view.title, 'Page One')
+  assert.equal(vr.__title, 'Page One')
+  assert.equal(document.title, 'keep-me', '虚拟 vrouter 不得写 document.title')
+  await view.push('/t2')
+  await flush()
+  assert.equal(view.title, 'Page Two')
+  assert.equal(vr.__title, 'Page Two')
+  app.destroy()
+})
+
+test('vrouter title: 路由节点 nav.instances 按 params 匹配出实例名，优先于页面 <title>', async () => {
+  const routes = [
+    { path: '/t3/:id', component: '/pg/t1', nav: {
+      name: 'Category',
+      instances: async () => [{ params: { id: 'ab12' }, name: 'Agent ab12' }],
+    } },
+    { path: '/t2', component: '/pg/t2' },
+  ]
+  const { app, view } = await createRouter('/t3/ab12', routes)
+  await flush()
+  assert.equal(view.title, 'Agent ab12')   // 实例名覆盖页面 <title> 与分类名
+  await view.push('/t3/nope')
+  await flush()
+  assert.equal(view.title, 'Page One')     // 未命中实例 → 页面 <title>
+  await view.push('/t2')
+  await flush()
+  assert.equal(view.title, 'Page Two')     // 无实例源 → 页面 <title>
+  app.destroy()
+})
+
+test('vrouter title: onTitleChange 订阅随导航触发', async () => {
+  const { app, view } = await createRouter('/t1', TITLE_ROUTES)
+  await flush()
+  const seen = []
+  const off = view.onTitleChange((t) => seen.push(t))
+  await view.push('/t2')
+  await flush()
+  assert.deepEqual(seen, ['Page Two'])
+  off()
+  app.destroy()
+})
