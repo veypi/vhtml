@@ -229,6 +229,7 @@ Static imports are supported; relative paths resolve against the component's own
 - `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
 - All conditions in a `v-if` / `v-else-if` chain are evaluated to select a branch; only the selected body is cloned and compiled. Removed branch effects are canceled immediately, including pending dirty work. Keep condition expressions safe for every state; do not rely on an earlier condition to short-circuit later conditions.
 - `v-for` has **no `:key` attribute** — item identity is tracked automatically (objects by reference, primitives by position). A `:key` on a v-for node compiles as a plain inert attribute; delete it.
+- Reusing the same raw object across replacement arrays preserves its reactive identity, DOM and component instance. A newly allocated object is a new entity even when its business `id` matches. Aliases of the same object share field notifications; write through `$data`/reactive proxies, since direct raw writes bypass tracking. Function-source lists that return fresh raw rows retain their existing position-merge behavior.
 - Always initialize list variables in `<script setup>`: `items = []`.
 
 ### Template whitespace and binding updates
@@ -269,6 +270,18 @@ Helpers available in all script types:
 
 - `$node` — the current host DOM element.
 - `$watch(() => expr, (val) => { ... })` — reactive watcher, auto-cleaned on dispose. In `<script setup>` the first evaluation runs after props are bound, so it already sees the incoming prop values; in other script types it starts immediately.
+- `$scope` — instance-owned cleanup and tasks: `addCleanup(fn)`, `removeCleanup(fn)`, `addEventListener(target, event, fn, options)`, `setTimeout/clearTimeout`, `setInterval/clearInterval`, `requestAnimationFrame/cancelAnimationFrame`. rAF receives the browser timestamp. One-shot tasks leave the pending collection before calling user code; cancel/dispose suppress queued callbacks and release their captures. Register observers or external subscriptions with `addCleanup(() => observer.disconnect())` / `addCleanup(unsubscribe)`. Late cleanup registration after dispose executes immediately; late task registration returns `null`.
+
+```html
+<script>
+  const observer = new ResizeObserver(() => { /* measure as needed */ })
+  observer.observe($node)
+  $scope.addCleanup(() => observer.disconnect())
+  $scope.requestAnimationFrame(time => { /* one owned frame */ })
+</script>
+```
+
+Only tasks registered through `$scope` are owned automatically; native `window` timers/rAF still need explicit cleanup. Deactivation does not dispose the scope or freeze data watchers. Use `active/deactive` to explicitly stop/restart work for cached views, or parent `v-if` when the view can be destroyed.
 
 **Scope isolation:** each script block is its own scope — `const` / `let` / `function` declared in one block are **not** visible in any other block of the same file. Cross-block state must go through `$data` (bare assignment in setup) or a module singleton (`$mod.define` or an imported JS module).
 

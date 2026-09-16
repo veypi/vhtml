@@ -2,6 +2,8 @@
 
 2026-09-16。改动覆盖框架源码及 `dist/vhtml.min.js`；没有修改 aic 的消息列表、窗口管理或缓存策略。
 
+后续重构见 [通用性能重构方案](./performance-refactor-plan.md) 和 [R0–R3 实施报告](./performance-refactor-results.md)。本文表格仍专门记录 V1–V4 的历史对照。
+
 ## 实现
 
 | 项目 | 行为 |
@@ -62,6 +64,6 @@ npm run build
 
 ## 诊断与加载
 
-`window.__vhtml_dev.stats` 提供 liveHandles、dependencyEdges、dirty；`perfStats` 提供 disposalCandidates/Pending/Schedules/Flushes/Roots、templateCommentsRemoved/WhitespaceRemoved、textWrites/classWrites/styleWrites。它们只保存数字，不保存节点或逐 effect 日志；写入计数只记录渲染 DOM，CSS 解析器的临时声明不计入。
+`window.__vhtml_dev.stats` 提供 liveHandles、dependencyEdges、dirty；`perfStats` 提供 disposalCandidates/Pending/Schedules/Flushes/Roots、templateCommentsRemoved/WhitespaceRemoved、textWrites/classWrites/styleWrites。R0–R3 又增加 proxyCreates/CacheHits、vforReconciles/Noops/RowsCreated/RowsMoved/RowsDisposed 和 pendingFrames/Timeouts/Intervals，详见 [实施报告](./performance-refactor-results.md)。它们只保存数字，不保存节点或逐 effect 日志；写入计数只记录渲染 DOM，CSS 解析器的临时声明不计入。
 
 代码更新后需要整页刷新一次来加载新框架；仅关闭/重开内部小窗口不会替换已经加载的框架模块。

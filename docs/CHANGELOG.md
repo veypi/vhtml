@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 性能与修复（R0–R3）
+- 普通 raw 通过弱缓存取得稳定代理与 DataID；跨属性、数组、组件共享字段通知，循环数据惰性包装，`Wrap(proxy)` 幂等。读路径不再把代理与 DataID 写回 raw。
+- 作用域 root 移入独立包装元数据，迭代、slot 与模块不共享父级；显式 root 重绑使继承依赖重新收集。描述符、本地 define 与继承赋值语义保持。
+- 修复低精度浏览器时钟下短随机 DataID 碰撞；增加运行时递增序号，避免万行列表少量误重建。
+- `v-for` 等价顺序/值快路径跳过逐行调和；保留函数源 raw 的位置合并和重复条目语义。前插同一 raw 时保留旧节点、组件、焦点与选区。
+- `$scope.requestAnimationFrame/cancelAnimationFrame` 托管帧任务；timer/rAF 自然完成即退出 pending，取消或销毁清空业务回调。新增数值诊断与回归页，结果见 [实施报告](performance-refactor-results.md)。
+
 ### 性能（V1–V4）
 - 响应式依赖双向登记，每次求值解绑过期依赖；`Cancel` 立即退出 dirty/依赖集合并释放目标、回调和返回值。分支销毁同步移除父 scope 的清理入口，scope 终态清空队列、生命周期和宿主引用。
 - DOM 移除兜底改为每个 VHTML 根一个 Set 队列，共用 rAF/定时器并合并祖先候选；保留同帧移动和路由缓存，destroy 撤销排队任务。
