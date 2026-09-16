@@ -3,6 +3,8 @@
  */
 
 import { Wrap } from './reactive.js'
+import { classValue, styleValue, sameStyle } from './binding-values.js'
+import { perfStats } from './perf-stats.js'
 import { Run } from './sandbox.js'
 import moduleContextManager from './module.js'
 import utils from './utils.js'
@@ -357,65 +359,39 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
 
 export function handleStyle(dom, attrName, value, data, runtime) {
   const scope = instanceOf(dom)?.scope
-  let oldValue = ''
-  watch(scope, () => {
-    let res = Run(value, data, runtime)
-    if (typeof res === 'function') res = res()
-    if (attrName === 'class') {
-      if (oldValue) { dom.classList.remove(...oldValue.split(/\s+/)); oldValue = '' }
-      if (res instanceof Array) {
-        oldValue = ''
-        res.forEach(item => {
-          if (typeof item === 'string' && item.length) oldValue += ` ${item}`
-          else if (typeof item === 'object' && item) {
-            for (const key in item) { if (item[key]) oldValue += ` ${key}` }
-          }
-        })
-      } else if (typeof res === 'string' && res.length) {
-        oldValue = res.trim()
-      } else if (typeof res === 'object' && res) {
-        oldValue = ''
-        for (const key in res) { if (res[key]) oldValue += ` ${key}` }
-      } else if (res) {
-        console.warn('class value error:', res)
-      }
-      oldValue = oldValue.trim()
-      if (oldValue) dom.classList.add(...oldValue.split(/\s+/))
-      return
-    }
-    if (oldValue) {
-      if (typeof oldValue === 'object') {
-        for (const key in oldValue) {
-          if (key.startsWith('--')) dom.style.removeProperty(key)
-          else dom.style[key] = ''
-        }
-      } else if (typeof oldValue === 'string') {
-        oldValue.split(';').forEach(segment => {
-          const idx = segment.indexOf(':')
-          if (idx === -1) return
-          const styleKey = segment.slice(0, idx).trim()
-          if (styleKey.startsWith('--')) dom.style.removeProperty(styleKey)
-          else dom.style[styleKey] = ''
-        })
+  const evaluate = () => {
+    let result = Run(value, data, runtime)
+    return typeof result === 'function' ? result() : result
+  }
+  if (attrName === 'class') {
+    const staticTokens = new Set(dom.classList)
+    let previous = new Set()
+    watch(scope, () => classValue(evaluate()), normalized => {
+      const next = new Set(normalized ? normalized.split(' ') : [])
+      const remove = [...previous].filter(token => !next.has(token) && !staticTokens.has(token) && dom.classList.contains(token))
+      const add = [...next].filter(token => !dom.classList.contains(token))
+      if (remove.length) { dom.classList.remove(...remove); perfStats.classWrites++ }
+      if (add.length) { dom.classList.add(...add); perfStats.classWrites++ }
+      previous = next
+    })
+    return
+  }
+  let previous = new Map()
+  watch(scope, () => styleValue(evaluate(), dom.ownerDocument), next => {
+    for (const key of previous.keys()) {
+      if (!next.has(key) && dom.style.getPropertyValue(key)) {
+        dom.style.removeProperty(key)
+        perfStats.styleWrites++
       }
     }
-    if (typeof res === 'object' && res) {
-      for (const key in res) {
-        if (key.startsWith('--')) dom.style.setProperty(key, res[key])
-        else dom.style[key] = res[key]
-      }
-    } else if (typeof res === 'string') {
-      res.split(';').forEach(segment => {
-        const idx = segment.indexOf(':')
-        if (idx === -1) return
-        const styleKey = segment.slice(0, idx).trim()
-        const styleValue = segment.slice(idx + 1).trim()
-        if (styleKey.startsWith('--')) dom.style.setProperty(styleKey, styleValue)
-        else dom.style[styleKey] = styleValue
-      })
+    // 对照实际声明：移除 shorthand 可能顺带清除仍需保留的 longhand。
+    for (const [key, [value, priority]] of next) {
+      if (dom.style.getPropertyValue(key) === value && dom.style.getPropertyPriority(key) === priority) continue
+      dom.style.setProperty(key, value, priority)
+      perfStats.styleWrites++
     }
-    oldValue = res
-  })
+    previous = next
+  }, { equality: sameStyle })
 }
 
 export function handleEvent(dom, name, value, data, runtime, ctx) {

@@ -14,6 +14,7 @@ const FETCH_TIMEOUT = 10000
 const SCRIPT_TIMEOUT = 15000
 import moduleContextManager, { normalizeScoped, resolveScopedUrl, getModulePath, mergeModulePatch, bumpImportEpoch } from './module.js'
 import { prepareStaticUrlAttrs } from './compiler-attrs.js'
+import { normalizeTemplate } from './template-normalize.js'
 
 function normalizeFetchUrl(url, scoped = '') {
   if (!url || url === '/') return resolveScopedUrl('/', scoped)
@@ -235,6 +236,7 @@ class TemplateParser {
     this.processStyles(descriptor)
     this.processBody(descriptor)
     this.processScripts(descriptor)
+    normalizeTemplate(descriptor.body)
     this.syncRefOwnerId(descriptor.body, url)
     prepareStaticUrlAttrs(descriptor.body, mod)
     await this.resourceLoader.loadHeads(descriptor.heads, mod, descriptor, unsafe)

@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>vhtml V1–V4 performance probe</title>
+<style>body{font:14px monospace}#fixtures{max-height:400px;overflow:auto}pre{white-space:pre-wrap}</style>
+<button id="run">Run probe</button><pre id="result">Ready</pre><div id="fixtures"></div>
+<script type="module">
+const moduleURL = new URLSearchParams(location.search).get('module') || '../../src/index.js'
+const frame = window.requestAnimationFrame.bind(window)
+let requestedFrames = 0
+window.requestAnimationFrame = cb => { requestedFrames++; return frame(cb) }
+const { default: VHTML } = await import(moduleURL)
+const delay = (ms = 120) => new Promise(resolve => setTimeout(resolve, ms))
+const container = document.querySelector('#fixtures')
+const counts = root => {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ALL)
+  const result = { total: 0, elements: 0, comments: 0, text: 0, blank: 0 }
+  while (walker.nextNode()) {
+    const n = walker.currentNode
+    result.total++
+    if (n.nodeType === 1) result.elements++
+    if (n.nodeType === 8) result.comments++
+    if (n.nodeType === 3) { result.text++; if (!n.nodeValue.trim()) result.blank++ }
+  }
+  return result
+}
+async function mount(template, data) {
+  const host = document.createElement('div')
+  host.innerHTML = template
+  container.append(host)
+  const app = new VHTML({ target: host, data })
+  await app.ready
+  return { app, host, destroy() { app.destroy(); host.remove() } }
+}
+
+window.runPerformanceProbe = async () => {
+  const result = { module: moduleURL, userAgent: navigator.userAgent, lists: [], checks: {} }
+  const warm = await mount('<b>{{n}}</b>', { n: 1 }); warm.destroy(); await delay()
+  for (const [size, compact] of [[100, false], [1000, false], [10000, false], [1000, true]]) {
+    const data = { items: Array.from({length:size}, (_, i) => ({ label: `row ${i}` })), suffix:'ok', show: true }
+    const before = window.__vhtml_dev.stats
+    const start = performance.now()
+    const item = await mount(`<section ${compact ? 'v-whitespace="compact"' : ''}><template v-for="item in items">\n<!-- developer row -->\n<div :class="show ? 'row' : 'row'"><span>{{item.label}}:{{suffix}}</span><i v-if="show">details</i></div>\n</template></section>`, data)
+    const mountMs = performance.now() - start
+    await delay()
+    item.app._data.show = false
+    await delay()
+    result.lists.push({ size, compact, mountMs, nodes: counts(item.host), liveHandles:window.__vhtml_dev.stats.liveHandles - before.liveHandles })
+    item.destroy(); await delay()
+  }
+  const mass = await mount('', {})
+  const fragment = document.createDocumentFragment()
+  for (let i = 0; i < 10000; i++) fragment.append(document.createElement('i'))
+  mass.host.append(fragment)
+  await delay()
+  const before = requestedFrames
+  mass.host.replaceChildren()
+  await delay(220)
+  result.removalFrameRequests = requestedFrames - before
+  mass.destroy(); await delay()
+
+  const binding = await mount(`<p class="static" :class="n ? ['hot', {on:true}] : 'on hot'" :style="n ? {color:'red', '--x':'1'} : '--x:1;color:red'">{{n ? 'same' : 'same'}}:{{tail}}</p><b class="base" style="display:block" :class="classes" :style="styles"></b><pre>  {{tail}}\n  next\n</pre>`, {
+    n:0, tail:'x', classes:{base:true,active:true}, styles:{fontSize:'12px', color:'red', margin:'1px', marginLeft:'2px'},
+  })
+  await delay()
+  const p = binding.host.querySelector('p'), b = binding.host.querySelector('b')
+  let mutations = 0
+  const observer = new MutationObserver(records => { mutations += records.length })
+  observer.observe(p, { attributes:true, characterData:true, childList:true, subtree:true })
+  binding.app._data.n = 1
+  await delay()
+  result.equalBindingMutations = mutations
+  observer.disconnect()
+  binding.app._data.classes.base = false
+  binding.app._data.classes.active = false
+  binding.app._data.classes.added = true
+  binding.app._data.styles = 'margin-left:2px;color:blue!important;--raw:"a;b:c"'
+  binding.app._data.tail = 'updated'
+  await delay()
+  result.checks.staticClass = b.classList.contains('base') && !b.classList.contains('active') && b.classList.contains('added')
+  result.checks.styleSwitch = b.style.fontSize === '' && b.style.marginLeft === '2px' && b.style.color === 'blue' && b.style.display === 'block'
+  result.checks.cssPriority = b.style.getPropertyPriority('color') === 'important'
+  result.checks.cssQuotedSemicolon = b.style.getPropertyValue('--raw') === '"a;b:c"'
+  result.checks.preformattedText = binding.host.querySelector('pre').textContent === '  updated\n  next\n'
+  binding.destroy(); await delay()
+
+  const startStats = window.__vhtml_dev.stats
+  for (let i = 0; i < 20; i++) {
+    const item = await mount('<template v-for="n in items"><b v-if="n">{{n}}</b></template>', {items:[1,2,3]})
+    item.destroy()
+  }
+  await delay()
+  result.lifecycleDelta = {
+    liveHandles:window.__vhtml_dev.stats.liveHandles - startStats.liveHandles,
+    dependencyEdges:window.__vhtml_dev.stats.dependencyEdges - startStats.dependencyEdges,
+  }
+  let evaluations = 0
+  const conditional = await mount('<b>{{(countEval(), flag ? a : b)}}</b>', {
+    flag:true, a:1, b:2, countEval:() => evaluations++,
+  })
+  conditional.app._data.flag = false; await delay()
+  conditional.app._data.a++; await delay()
+  result.checks.staleDependencyDetached = evaluations === 2
+  conditional.destroy(); await delay()
+  result.perfStats = window.__vhtml_dev.perfStats
+  document.querySelector('#result').textContent = JSON.stringify(result, null, 2)
+  return result
+}
+document.querySelector('#run').onclick = () => window.runPerformanceProbe().catch(e => {
+  document.querySelector('#result').textContent = e.stack
+})
+</script>

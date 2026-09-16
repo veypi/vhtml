@@ -11,6 +11,8 @@ import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
 import { watch } from './runtime-watch.js'
 import { compileStats, now } from './compile-stats.js'
+import { perfStats } from './perf-stats.js'
+import { preserveComment } from './template-normalize.js'
 import {
   instanceOf, setInstance, metaOf, peekMeta,
   createInstance,
@@ -22,7 +24,6 @@ export { compileAttr, compileAttrs } from './compiler-attrs.js'
 
 // ---- 结构型编译 ----
 
-const varRegex = /{{|}}/g
 const vforRegex = /^\s*(?:\((\w+)\s*,\s*(\w+)\)|(\w+))\s+in\s+(.+?)\s*$/
 
 /** 从普通元素或 <template> 中提取内容子节点 */
@@ -76,8 +77,9 @@ export function ensureStructuralBoundary(dom, data, runtime) {
 
 export function compileTextNode(dom, data, runtime, scope, cleanups) {
   const runtimeScope = scope || instanceOf(dom)?.scope
-  const txt = dom.nodeValue.trim()
-  if (!txt) return
+  const txt = dom.nodeValue
+  if (!txt.includes('{{')) return
+  const varRegex = /{{|}}/g
   let match, nextStart = 0, start = -1
   const parts = []
   while ((match = varRegex.exec(txt)) !== null) {
@@ -85,23 +87,27 @@ export function compileTextNode(dom, data, runtime, scope, cleanups) {
       start = match.index
     } else if (match[0] === '}}' && start >= 0) {
       if (nextStart !== start) parts.push(txt.slice(nextStart, start))
-      parts.push('')
       const expr = txt.slice(start + 2, match.index)
-      const partIndex = parts.length - 1
+      parts.push({ expr })
       start = -1
       nextStart = match.index + 2
-      const id = watch(runtimeScope, () => {
-        let value = Run(expr, data, runtime)
-        if (typeof value === 'function') value = value()
-        else if (typeof value === 'object' && value) value = JSON.stringify(value)
-        parts[partIndex] = value
-        dom.nodeValue = parts.join('').trim()
-      })
-      if (cleanups) cleanups.push(() => Cancel(id))
     }
   }
   parts.push(txt.slice(nextStart))
-  dom.nodeValue = parts.join('')
+  if (!parts.some(part => typeof part === 'object')) return
+  // 一个文本节点一个 effect；最终字符串相等时不触碰 DOM。
+  const id = watch(runtimeScope, () => parts.map(part => {
+    if (typeof part === 'string') return part
+    let value = Run(part.expr, data, runtime)
+    if (typeof value === 'function') value = value()
+    else if (typeof value === 'object' && value) value = JSON.stringify(value)
+    return value
+  }).join(''), value => {
+    if (dom.nodeValue === value) return
+    dom.nodeValue = value
+    perfStats.textWrites++
+  })
+  if (cleanups) cleanups.push(() => Cancel(id))
 }
 
 /*
@@ -202,6 +208,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const teardown = () => {
     if (tornDown) return
     tornDown = true
+    parentScope?.removeCleanup(teardown)
     Cancel(watchId)
     Object.keys(cache).forEach(key => {
       removeVforItem(cache[key])
@@ -355,9 +362,6 @@ export function compileVif(nodes, data, runtime, ctx) {
 
     function showBranch(index) {
       if (index < 0 || index >= sourceBranches.length) {
-        const empty = document.createElement('div')
-        empty.style.display = 'none'
-        endMark.before(empty)
         return
       }
       const clones = sourceBranches[index].map(n => n.cloneNode(true))
@@ -481,7 +485,7 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
     compileTextNode(dom, scopedData, activeRuntime, runtimeScope)
     return
   } else if (dom.nodeType === 8) {
-    dom.remove()
+    if (!preserveComment(dom)) dom.remove()
     return
   } else if (dom.nodeType !== 1) {
     console.log('Other Node Type:', dom.nodeType, dom)

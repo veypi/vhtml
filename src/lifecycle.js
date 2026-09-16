@@ -1,7 +1,7 @@
 /*
  * lifecycle.js — 生命周期脚本执行与代际令牌
  */
-import { Watch, Cancel } from './reactive.js'
+import { watch } from './runtime-watch.js'
 import { AsyncRun, setCompileContext } from './sandbox.js'
 
 // ====================================================================
@@ -49,11 +49,7 @@ function createScriptContext(dom, inst, reason) {
       // 与 setup $watch 同一队列机制（v0.10.3）：队列模式入队、
       // 非队列模式立即执行并返回 watch 句柄（生命周期脚本运行时队列已排空）
       const scope = inst?.scope
-      const register = () => {
-        const id = Watch(target, callback, options)
-        scope?.addWatcher(() => Cancel(id))
-        return id
-      }
+      const register = () => watch(scope, target, callback, options)
       return scope ? scope.queueWatch(register) : register()
     },
     $scope: inst?.scope,

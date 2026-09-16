@@ -55,7 +55,7 @@ function bindVisibilityLifecycle() {
 export class ComponentScope {
   constructor(host = null) {
     this.host = host
-    this.cleanups = []
+    this.cleanups = new Set()
     this.timers = new Set()
     this.intervals = new Set()
     this.lifecycle = { mount: [], active: [], deactive: [], dispose: [] }
@@ -82,7 +82,7 @@ export class ComponentScope {
       runGuarded(cleanup, this.host)
       return cleanup
     }
-    this.cleanups.push(cleanup)
+    this.cleanups.add(cleanup)
     return cleanup
   }
 
@@ -90,15 +90,20 @@ export class ComponentScope {
     return this.addCleanup(cancel)
   }
 
+  removeCleanup(cleanup) {
+    this.cleanups.delete(cleanup)
+  }
+
   // ---- watch 延迟队列（v0.10.3，取代 setup $watch 的 50ms 魔法延迟）----
   // 队列模式下（setup 期间）注册入队，flushWatchQueue 一次性排空；
   // 非队列模式立即执行（生命周期脚本等常规路径），两种路径同一机制。
   beginWatchQueue() {
+    if (this.phase === 'disposed') return
     if (!this.watchQueue) this.watchQueue = []
   }
 
   queueWatch(register) {
-    if (typeof register !== 'function') return null
+    if (this.phase === 'disposed' || typeof register !== 'function') return null
     if (this.watchQueue) {
       this.watchQueue.push(register)
       return null
@@ -110,7 +115,10 @@ export class ComponentScope {
     const queue = this.watchQueue
     if (!queue) return
     this.watchQueue = null
-    for (const register of queue) register()
+    for (const register of queue) {
+      if (this.phase === 'disposed') break
+      register()
+    }
   }
 
   addEventListener(target, event, handler, options) {
@@ -121,12 +129,14 @@ export class ComponentScope {
   }
 
   setTimeout(fn, delay) {
+    if (this.phase === 'disposed') return null
     const id = window.setTimeout(() => { this.timers.delete(id); fn() }, delay)
     this.timers.add(id)
     return id
   }
 
   setInterval(fn, delay) {
+    if (this.phase === 'disposed') return null
     const id = window.setInterval(fn, delay)
     this.intervals.add(id)
     return id
@@ -159,15 +169,17 @@ export class ComponentScope {
   }
 
   onActive(fn) {
-    if (typeof fn === 'function') this.lifecycle.active.push(fn)
+    if (this.phase !== 'disposed' && typeof fn === 'function') this.lifecycle.active.push(fn)
   }
 
   onDeactive(fn) {
-    if (typeof fn === 'function') this.lifecycle.deactive.push(fn)
+    if (this.phase !== 'disposed' && typeof fn === 'function') this.lifecycle.deactive.push(fn)
   }
 
   onDispose(fn) {
-    if (typeof fn === 'function') this.lifecycle.dispose.push(fn)
+    if (typeof fn !== 'function') return
+    if (this.phase === 'disposed') runGuarded(fn, this.host)
+    else this.lifecycle.dispose.push(fn)
   }
 
   /**
@@ -222,6 +234,8 @@ export class ComponentScope {
 
   dispose(context) {
     if (this.phase === 'disposed') return
+    // 先落终态闩，deactive/dispose 回调重入也只能回收一次。
+    this.phase = 'disposed'
     liveScopes.delete(this)
     if (this.host) cancelConnected(this.host)
     // 作废全部在途异步段（generation token 契约：唯一销毁口单点收口）
@@ -231,16 +245,21 @@ export class ComponentScope {
       this.active = false
       for (const fn of this.lifecycle.deactive) runGuarded(fn, context, 'dispose')
     }
-    this.phase = 'disposed'
     // 未执行的 mount 队列直接丢弃（staging 作废零脚本副作用）
     this.lifecycle.mount.length = 0
     for (const fn of this.lifecycle.dispose) runGuarded(fn, context)
     // 不变式 3：单个 cleanup 抛错不阻断剩余回收
-    for (const cleanup of this.cleanups.splice(0)) runGuarded(cleanup, context)
+    const cleanups = Array.from(this.cleanups)
+    this.cleanups.clear()
+    for (const cleanup of cleanups) runGuarded(cleanup, context)
     for (const id of this.timers) window.clearTimeout(id)
     this.timers.clear()
     for (const id of this.intervals) window.clearInterval(id)
     this.intervals.clear()
+    for (const handlers of Object.values(this.lifecycle)) handlers.length = 0
+    this.watchQueue = null
+    this._awaitingConnection = false
+    this.host = null
   }
 }
 

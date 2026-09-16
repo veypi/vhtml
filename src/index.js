@@ -13,6 +13,8 @@ import { createRuntimeContext, RUNTIME } from './module.js'
 import { EnsureWrap } from './reactive.js'
 import { createMemoryHistory, registerRouterHistory } from './router.js'
 import { warnObserverFallback } from './component-scope.js'
+import { perfStats } from './perf-stats.js'
+import { normalizeTemplate } from './template-normalize.js'
 
 class VHTML {
   static _globalStyled = false
@@ -34,7 +36,8 @@ class VHTML {
     this._ctx = null
     this._observer = null
     this._moSuspended = false
-    this._moPendingRemoved = []
+    this._moPendingRemoved = new Set()
+    this._disposeTask = null
     // 暴露运行时所使用的模板加载器（单例）：宿主页面经 window.$vhtml.templateLoader
     // 拿到与内部一致的对象做 clearScoped/scopeOf（生产 bundle 与 debug src 图双形态
     // 同一实例；直接 import /vhtml/loader.js 在生产是另一份模块实例，清不到本缓存）
@@ -58,6 +61,7 @@ class VHTML {
     }
 
     VHTML._injectGlobalStyles()
+    normalizeTemplate(this._el)
     this._startObserver()
 
     this._ctx = createRenderContext({
@@ -76,13 +80,16 @@ class VHTML {
 
   destroy() {
     if (this._observer) {
+      this._collectRemoved(this._observer.takeRecords())
       this._observer.disconnect()
       this._observer = null
     }
+    this._cancelDisposalTask()
+    this._flushMOPending()
     if (this._el) {
       disposeRuntimeSubtree(this._el)
     }
-    this._moPendingRemoved.length = 0
+    this._moSuspended = false
     this._mounted = false
     this._ctx = null
   }
@@ -92,6 +99,7 @@ class VHTML {
    */
   parseDom(dom, data = {}, runtime = {}) {
     if (!this._ctx) return
+    normalizeTemplate(dom)
     data = EnsureWrap(data)
     const activeRuntime = runtime?.[RUNTIME] ? runtime : this._runtime
     this._ctx.ensureBoundary(dom, data, activeRuntime)
@@ -145,48 +153,74 @@ class VHTML {
   _startObserver() {
     const config = { attributes: false, childList: true, subtree: true, characterData: false }
     this._observer = new MutationObserver((mutationsList) => {
-      if (this._moSuspended) {
-        for (const mutation of mutationsList) {
-          this._moPendingRemoved.push(...mutation.removedNodes)
-        }
-        return
-      }
-      for (const mutation of mutationsList) {
-        for (let node of mutation.removedNodes) {
-          this._scheduleDisposeNodeScope(node)
-        }
-      }
+      this._collectRemoved(mutationsList)
     })
     this._observer.observe(this._el, config)
   }
 
-  // v0.10.1 阶段 2：observer 降级为兜底——取消启发式（_cancelPendingDisposal/
-  // _pendingDisposals）已删，rAF 时的 isConnected 检查本身就是「同帧移回」判据；
-  // 兜底真正清理到内容时打 dev 警告，让依赖兜底的移除路径可发现并收敛为零
-  // （显式 dispose 过的节点再次进入此处是幂等空转，不警告）
+  _collectRemoved(records) {
+    for (const record of records) {
+      for (const node of record.removedNodes) this._scheduleDisposeNodeScope(node)
+    }
+  }
+
+  // 每个根共用一个队列；仍在延迟执行时检查连接状态，允许同帧 DOM 移动。
   _scheduleDisposeNodeScope(node) {
     if (!node || node.nodeType !== 1) return
-    // 阶段 3：keepOnDetach 实例字段判读（原 data-keep 属性 hack 已废，
-    // 属性仅在实例创建前作为信号存在，parseRef 翻译后即移除）
     if (instanceOf(node, false)?.keepOnDetach) return
-    requestAnimationFrame(() => {
-      if (node.isConnected) return
-      if (disposeRuntimeSubtree(node)) {
-        // 警告只针对 vhtml 模板衍生 DOM（加载器打印的 vrefof / 模板 vref 标记）：
-        // 外部库/应用代码移除自管 DOM（可能携带 vhtml 残留状态）不是收敛目标，
-        // 静默清理即可，否则三方库操作 DOM 会产生大量噪音警告。清理本身恒执行（防泄漏）
-        if (node.hasAttribute?.('vrefof') || node.hasAttribute?.('vref')) {
-          warnObserverFallback(node)
-        }
-      }
-    })
+    if (!this._moPendingRemoved.has(node)) {
+      this._moPendingRemoved.add(node)
+      perfStats.disposalCandidates++
+      perfStats.disposalPending++
+    }
+    this._scheduleDisposalFlush()
+  }
+
+  _scheduleDisposalFlush() {
+    if (this._moSuspended || this._disposeTask || !this._moPendingRemoved.size) return
+    const task = { frame: null, timer: null }
+    this._disposeTask = task
+    const drain = () => {
+      if (this._disposeTask !== task) return
+      this._cancelDisposalTask()
+      if (!this._moSuspended) this._flushMOPending()
+    }
+    perfStats.disposalSchedules++
+    task.frame = requestAnimationFrame(drain)
+    // 总是登记一次兜底：也覆盖登记后才切到后台、rAF 因而停摆的情况。
+    task.timer = setTimeout(drain, 100)
+  }
+
+  _cancelDisposalTask() {
+    const task = this._disposeTask
+    if (!task) return
+    this._disposeTask = null
+    cancelAnimationFrame(task.frame)
+    clearTimeout(task.timer)
   }
 
   _flushMOPending() {
-    const removed = this._moPendingRemoved.splice(0)
-    for (let node of removed) {
-      this._scheduleDisposeNodeScope(node)
+    if (!this._moPendingRemoved.size) return
+    const removed = this._moPendingRemoved
+    this._moPendingRemoved = new Set()
+    perfStats.disposalPending -= removed.size
+    perfStats.disposalFlushes++
+    for (const node of removed) {
+      if (node.isConnected) continue
+      let covered = false
+      for (let parent = node.parentNode; parent; parent = parent.parentNode) {
+        if (removed.has(parent) || instanceOf(parent, false)?.keepOnDetach) {
+          covered = true
+          break
+        }
+      }
+      if (covered) continue
+      perfStats.disposalRoots++
+      if (disposeRuntimeSubtree(node, true) && (node.hasAttribute('vrefof') || node.hasAttribute('vref'))) {
+        warnObserverFallback(node)
+      }
     }
+    removed.clear()
   }
 
   _suspendMO() {
@@ -196,9 +230,7 @@ class VHTML {
   _resumeMO() {
     if (!this._moSuspended) return
     this._moSuspended = false
-    if (this._moPendingRemoved.length > 0) {
-      this._flushMOPending()
-    }
+    this._scheduleDisposalFlush()
   }
 }
 

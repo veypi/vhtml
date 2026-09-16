@@ -5,10 +5,8 @@
  * 设计要点（2026-08-28 v0.10.0，行为基线见 test/copybind.test.js）：
  *
  * - Effect handle（对象身份）取代全局数字索引：Watch 返回不透明 handle
- *   { dead, debug, fn }，Cancel O(1) 幂等；依赖表 listeners[lkey] =
- *   Set<handle>，add 天然去重，notify 迭代时惰性清理 dead 条目（key 不再
- *   变化则随 proxy 整体 GC，不劣于旧全局数组形态）。伪回调漏洞（整数索引
- *   复用）与槽位膨胀结构性消失。
+ *   { dead, debug, fn }；依赖表与 handle 双向登记，重估后解绑过期依赖，
+ *   Cancel 按依赖数立即解绑并释放闭包/返回值，不依赖下一次通知回收。
  *
  * - 两阶段 flush + 变更门控：阶段一重求值拿新值并重新注册依赖，阶段二按
  *   equality 比较（缺省 Object.is），变了才调用户回调。equality: null =
@@ -53,6 +51,7 @@
 
 import { errorLog } from './errors.js'
 import { compileStats } from './compile-stats.js'
+import { perfStats } from './perf-stats.js'
 
 const listenStack = []   // 求值期栈：栈顶 = 当前正在注册依赖的 handle
 const dirty = new Set()  // 待 flush 的 handle（Set 去重，迭代中删除安全）
@@ -67,7 +66,7 @@ const MAX_CASCADE_ROUNDS = 10
 const MAX_CASCADE_ERRORS = 50
 
 // __vhtml_dev 观测层（最小版；10.1 扩展 scope 注册表与实例树）
-const devStats = { watches: 0, cancels: 0, flushes: 0 }
+const devStats = { watches: 0, cancels: 0, flushes: 0, dependencyEdges: 0 }
 const cascadeErrors = []
 
 const scheduleFrame = typeof requestAnimationFrame === 'function'
@@ -175,55 +174,84 @@ function previewOf(target) {
  * @returns 不透明 handle（传给 Cancel 取消；对象身份永不复用）
  */
 export function Watch(target, callback, options) {
-  const equality = options ? options.equality : undefined
   const handle = {
     dead: false,
     debug: (options && options.debug) || previewOf(target),
-    fn: null,
+    fn: runEffect,
+    target,
+    callback,
+    equality: options?.equality,
+    deps: new Set(),
+    nextDeps: null,
+    lastValue: undefined,
+    hasLast: false,
+    onCancel: null,
   }
-  let lastValue
-  let hasLast = false
-
-  const runTarget = () => {
-    listenStack.push(handle)
-    try {
-      return target()
-    } catch (e) {
-      console.warn('running \n%s\n failed:', target, e)
-      return undefined
-    } finally {
-      listenStack.pop()
-    }
-  }
-
-  handle.fn = () => {
-    const value = runTarget()
-    if (typeof callback === 'function') {
-      let changed = true
-      if (equality !== null && hasLast) {
-        changed = typeof equality === 'function'
-          ? !equality(lastValue, value)
-          : !Object.is(lastValue, value)
-      }
-      if (changed) callback(value)
-    }
-    lastValue = value
-    hasLast = true
-  }
-
-  // 首轮：求值注册依赖 + 立即同步回调（既有语义）
-  lastValue = runTarget()
-  hasLast = true
-  if (typeof callback === 'function') callback(lastValue)
   devStats.watches++
+  // 首轮同步执行；注册阶段抛错时没有调用者能拿到 handle，必须收回订阅。
+  try { handle.fn() } catch (error) { Cancel(handle); throw error }
   return handle
 }
 
-/** O(1) 幂等取消；dead handle 随对应 key 下次通知惰性清理 */
+function unlink(handle, dep) {
+  if (dep.delete(handle)) devStats.dependencyEdges--
+}
+
+function runEffect() {
+  const handle = this
+  if (handle.dead) return
+  const next = new Set()
+  handle.nextDeps = next
+  let value
+  listenStack.push(handle)
+  try {
+    const target = handle.target
+    value = target()
+  } catch (error) {
+    console.warn('running \n%s\n failed:', handle.target, error)
+  } finally {
+    listenStack.pop()
+    for (const dep of handle.deps) {
+      if (!next.has(dep) || handle.dead) {
+        unlink(handle, dep)
+        handle.deps.delete(dep)
+      }
+    }
+    handle.nextDeps = null
+  }
+  if (handle.dead) return
+  // 回调/比较器不收集依赖，嵌套 Watch 时也不能污染外层求值的依赖集合。
+  listenStack.push(null)
+  try {
+    const equal = handle.equality
+    const changed = !handle.hasLast || equal === null || !(typeof equal === 'function'
+      ? equal(handle.lastValue, value) : Object.is(handle.lastValue, value))
+    const callback = handle.callback
+    if (!handle.dead && changed && typeof callback === 'function') callback(value)
+    // 回调可取消自己；不得在取消后重新保留返回值。
+    if (!handle.dead) {
+      handle.lastValue = value
+      handle.hasLast = true
+    }
+  } finally {
+    listenStack.pop()
+  }
+}
+
+/** 幂等取消，O(依赖数)；即使调用者保留 handle 也不保留业务闭包。 */
 export function Cancel(handle) {
   if (handle && !handle.dead) {
     handle.dead = true
+    dirty.delete(handle)
+    for (const dep of handle.deps) unlink(handle, dep)
+    handle.deps.clear()
+    handle.nextDeps?.clear()
+    handle.fn = handle.target = handle.callback = handle.equality = handle.lastValue = null
+    handle.hasLast = false
     devStats.cancels++
+    const onCancel = handle.onCancel
+    handle.onCancel = null
+    onCancel?.()
   }
 }
 
@@ -233,13 +261,18 @@ export function Cancel(handle) {
 
 function track(listeners, lkey) {
   const top = listenStack[listenStack.length - 1]
-  if (!top) return
+  if (!top || top.dead) return
   let set = listeners[lkey]
   if (!set) {
     set = new Set()
     listeners[lkey] = set
   }
-  set.add(top)  // Set 去重：同一 handle 重复读取同一 key 只挂一次
+  top.nextDeps.add(set)
+  if (!set.has(top)) {
+    set.add(top)
+    top.deps.add(set)
+    devStats.dependencyEdges++
+  }
 }
 
 function notifyNow(listeners, lkey) {
@@ -376,7 +409,7 @@ export function Wrap(data, root = undefined) {
   const isArray = Array.isArray(data)
   if (root) SetDataRoot(data, root)
   data[DataID] = did
-  const listeners = {}
+  const listeners = Object.create(null)
   const handler = {
     get(target, key, receiver) {
       if (key === DataID) return did
@@ -424,7 +457,7 @@ export function Wrap(data, root = undefined) {
         // 调用方严格模式；经 executeFn 的 try/catch 落入错误登记表。
         throw new TypeError(`cannot set ${isArray ? 'array item' : `property '${String(key)}'`}: readonly or setter-less`)
       }
-      if (listenStack.length === 0) {
+      if (!listenStack[listenStack.length - 1]) {
         // 新增 key 属于结构变化：除精确 key 外还需通知结构依赖（'' 通道，
         // 数组已有该语义——其所有 key 都注册在 ''）
         notify(listeners, isArray ? '' : key)
@@ -444,7 +477,7 @@ export function Wrap(data, root = undefined) {
     },
     deleteProperty(target, key) {
       const result = Reflect.deleteProperty(target, key)
-      if (result && listenStack.length === 0) {
+      if (result && !listenStack[listenStack.length - 1]) {
         // 删 key 同属结构变化，通知 '' 通道（数组语义并入 ''）
         notify(listeners, isArray ? '' : key)
         if (!isArray) notify(listeners, '')
@@ -542,6 +575,7 @@ if (typeof window !== 'undefined' && !window.__vhtml_dev) {
     },
     // 编译耗时统计（v0.10.3 AOT 评估诊断；compile.js / compiler.js 共用，非契约）
     compileStats,
+    perfStats,
     cascadeErrors,
     // 全局错误登记表（errors.js，v0.10.3 错误契约）：编译/表达式/挂载四类
     get errors() {

@@ -103,18 +103,19 @@ export function detachInstance(instance) {
 
 function purgeNodeState(node) {
   if (!node) return false
+  const hadScope = nodeScopeMap.delete(node)
   const instance = nodeInst.get(node)
   if (instance) {
     detachInstance(instance)
     nodeInst.delete(node)
   }
-  return nodeMeta.delete(node) || Boolean(instance)
+  return nodeMeta.delete(node) || Boolean(instance) || hadScope
 }
 
-function disposeInstanceSubtree(instance) {
-  if (!instance) return
+function disposeInstanceSubtree(instance, preserveDetached = false) {
+  if (!instance || (preserveDetached && (instance.keepOnDetach || instance.host?.isConnected))) return
   for (const child of Array.from(instance.children)) {
-    disposeInstanceSubtree(child)
+    disposeInstanceSubtree(child, preserveDetached)
   }
   const host = instance.host
   if (host) {
@@ -130,18 +131,24 @@ function disposeInstanceSubtree(instance) {
  * meta（parsed/vforData/slotOutletState 等）只能靠 DOM 子树遍历清到位，
  * 否则幂等契约（再次调用返回 false）被残留 meta 破坏。
  */
-export function disposeRuntimeSubtree(node) {
+export function disposeRuntimeSubtree(node, preserveDetached = false) {
   if (!node || node.nodeType !== 1) return false
   const instance = nodeInst.get(node)
+  if (preserveDetached && (node.isConnected || instance?.keepOnDetach)) return false
   let did = false
   if (instance) {
-    disposeInstanceSubtree(instance)
+    disposeInstanceSubtree(instance, preserveDetached)
     did = true
   }
   did = purgeNodeState(node) || did
-  node.childNodes?.forEach(child => {
-    if (child.nodeType === 1) did = disposeRuntimeSubtree(child) || did
-  })
+  // teardown 可能同时移除兄弟节点，必须遍历快照。
+  for (const child of Array.from(node.childNodes || [])) {
+    if (child.nodeType === 1) did = disposeRuntimeSubtree(child, preserveDetached) || did
+    else {
+      if (child.nodeType === 8) peekMeta(child)?.teardown?.()
+      did = purgeNodeState(child) || did
+    }
+  }
   return did
 }
 
