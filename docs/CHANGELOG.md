@@ -7,6 +7,13 @@
 
 ## [Unreleased]
 
+### 性能（V1–V4）
+- 响应式依赖双向登记，每次求值解绑过期依赖；`Cancel` 立即退出 dirty/依赖集合并释放目标、回调和返回值。分支销毁同步移除父 scope 的清理入口，scope 终态清空队列、生命周期和宿主引用。
+- DOM 移除兜底改为每个 VHTML 根一个 Set 队列，共用 rAF/定时器并合并祖先候选；保留同帧移动和路由缓存，destroy 撤销排队任务。
+- 模板缓存/编译前清除普通注释（递归 template.content），保留结构锚点与 `vhtml:keep` 注释；空 v-if 不再生成隐藏 div。新增显式 `v-whitespace="compact"` / `"preserve"` 规则，默认保留空白。
+- 每个插值文本节点共用一个 watcher，保留原始文本空白；class 比较 token 集合，style 按规范化属性 diff，相同结果不写 DOM。修复动态 class 删除同名静态 class、style 原地删除字段和带引号分号/`!important` 解析。
+- 增加数值型 `__vhtml_dev.stats.dependencyEdges` 和 `__vhtml_dev.perfStats` 诊断，无全局 effect/节点强引用登记表。验证方法与浏览器对照数据见 [性能说明](performance.md)。
+
 ## [0.11.0] - 2026-09-08
 
 ### 变更（破坏性）

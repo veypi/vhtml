@@ -227,9 +227,17 @@ Static imports are supported; relative paths resolve against the component's own
 - Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
 - Special events: `@outerclick` (click outside the element).
 - `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
-- All `v-if` / `v-else-if` / `v-else` branches are compiled up front: binding expressions inside an **inactive** branch still evaluate within the same flush. Never let an inner expression dereference state that switches between `null` and a value across branches (`!x.length` throws when `x` is `null`, and the interrupted flush can leave the branch half-mounted) — keep cross-branch state at a constant type (boolean flag + always-an-array), not a null/value switch.
+- All conditions in a `v-if` / `v-else-if` chain are evaluated to select a branch; only the selected body is cloned and compiled. Removed branch effects are canceled immediately, including pending dirty work. Keep condition expressions safe for every state; do not rely on an earlier condition to short-circuit later conditions.
 - `v-for` has **no `:key` attribute** — item identity is tracked automatically (objects by reference, primitives by position). A `:key` on a v-for node compiles as a plain inert attribute; delete it.
 - Always initialize list variables in `<script setup>`: `items = []`.
+
+### Template whitespace and binding updates
+
+Text and interpolation whitespace is preserved, including code indentation. Ordinary template comments are removed before cloning; keep a required boundary with `<!-- vhtml:keep boundary -->`. Empty `v-if` branches contain only structural comment anchors.
+
+`v-whitespace="compact"` explicitly opts a template subtree into removing whitespace-only text nodes containing line breaks. Single-line spaces between inline elements and NBSP remain. `pre/code/textarea/script/style`, inline styles that preserve whitespace, and `v-whitespace="preserve"` subtrees are protected. If a CSS class preserves whitespace, mark that subtree `v-whitespace="preserve"`; the template normalizer does not inspect external stylesheets. `no-vhtml`, foreign namespaces, and dynamic `v-html` contents are excluded from this normalization.
+
+Text, class and style bindings compare normalized output before writing DOM. Class bindings preserve static classes; style bindings support property removal, CSS variables, priorities and string/object switching. See [performance notes](docs/performance.md) for measurements and diagnostics.
 
 ## Script Types
 
@@ -509,6 +517,8 @@ Nested objects are reactive — no opt-in needed. Updates are batched: multiple 
 
 **Change gate**: a watcher callback fires only when the value actually changed (`Object.is` comparison). Pass `{ equality: null }` to `$watch` for an always-run subscription. Known boundary: a template expression that returns a fresh reference on every evaluation (e.g. `items.filter(...)`) always passes the gate — avoid allocating inside template expressions.
 
+Dependencies follow the latest evaluation: switching `flag ? a : b` unsubscribes from the unused branch. Cancel is idempotent and immediately unlinks dependencies, pending work and retained callbacks/values; no further source mutation is needed to release an effect. Callbacks and equality comparators do not collect dependencies, including inside a nested watch.
+
 **Pure-replacement writes**: assigning to a reactive key replaces the value outright — no deep merge, and the new value gets a fresh identity (v-for position-keyed row reuse is the one exception — see below).
 
 **Array mutators**: all standard mutators (`push / pop / splice / shift / unshift / sort / reverse / copyWithin / fill`) are safe on reactive arrays; their notifications collapse into one refresh. In-place mutation keeps v-for row identity.
@@ -538,6 +548,8 @@ Structural edits (insert / remove / reorder): either in-place mutators (`splice`
 #### Compile stats (`__vhtml_dev.compileStats`)
 
 Counters for compile-vs-render profiling: `nodeCompiles` / `nodeMs` (DOM-compile calls and self time), `codeCompiles` / `codeMs` (expression compiles, including cache hits), `vforLines` (new v-for rows).
+
+`__vhtml_dev.stats` also exposes `liveHandles`, `dependencyEdges` and `dirty`. `__vhtml_dev.perfStats` counts disposal candidates/pending/schedules/flushes/roots, template comment/whitespace removal and actual text/class/style writes. These counters retain no nodes or effects.
 
 ## Debug
 
