@@ -2,7 +2,7 @@
  * slots.js — vslot 内容投影
  */
 
-import { Wrap, Cancel, SetDataRoot, GenUniqueID } from './reactive.js'
+import { Wrap, Cancel, GenUniqueID } from './reactive.js'
 import { Run } from './sandbox.js'
 import { instanceOf, metaOf, peekMeta, setNodeScope } from './component-instance.js'
 import { watch } from './runtime-watch.js'
@@ -54,8 +54,7 @@ function createSlotBindingData(dom, outletData, sourceData) {
   // 否则 watcher 同步 outlet 值时会误写入投影方的 sourceData）
   const local = {}
   bindAttrs.forEach(attr => { local[attr] = outletData[attr] })
-  const slotData = Wrap(local)
-  SetDataRoot(slotData, sourceData)
+  const slotData = Wrap(local, sourceData)
   const scope = instanceOf(dom)?.scope
   const watcherIds = []
   bindAttrs.forEach(attr => {

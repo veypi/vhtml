@@ -1,0 +1,72 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>vhtml R0–R3 regression probe</title>
+<style>body{font:14px monospace}#fixtures{display:flex;max-height:600px;overflow:auto}.fixture{min-width:240px}pre{white-space:pre-wrap}</style>
+<pre id="result">Ready</pre><div id="fixtures"></div>
+<script type="module">
+const moduleURL = new URLSearchParams(location.search).get('module') || '../../src/index.js'
+const { default: VHTML } = await import(moduleURL)
+const delay = (ms = 120) => new Promise(resolve => setTimeout(resolve, ms))
+const root = document.querySelector('#fixtures')
+const stats = () => ({ ...window.__vhtml_dev.stats, ...window.__vhtml_dev.perfStats })
+const delta = (a, b, keys) => Object.fromEntries(keys.map(key => [key, typeof b[key] === 'number' ? b[key] - (a[key] || 0) : null]))
+const rowKeys = ['vforReconciles','vforNoops','vforRowsCreated','vforRowsMoved','vforRowsDisposed','proxyCreates','watches','cancels','textWrites']
+async function mount(template, data) {
+  const host = document.createElement('div'); host.className = 'fixture'; host.innerHTML = template; root.append(host)
+  const app = new VHTML({ target: host, data }); await app.ready
+  return { app, host, destroy() { app.destroy(); host.remove() } }
+}
+window.runRefactorProbe = async (size = 1000, views = 1) => {
+  const warm = await mount('<b>{{n}}</b>', { n: 1 }); warm.destroy(); await delay()
+  const initial = stats(), instances = [], checks = {}, rows = Array.from({length:size}, (_, n) => ({ label: `row ${n}` }))
+  const result = { module: moduleURL, size, views, checks }
+  try {
+    const start = performance.now()
+    for (let i = 0; i < views; i++) instances.push(await mount('<p v-for="(row, i) in rows"><input value="draft"><b>{{i}}:{{row.label}}</b></p>', { rows: rows.slice() }))
+    result.mountMs = performance.now() - start
+    await delay()
+    const original = instances.map(x => [...x.host.querySelectorAll('p')])
+    const input = original[0][0].querySelector('input'); input.focus(); input.setSelectionRange(1, 3)
+    let before = stats()
+    instances.forEach(x => { x.app._data.rows = rows.slice() }); await delay()
+    result.sameList = delta(before, stats(), rowKeys)
+    checks.sameListRetainsRows = instances.every((x, i) => {
+      const nodes = x.host.querySelectorAll('p'); return original[i].every((n, j) => nodes[j] === n)
+    })
+    before = stats()
+    instances.forEach(x => { x.app._data.rows = [{ label: 'head' }, ...rows] }); await delay()
+    result.prepend = delta(before, stats(), rowKeys)
+    checks.prependRetainsRows = instances.every((x, i) => {
+      const nodes = x.host.querySelectorAll('p'); return original[i].every((n, j) => nodes[j+1] === n)
+    })
+    checks.focusAndSelection = document.activeElement === input && input.selectionStart === 1 && input.selectionEnd === 3
+    instances[0].app._data.rows[1].label = 'shared'; await delay()
+    checks.sharedNotifications = instances.every(x => x.host.querySelectorAll('b')[1].textContent === '1:shared')
+    before = stats()
+    instances.forEach(x => { x.app._data.rows = rows.slice().reverse() }); await delay()
+    result.reorder = delta(before, stats(), rowKeys)
+    checks.reorderRetainsRows = instances.every((x, i) => {
+      const nodes = x.host.querySelectorAll('p'); return original[i].every((n, j) => nodes[size-1-j] === n)
+    })
+    result.nodes = root.querySelectorAll('*').length
+    result.peak = stats()
+  } finally { instances.forEach(x => x.destroy()); await delay() }
+  result.lifecycleDelta = delta(initial, stats(), ['liveHandles','dependencyEdges','pendingFrames','pendingTimeouts','pendingIntervals'])
+  document.querySelector('#result').textContent = JSON.stringify(result, null, 2)
+  return result
+}
+window.runChildIdentityProbe = async () => {
+  window.childProbe = { mounts: 0, disposes: 0, frames: 0 }
+  const raw = { label: 'existing' }
+  const item = await mount('<div v-for="row in rows" vsrc="/vhtml/test/browser/refactor-child.html" :row="row"></div>', { rows: [raw] })
+  await delay(300)
+  const input = item.host.querySelector('input'); input.value = 'local draft'; input.focus(); input.setSelectionRange(2, 5)
+  item.app._data.rows = [{ label: 'new' }, raw]; await delay(300)
+  const result = { retained: item.host.querySelectorAll('input')[1] === input, focused: document.activeElement === input,
+    selection: [input.selectionStart,input.selectionEnd], value: input.value, beforeDispose: { ...window.childProbe } }
+  item.destroy(); await delay()
+  result.afterDispose = { ...window.childProbe }
+  result.pending = delta({}, stats(), ['pendingFrames','pendingTimeouts','pendingIntervals'])
+  return result
+}
+</script>

@@ -27,7 +27,7 @@
  *   由 compiler.js reconcile 显式调用 mergeIntoProxy 保持。
  *
  * - 数组恒 '' 单粗通道（按索引订阅是反模式：splice 后索引身份无意义）；
- *   lazy wrap-on-read；DataID 盖章；SetDataRoot 作用域链；root 链穿透读
+ *   lazy wrap-on-read；raw 弱缓存身份；独立 scope root；root 链穿透读
  *   同时注册本地 key 通道（重写顺带修复的追踪洞）。
  *
  * - 级联防护：单帧 flush 轮数上限 10，超限在调度层 throw（不经过单 watcher
@@ -307,39 +307,60 @@ function notify(listeners, lkey) {
 // Wrap（Proxy 依赖追踪）
 // ====================================================================
 
+let uniqueSequence = 0
 export function GenUniqueID() {
   const timestamp = performance.now().toString(36)
   const random = Math.random().toString(36).substring(2, 5)
-  return `${timestamp}-${random}`
+  // 浏览器会降低时钟精度；短随机串在万行列表中会碰撞，导致缓存串行。
+  return `${timestamp}-${random}-${++uniqueSequence}`
 }
 
 const isProxy = Symbol('isProxy')
 export const DataID = Symbol('DataID')
-const rootObj = Symbol('root')
-
-// defineProperty 原语需要触及 Wrap 闭包内的 listeners/isArray：Wrap 时登记
-const proxyMeta = new WeakMap()  // proxy → { target, listeners, isArray }
+// 数据身份/通知属于 raw；父级查找属于独立包装。弱缓存不登记 DOM 或历史代理。
+const targetMeta = new WeakMap()
+const proxyMeta = new WeakMap()
 
 export function IsWrapped(data) {
-  return Boolean(data && typeof data === 'object' && data[isProxy])
+  return proxyMeta.has(data)
 }
 
 export function EnsureWrap(data, root = undefined) {
   if (!data || typeof data !== 'object') return data
   if (IsWrapped(data)) {
-    if (root) SetDataRoot(data, root)
+    if (root !== undefined) {
+      if (!proxyMeta.get(data).scoped) return Wrap(data, root)
+      SetDataRoot(data, root)
+    }
     return data
   }
   return Wrap(data, root)
 }
 
 export function SetDataRoot(data, root) {
-  data[rootObj] = root
+  const meta = proxyMeta.get(data)
+  if (!meta) throw new TypeError('SetDataRoot requires a wrapped scope')
+  // 兼容旧的 Wrap(local); SetDataRoot(local, root) 调用。显式转为 scope 后
+  // 撤掉 canonical 缓存，防止仍存活的 raw 经缓存反向保留父级作用域。
+  const promoted = !meta.scoped
+  if (promoted) {
+    meta.scoped = true
+    meta.rootListeners = Object.create(null)
+    meta.shared.proxy = null
+  }
+  if (Object.is(meta.root, root)) return
+  meta.root = root
+  batch(() => {
+    notify(meta.rootListeners, '')
+    // 转换前的缺失读取只订阅了 target 通道，必须使其重新收集 root 依赖。
+    if (promoted) Object.keys(meta.listeners).forEach(key => notify(meta.listeners, key))
+  })
 }
 
 function isProxyType(v) {
   if (!v || typeof v !== 'object') return false
-  if (v instanceof Node || v instanceof Date || v instanceof RegExp || v instanceof Event) return false
+  if ((typeof Node !== 'undefined' && v instanceof Node) || v instanceof Date || v instanceof RegExp
+    || (typeof Event !== 'undefined' && v instanceof Event)) return false
   if (v.__noproxy) return false
   if (v.constructor !== Object && v.constructor !== Array) return false
   return true
@@ -349,13 +370,13 @@ function isProxyType(v) {
 const ARRAY_MUTATORS = new Set([
   'splice', 'shift', 'unshift', 'sort', 'reverse', 'copyWithin', 'fill',
 ])
-const mutatorCache = new WeakMap()  // raw target → { key: wrapped fn }
+const mutatorCache = new WeakMap()  // proxy → { key: wrapped fn }
 
-function getArrayMutator(target, key, receiver) {
-  let perProxy = mutatorCache.get(target)
+function getArrayMutator(key, receiver) {
+  let perProxy = mutatorCache.get(receiver)
   if (!perProxy) {
     perProxy = {}
-    mutatorCache.set(target, perProxy)
+    mutatorCache.set(receiver, perProxy)
   }
   let wrapped = perProxy[key]
   if (!wrapped) {
@@ -405,11 +426,23 @@ export function mergeIntoProxy(oldValue, newValue) {
 }
 
 export function Wrap(data, root = undefined) {
-  const did = GenUniqueID()
-  const isArray = Array.isArray(data)
-  if (root) SetDataRoot(data, root)
-  data[DataID] = did
-  const listeners = Object.create(null)
+  const existing = proxyMeta.get(data)
+  if (existing && root === undefined) return data
+  if (existing) data = existing.target
+  else if (!isProxyType(data)) return data
+  let shared = targetMeta.get(data)
+  if (!shared) {
+    shared = { did: GenUniqueID(), isArray: Array.isArray(data), listeners: Object.create(null), proxy: null }
+    targetMeta.set(data, shared)
+  }
+  const scoped = root !== undefined
+  if (!scoped && shared.proxy) {
+    perfStats.proxyCacheHits++
+    return shared.proxy
+  }
+  const { did, isArray, listeners } = shared
+  const meta = { target: data, shared, listeners, isArray, scoped, root,
+    rootListeners: scoped ? Object.create(null) : null }
   const handler = {
     get(target, key, receiver) {
       if (key === DataID) return did
@@ -418,28 +451,32 @@ export function Wrap(data, root = undefined) {
       // root 链穿透读：本地无此 key 而 root 上有 → 读走 root（root 是 proxy
       // 时读取本身已注册 root 通道依赖），同时注册本地 key 通道——key 被本地
       // 遮蔽/结构变化时依赖方仍会重估（修复旧实现零注册的追踪洞）
-      if (!hasLocalKey && target[rootObj] && key in target[rootObj]) {
-        if (typeof key !== 'symbol') track(listeners, key)
-        return target[rootObj][key]
+      if (!hasLocalKey && meta.scoped) {
+        if (typeof key !== 'symbol') {
+          track(listeners, isArray ? '' : key)
+          track(meta.rootListeners, '')
+        }
+        if (meta.root && key in meta.root) return meta.root[key]
       }
       const value = Reflect.get(target, key, receiver)
       if (typeof value === 'function') {
         // 数组变异方法：自动 batch 包装；其余函数原样返回且不注册依赖
         // （重赋值函数本身不触发，重估依赖函数体内读取的响应式字段）
-        if (isArray && ARRAY_MUTATORS.has(key)) return getArrayMutator(target, key, receiver)
+        if (isArray && ARRAY_MUTATORS.has(key)) return getArrayMutator(key, receiver)
         return value
       }
       if (typeof key === 'symbol') return value
       track(listeners, isArray ? '' : key)
-      if (isProxyType(value) && !value[isProxy]) {
-        const newValue = Wrap(value, undefined)
-        target[key] = newValue  // 直写 raw target：读路径零通知（wrap 是读副作用）
-        return newValue
+      if (!IsWrapped(value) && isProxyType(value)) {
+        // 不写回 raw；锁定的数据描述符必须按 Proxy 不变式返回原值。
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, key)
+        if (descriptor && !descriptor.configurable && descriptor.writable === false) return value
+        return Wrap(value)
       }
       return value
     },
     set(target, key, newValue, receiver) {
-      const root = target[rootObj]
+      const root = meta.root
       // 与 get/has 对称：本地没有且 root 链上有的 key，穿透写入持有者，
       // 避免写入本地后遮蔽 root 同名属性（如 v-for 作用域内修改组件状态）
       if (typeof key !== 'symbol' && root && !Reflect.has(target, key) && key in root) {
@@ -447,7 +484,8 @@ export function Wrap(data, root = undefined) {
         return true
       }
       const oldValue = Reflect.get(target, key, receiver)
-      if (Object.is(oldValue, newValue)) return true
+      if (Object.is(oldValue, newValue) || (IsWrapped(newValue) && proxyMeta.get(newValue).shared.proxy === newValue
+        && Object.is(oldValue, proxyMeta.get(newValue).target))) return true
       // 纯替换：深度合并已迁出（mergeIntoProxy），写路径可预测
       const hadKey = Reflect.has(target, key)
       const result = Reflect.set(target, key, newValue, receiver)
@@ -473,7 +511,11 @@ export function Wrap(data, root = undefined) {
     },
     has(target, key) {
       if (Reflect.has(target, key)) return true
-      return Boolean(target[rootObj] && key in target[rootObj])
+      if (meta.scoped && typeof key !== 'symbol') {
+        track(listeners, isArray ? '' : key)
+        track(meta.rootListeners, '')
+      }
+      return Boolean(meta.root && key in meta.root)
     },
     deleteProperty(target, key) {
       const result = Reflect.deleteProperty(target, key)
@@ -486,7 +528,9 @@ export function Wrap(data, root = undefined) {
     },
   }
   const proxy = new Proxy(data, handler)
-  proxyMeta.set(proxy, { target: data, listeners, isArray })
+  proxyMeta.set(proxy, meta)
+  if (!scoped) shared.proxy = proxy
+  perfStats.proxyCreates++
   return proxy
 }
 

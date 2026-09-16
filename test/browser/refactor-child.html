@@ -1,0 +1,8 @@
+<body><input><b>{{row.label}}</b></body>
+<script setup>row = null;</script>
+<script>
+  window.childProbe.mounts++;
+  if ($scope.requestAnimationFrame) $scope.requestAnimationFrame(() => window.childProbe.frames++);
+  $scope.setTimeout(() => window.childProbe.frames++, 60000);
+</script>
+<script dispose>window.childProbe.disposes++;</script>

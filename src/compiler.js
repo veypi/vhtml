@@ -5,7 +5,7 @@
  * 结构指令和根节点分发。属性/事件编译在 compiler-attrs.js。
  */
 
-import { Wrap, DataID, EnsureWrap, Cancel, mergeIntoProxy } from './reactive.js'
+import { Wrap, IsWrapped, DataID, EnsureWrap, Cancel, mergeIntoProxy } from './reactive.js'
 import { Run } from './sandbox.js'
 import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
@@ -134,6 +134,7 @@ function clearVforRange(startMark, endMark) {
 
 function removeVforItem(entry) {
   if (!entry) return
+  perfStats.vforRowsDisposed++
   if (entry.textCleanups) {
     entry.textCleanups.forEach(fn => fn())
     entry.textCleanups = null
@@ -151,6 +152,7 @@ function removeVforItem(entry) {
 
 function moveItemBefore(itemStart, itemEnd, refNode) {
   if (itemEnd.nextSibling === refNode) return
+  perfStats.vforRowsMoved++
   const nodes = [itemStart]
   let n = itemStart.nextSibling
   while (n && n !== itemEnd) {
@@ -205,9 +207,11 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   // watchId 在尾部注册时回填（Watch 注册即同步首评，reconcile 依赖下方闭包就绪）
   let watchId = null
   let tornDown = false
+  let previousOrder = null
   const teardown = () => {
     if (tornDown) return
     tornDown = true
+    previousOrder = null
     parentScope?.removeCleanup(teardown)
     Cancel(watchId)
     Object.keys(cache).forEach(key => {
@@ -228,7 +232,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   }
 
   const resolveCacheKey = (key, value, seen) => {
-    if (value && typeof value === 'object') {
+    if (IsWrapped(value)) {
       const id = value[DataID]
       if (id) {
         const ck = `data:${id}`
@@ -263,7 +267,16 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   // reconcile 在 callback 中执行（runTarget 返回、listen_tags 弹出之后）：
   // 命中条目的就地数据写入会正常通知下游绑定，标量列表原位换值不再静默
   const reconcile = (order) => {
-    if (!order) return
+    if (!order || tornDown) return
+    // 仍需 collect/比较 O(n)，但等价结果不建立 Set、不写行 scope、不动 DOM。
+    if (previousOrder && order.length === previousOrder.length && order.every((item, i) => {
+      const prev = previousOrder[i]
+      return item.key === prev.key && Object.is(item.value, prev.value)
+    })) {
+      perfStats.vforNoops++
+      return
+    }
+    perfStats.vforReconciles++
     const keep = new Set()
     const seen = Object.create(null)
     order.forEach(item => {
@@ -293,6 +306,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
       }
       if (!entry) {
         compileStats.vforLines++
+        perfStats.vforRowsCreated++
         const itemStart = document.createComment('~vitem')
         const itemEnd = document.createComment('~/vitem')
         insertBefore([itemStart, itemEnd], refNode)
@@ -328,6 +342,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
       moveItemBefore(entry.startMark, entry.endMark, refNode)
       refNode = entry.startMark
     }
+    previousOrder = order
   }
 
   // equality: null —— 数组原地变异（splice/shift/...）后列表引用不变，

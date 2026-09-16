@@ -28,6 +28,31 @@
 import { createGenToken } from './lifecycle.js'
 import { cancelConnected, whenConnected } from './connection.js'
 import { reportError } from './errors.js'
+import { perfStats } from './perf-stats.js'
+
+// 独立闭包只捕获可清空的 task，不捕获用户 fn。即使宿主仍保留已取消的
+// 浏览器回调，clear/dispose 后也不会继续保留业务数据或执行用户代码。
+function scheduledCallback(scope, tasks, task, counter, repeat) {
+  return (...args) => {
+    if (scope.phase === 'disposed' || !task.fn) return
+    const fn = task.fn
+    if (!repeat) {
+      tasks.delete(task.id)
+      task.fn = null
+      perfStats[counter]--
+    }
+    fn(...args)
+  }
+}
+
+function cancelTask(tasks, id, counter, cancel) {
+  const task = tasks.get(id)
+  if (!task) return
+  tasks.delete(id)
+  task.fn = null
+  perfStats[counter]--
+  cancel(id)
+}
 
 function runGuarded(fn, host, reason) {
   try {
@@ -56,8 +81,9 @@ export class ComponentScope {
   constructor(host = null) {
     this.host = host
     this.cleanups = new Set()
-    this.timers = new Set()
-    this.intervals = new Set()
+    this.timers = new Map()
+    this.intervals = new Map()
+    this.frames = new Map()
     this.lifecycle = { mount: [], active: [], deactive: [], dispose: [] }
     this.phase = 'setup'
     this.active = false
@@ -129,25 +155,42 @@ export class ComponentScope {
   }
 
   setTimeout(fn, delay) {
-    if (this.phase === 'disposed') return null
-    const id = window.setTimeout(() => { this.timers.delete(id); fn() }, delay)
-    this.timers.add(id)
-    return id
+    if (this.phase === 'disposed' || typeof fn !== 'function') return null
+    const task = { fn, id: null }
+    task.id = window.setTimeout(scheduledCallback(this, this.timers, task, 'pendingTimeouts', false), delay)
+    this.timers.set(task.id, task)
+    perfStats.pendingTimeouts++
+    return task.id
   }
 
   setInterval(fn, delay) {
-    if (this.phase === 'disposed') return null
-    const id = window.setInterval(fn, delay)
-    this.intervals.add(id)
-    return id
+    if (this.phase === 'disposed' || typeof fn !== 'function') return null
+    const task = { fn, id: null }
+    task.id = window.setInterval(scheduledCallback(this, this.intervals, task, 'pendingIntervals', true), delay)
+    this.intervals.set(task.id, task)
+    perfStats.pendingIntervals++
+    return task.id
+  }
+
+  requestAnimationFrame(fn) {
+    if (this.phase === 'disposed' || typeof fn !== 'function') return null
+    const task = { fn, id: null }
+    task.id = window.requestAnimationFrame(scheduledCallback(this, this.frames, task, 'pendingFrames', false))
+    this.frames.set(task.id, task)
+    perfStats.pendingFrames++
+    return task.id
   }
 
   clearTimeout(id) {
-    if (this.timers.has(id)) { this.timers.delete(id); window.clearTimeout(id) }
+    cancelTask(this.timers, id, 'pendingTimeouts', id => window.clearTimeout(id))
   }
 
   clearInterval(id) {
-    if (this.intervals.has(id)) { this.intervals.delete(id); window.clearInterval(id) }
+    cancelTask(this.intervals, id, 'pendingIntervals', id => window.clearInterval(id))
+  }
+
+  cancelAnimationFrame(id) {
+    cancelTask(this.frames, id, 'pendingFrames', id => window.cancelAnimationFrame(id))
   }
 
   // ---- 阶段迁移 ----
@@ -252,10 +295,9 @@ export class ComponentScope {
     const cleanups = Array.from(this.cleanups)
     this.cleanups.clear()
     for (const cleanup of cleanups) runGuarded(cleanup, context)
-    for (const id of this.timers) window.clearTimeout(id)
-    this.timers.clear()
-    for (const id of this.intervals) window.clearInterval(id)
-    this.intervals.clear()
+    for (const id of this.timers.keys()) this.clearTimeout(id)
+    for (const id of this.intervals.keys()) this.clearInterval(id)
+    for (const id of this.frames.keys()) this.cancelAnimationFrame(id)
     for (const handlers of Object.values(this.lifecycle)) handlers.length = 0
     this.watchQueue = null
     this._awaitingConnection = false

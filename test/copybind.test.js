@@ -132,13 +132,17 @@ test('golden-4 [REWRITTEN, old bug fixed]: unshift moves object entries without 
   assert.deepEqual([...p.list], ['HEAD', 'a', 'b'])
 })
 
-test('golden-4: two keys sharing one raw object stay data-synced', () => {
+test('golden-4: two keys sharing one raw object share identity and notifications', async () => {
   const shared = { n: 1 }
   const p = Wrap({ a: shared, b: shared })
-  // 现状：a/b 各自 wrap 出独立 proxy（后写覆盖 raw 上的 DataID），
-  // 但两者包裹同一 raw target —— 数据天然同步，通知通道分离
+  assert.equal(p.a, p.b)
+  let seen
+  const h = Watch(() => p.b.n, n => { seen = n })
   p.a.n = 5
+  await settle()
   assert.equal(p.b.n, 5, 'same raw target keeps data in sync across aliases')
+  assert.equal(seen, 5, 'writes through either alias notify readers')
+  Cancel(h)
 })
 
 // ====================================================================

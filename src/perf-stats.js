@@ -1,5 +1,15 @@
 // 只存数字，不保留节点、effect 或逐次日志。
 export const perfStats = {
+  proxyCreates: 0,
+  proxyCacheHits: 0,
+  vforReconciles: 0,
+  vforNoops: 0,
+  vforRowsCreated: 0,
+  vforRowsMoved: 0,
+  vforRowsDisposed: 0,
+  pendingFrames: 0,
+  pendingTimeouts: 0,
+  pendingIntervals: 0,
   disposalCandidates: 0,
   disposalPending: 0,
   disposalSchedules: 0,
