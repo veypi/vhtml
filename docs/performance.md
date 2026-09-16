@@ -64,6 +64,20 @@ npm run build
 
 ## 诊断与加载
 
-`window.__vhtml_dev.stats` 提供 liveHandles、dependencyEdges、dirty；`perfStats` 提供 disposalCandidates/Pending/Schedules/Flushes/Roots、templateCommentsRemoved/WhitespaceRemoved、textWrites/classWrites/styleWrites。R0–R3 又增加 proxyCreates/CacheHits、vforReconciles/Noops/RowsCreated/RowsMoved/RowsDisposed 和 pendingFrames/Timeouts/Intervals，详见 [实施报告](./performance-refactor-results.md)。它们只保存数字，不保存节点或逐 effect 日志；写入计数只记录渲染 DOM，CSS 解析器的临时声明不计入。
+以下字段位于 `window.__vhtml_dev`，用于性能排查，不属于应用应依赖的稳定 API。仅在调查编译、更新或回收开销时读取，业务代码不应据此作行为判断。
+
+| 字段 | 含义与判断方法 |
+| --- | --- |
+| `compileStats.nodeCompiles` / `nodeMs` | DOM 编译调用次数与累计耗时，辅助判断首屏或重建开销 |
+| `compileStats.codeCompiles` / `codeMs` | 表达式编译调用次数与累计耗时，包含缓存命中的调用 |
+| `compileStats.vforLines` | 新建列表行累计数量，复用行不增加 |
+| `stats.liveHandles` / `dependencyEdges` / `dirty` | 当前活跃订阅、依赖边及待处理订阅；反复挂载/销毁后，等待任务收尾再与预热基线比较。其他活跃视图或缓存可能让基线大于 0 |
+| `perfStats.vforNoops` / `vforReconciles` / `vforRowsCreated` / `vforRowsMoved` / `vforRowsDisposed` | 列表快路径、调和及行变动次数；相同列表重交应不创建、移动或销毁行，前插只创建新增行 |
+| `perfStats.pendingFrames` / `pendingTimeouts` / `pendingIntervals` | scope 当前托管任务数；完成或销毁后应回到基线，不统计绕过 `$scope` 注册的原生任务 |
+| `perfStats.textWrites` / `classWrites` / `styleWrites` | 实际渲染写入次数；输出未变时不增加。CSS 解析器的临时声明不计入 |
+
+`perfStats` 还包含代理创建/缓存命中、DOM 移除兜底队列及模板注释/空白移除统计。R0–R3 的验证结果见 [实施报告](./performance-refactor-results.md)。
+
+次数和耗时取同一交互前后的差值；活跃数量和 pending 值比较前后基线。这些统计只保存数字，不保存节点或逐 effect 日志，也不能代表浏览器总堆大小。回归需同时覆盖首次滚动/首次历史请求和已加载列表，避免仅验证缓存预热后的流畅度。
 
 代码更新后需要整页刷新一次来加载新框架；仅关闭/重开内部小窗口不会替换已经加载的框架模块。
