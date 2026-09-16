@@ -1,6 +1,6 @@
 ---
 name: vhtml
-description: vhtml browser-only HTML component framework user manual — components, script setup, bindings, props, URL prefix rules, ESM import, slots, refs, env.js, routes.js, vrouter, $data/$sys/$mod/$router, $t/$i18n, $bus, lifecycle scripts. Read this guide whenever a task involves vhtml pages, components, routing, i18n, or module-scoped concepts.
+description: Develop and troubleshoot pages and components with the browser-only vhtml framework. Use for vhtml templates, reactive state and list identity, lifecycle and resource cleanup, routing, module context, i18n, or rendering performance. Explains framework usage and its boundaries for application authors.
 ---
 
 # vhtml Frontend Guide
@@ -229,7 +229,7 @@ Static imports are supported; relative paths resolve against the component's own
 - `v-for` and `v-if` can coexist on the same node: `v-for` clones first, then `v-if` filters each clone.
 - All conditions in a `v-if` / `v-else-if` chain are evaluated to select a branch; only the selected body is cloned and compiled. Removed branch effects are canceled immediately, including pending dirty work. Keep condition expressions safe for every state; do not rely on an earlier condition to short-circuit later conditions.
 - `v-for` has **no `:key` attribute** — item identity is tracked automatically (objects by reference, primitives by position). A `:key` on a v-for node compiles as a plain inert attribute; delete it.
-- Reusing the same raw object across replacement arrays preserves its reactive identity, DOM and component instance. A newly allocated object is a new entity even when its business `id` matches. Aliases of the same object share field notifications; write through `$data`/reactive proxies, since direct raw writes bypass tracking. Function-source lists that return fresh raw rows retain their existing position-merge behavior.
+- Preserve item references when updating lists whose input or component state should survive; see [list identity](#v-for-item-identity-no-key) for replacement and function-source rules.
 - Always initialize list variables in `<script setup>`: `items = []`.
 
 ### Template whitespace and binding updates
@@ -238,7 +238,7 @@ Text and interpolation whitespace is preserved, including code indentation. Ordi
 
 `v-whitespace="compact"` explicitly opts a template subtree into removing whitespace-only text nodes containing line breaks. Single-line spaces between inline elements and NBSP remain. `pre/code/textarea/script/style`, inline styles that preserve whitespace, and `v-whitespace="preserve"` subtrees are protected. If a CSS class preserves whitespace, mark that subtree `v-whitespace="preserve"`; the template normalizer does not inspect external stylesheets. `no-vhtml`, foreign namespaces, and dynamic `v-html` contents are excluded from this normalization.
 
-Text, class and style bindings compare normalized output before writing DOM. Class bindings preserve static classes; style bindings support property removal, CSS variables, priorities and string/object switching. See [performance notes](docs/performance.md) for measurements and diagnostics.
+Text, class and style bindings compare normalized output before writing DOM. Class bindings preserve static classes; style bindings support property removal, CSS variables, priorities and string/object switching. These comparisons are automatic; application code does not need its own cache of the last rendered string or style.
 
 ## Script Types
 
@@ -281,9 +281,19 @@ Helpers available in all script types:
 </script>
 ```
 
-Only tasks registered through `$scope` are owned automatically; native `window` timers/rAF still need explicit cleanup. Deactivation does not dispose the scope or freeze data watchers. Use `active/deactive` to explicitly stop/restart work for cached views, or parent `v-if` when the view can be destroyed.
+Only tasks registered through `$scope` are owned automatically; bare/native timers and rAF still need explicit cleanup. Removing DOM alone cannot cancel a timer, disconnect an observer or unsubscribe an external service. Register the corresponding release function with `$scope.addCleanup`; already-owned resources do not need duplicate cleanup in `<script dispose>`. A manually released resource should have an idempotent cleanup, or its cleanup can be unregistered with `removeCleanup(fn)`.
 
 **Scope isolation:** each script block is its own scope — `const` / `let` / `function` declared in one block are **not** visible in any other block of the same file. Cross-block state must go through `$data` (bare assignment in setup) or a module singleton (`$mod.define` or an imported JS module).
+
+### Choosing visibility and lifetime
+
+| mechanism | what stays alive | application guidance |
+| --- | --- | --- |
+| `v-if="open"` | when false, the branch DOM, component instances and owned resources are disposed | use for an expensive view that can be recreated; its local state resets on the next mount |
+| `v-show="open"` / CSS hiding | DOM, component state, watchers and tasks remain | use when retaining the mounted view is intentional; hiding alone does not save this work |
+| cached route becomes inactive | component state and subscriptions remain; `deactive` runs | stop visible-only animation/polling in `deactive`, restart in `active`; dispose is the final release |
+
+For a disposable child, a parent condition such as `<heavy-panel v-if="panelOpen"></heavy-panel>` is enough; the child does not need its own visibility observer. Framework activation covers route state and document visibility, not arbitrary CSS hiding or a custom host's minimized state. A host that preserves hidden views should pass visibility explicitly and let those views stop their display work. Neither deactivation nor CSS hiding automatically freezes reactive subscriptions or cancels all `$scope` tasks.
 
 ### Disposal Contract
 
@@ -526,13 +536,15 @@ vhtml check --json               # findings as a JSON array (agent consumption)
 
 ## Reactivity Contract & Pitfalls
 
-Nested objects are reactive — no opt-in needed. Updates are batched: multiple writes within the same task collapse into one refresh. Writes made **during a watcher's own evaluation are ignored** (feedback-loop guard).
+Nested plain objects and arrays are reactive — no manual wrapping is needed in component data. Updates are batched: multiple writes within the same task collapse into one refresh. Keep watch getters and binding expressions free of writes: mutations made during dependency collection do not notify subscribers.
 
-**Change gate**: a watcher callback fires only when the value actually changed (`Object.is` comparison). Pass `{ equality: null }` to `$watch` for an always-run subscription. Known boundary: a template expression that returns a fresh reference on every evaluation (e.g. `items.filter(...)`) always passes the gate — avoid allocating inside template expressions.
+**Change gate**: a watcher callback fires only when the value actually changed (`Object.is` comparison). Pass `{ equality: null }` to `$watch` for an always-run subscription. A getter returning a fresh array/object on every evaluation passes this gate each time; return a scalar or stable reference when that expresses the dependency you need. `v-for` additionally compares the collected keys, order and values before updating rows.
 
 Dependencies follow the latest evaluation: switching `flag ? a : b` unsubscribes from the unused branch. Cancel is idempotent and immediately unlinks dependencies, pending work and retained callbacks/values; no further source mutation is needed to release an effect. Callbacks and equality comparators do not collect dependencies, including inside a nested watch.
 
-**Pure-replacement writes**: assigning to a reactive key replaces the value outright — no deep merge, and the new value gets a fresh identity (v-for position-keyed row reuse is the one exception — see below).
+**Shared identity**: within one runtime, aliases of the same ordinary raw object resolve to the same reactive object. Updating it through any reactive path notifies readers through the other paths, including other components. A raw object and its reactive wrapper are still different references; retaining a raw reference does not make writes through it reactive. Iteration locals and slot bindings have their own parent lookup context, while explicitly shared data remains shared.
+
+**Pure-replacement writes**: assignment replaces a value without deep merging. Reassigning the same object preserves identity; allocating another object creates a new identity even if its fields or business `id` match. Replacing an array while retaining its member objects keeps those objects' identities. Function-source list merging is a separate rendering behavior described below.
 
 **Array mutators**: all standard mutators (`push / pop / splice / shift / unshift / sort / reverse / copyWithin / fill`) are safe on reactive arrays; their notifications collapse into one refresh. In-place mutation keeps v-for row identity.
 
@@ -542,31 +554,40 @@ v-for tracks items automatically; there is no `:key` attribute (it compiles as a
 
 | list content | identity | update behavior |
 | ------------ | -------- | --------------- |
-| object items with stable references | the item itself | mutate fields → in-place patch, DOM kept · `list[i] = {...}` replaces the entry → destroyed & rebuilt · wholesale `list = [new objects]` → all entries destroyed & rebuilt (transient state like focus is lost) |
-| fresh objects without stable references (e.g. a function source like `v-for="tr in tracks()"`) | array position | same shape (equal top-level key set) → merged in place, DOM kept · shape change → entry destroyed & rebuilt |
+| ordinary objects in a reactive array/object | object reference, including the same raw object reused in a new array | field mutations patch the existing row; inserting/removing other items preserves this row; a newly allocated replacement rebuilds it even if the business `id` is equal |
+| fresh raw objects returned by a function source (e.g. `v-for="tr in tracks()"`) | array position | same shape (equal top-level key set) → merged in place, DOM kept · shape change → entry destroyed & rebuilt; returning existing reactive items instead preserves their object identity |
 | primitive items (string/number) | array position | value changes patch in place, DOM kept |
-| the same object twice in one list | — | both entries bind the same record; avoid |
+| the same object twice in one list | separate occurrences sharing one record | both rows render and receive shared field updates; repeated occurrences can reuse by position, so do not use them to represent independent editable records |
 
 Structural edits (insert / remove / reorder): either in-place mutators (`splice` / `unshift` / `sort`) or copy-then-assign (`slice()` / spread + assign back) — both are safe; kept items retain identity, so their DOM is preserved and physically re-ordered.
+
+For example, inside a component:
+
+```html
+<script setup>
+  rows = [{ id: 'a', text: 'First message' }]
+  prepend = page => { rows = [...page, ...rows] }
+  appendChunk = (id, chunk) => {
+    const row = rows.find(item => item.id === id) // read through reactive data
+    if (row) row.text += chunk
+  }
+</script>
+```
+
+The existing row survives `prepend`, and `appendChunk` updates its text in place. Mapping every retained item to `{ ...item }` creates new entities in a reactive list and discards row-local state. When a server snapshot represents existing entities, the application can match its business IDs and update those existing reactive objects; the framework does not perform that matching. No application-maintained proxy cache or internal identity field is needed for ordinary lists.
+
+### Large-list boundaries
+
+An equivalent list result skips row reconciliation and DOM writes, but collecting and comparing the list is still O(n). An ordinary `v-for` mounts every included row; it does not automatically virtualize, paginate, unload bodies or limit application caches. Filter out unwanted data before rendering when those rows should not exist. Long histories still need an explicit application rendering window and a cache policy; vhtml currently has no built-in virtual-list directive or helper. Offscreen rows removed by such a window lose their local component state, so keep any state that must survive on the retained data model.
 
 ### Other rules
 
 1. Mutating a nested object through a held **raw reference** (`const msg = {...}` then `msg.text = x`) bypasses reactivity — no update. Always write through the reactive path: `d.list[i].text = x`.
-2. For streaming/animation (typewriter, count-up): drive from top-level scalar `$data` props, not nested object fields; lists should be append-only immutable records.
-3. Writes from within a reactive evaluation (watchers, binding expressions) do not notify — mutate state from event handlers, timers, or rAF callbacks instead.
+2. Streaming can update an existing nested reactive field, as in `rows[i].text += chunk`. Keep retained records stable and avoid rebuilding or cloning the entire history for each chunk; append-only immutable records are not a framework requirement.
+3. Write from event handlers, watch callbacks, timers or rAF callbacks; keep watch getters and binding expressions read-only. A watch callback may write reactive data but must not create a feedback loop.
 4. A runaway feedback loop (a callback writing its own dependency every round) aborts after 10 rounds in one refresh, throwing an error — check `window.__vhtml_dev.cascadeErrors` for the effect chain.
 5. Errors are exposed, never silent: template compilation failures throw; a component that fails to mount renders a visible red `[vhtml] ... failed` placeholder instead of blank space; every compile/expression/mount error is recorded in `window.__vhtml_dev.errors` (newest last) with code preview and component location. Undefined identifiers read inside sandboxed code warn once per name (spelling check). Router page-load failure: in-app navigation keeps the current page and records the error; initial mount (no current page) commits a visible `[Load Error]` box page instead of rejecting the whole mount (white screen = visual silence) — route-level `error_redirect` overrides both.
-6. Only plain objects and arrays are proxied — `Node` / `Date` / `RegExp` / `Event` and class instances are already excluded. To keep a plain object raw (a large static structure, an object handed to a third-party library, or one compared by identity), set `__noproxy: true` on it and the reactive system returns it unproxied.
-
-#### Compile stats (`__vhtml_dev.compileStats`)
-
-Counters for compile-vs-render profiling: `nodeCompiles` / `nodeMs` (DOM-compile calls and self time), `codeCompiles` / `codeMs` (expression compiles, including cache hits), `vforLines` (new v-for rows).
-
-`__vhtml_dev.stats` also exposes `liveHandles`, `dependencyEdges` and `dirty`. `__vhtml_dev.perfStats` counts disposal candidates/pending/schedules/flushes/roots, template comment/whitespace removal and actual text/class/style writes. These counters retain no nodes or effects.
-
-## Debug
-
-`localStorage.debug = 1` enables verbose logs (router navigation, module loading). Warnings and errors always print regardless.
+6. Only plain objects and arrays are proxied — `Node` / `Date` / `RegExp` / `Event` and class instances are already excluded. To keep a plain object raw (a static structure or an object handed to a third-party library), set `__noproxy: true` before exposing it as reactive data. Reads inside that raw object are not tracked; use this only when its internal changes do not need reactive bindings.
 
 ## Example
 
