@@ -18,8 +18,7 @@ const configFile = "vhtml.config.json"
 // Config vhtml.config.json 的根结构。
 //
 // 配置加载遵循 vigo/flags 原生协议，优先级：flag > 环境变量 > 配置文件 > default 标签。
-// 已知限制：default 为 true 的 bool 字段（reload）无法经配置文件关闭，
-// 请用 --reload=false 或环境变量 RELOAD=false（flags 包默认值注册语义所致）。
+// false、0 和空字符串是有效的显式配置，不会被 default 标签覆盖。
 type Config struct {
 	Port   int                    `json:"port" desc:"dev server 监听端口" default:"3000" short:"p"`
 	Host   string                 `json:"host" desc:"dev server 监听地址" default:"127.0.0.1"`

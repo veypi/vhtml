@@ -8,6 +8,8 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"os"
 
 	"github.com/veypi/vhtml/cli/vhtml/i18n"
@@ -19,12 +21,9 @@ var version = "v0.10.1" // 与 package.json version 保持同步
 
 func main() {
 	cfg := &Config{I18n: i18n.DefaultConfig()}
-	// 配置文件必须先于 AutoRegister 加载：字段当前值会成为 flag 的默认值，
-	// 从而形成 flag > env > 配置文件 > default 标签 的优先级。
-	flags.LoadCfg(configFile, cfg)
-
 	cmd := flags.New("vhtml", "vhtml 命令行工具：零构建前端开发服务器 + i18n 管理\nversion: "+version)
 	cmd.AutoRegister(cfg)
+	cmd.ConfigFile(configFile)
 	cmd.Command = func() error { return serve(cfg) }
 
 	cmdServe := cmd.SubCommand("serve", "启动开发服务器（默认命令）：静态服务 ./ui + API 代理 + live reload")
@@ -47,7 +46,13 @@ func main() {
 	cmdCheck.AutoRegister(checkCfg)
 	cmdCheck.Command = func() error { return runCheck(cmdCheck, checkCfg) }
 
-	cmd.Parse()
+	if err := cmd.Parse(); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
+		logv.Error().Msg(err.Error())
+		os.Exit(2)
+	}
 	if err := cmd.Run(); err != nil {
 		logv.Warn().Msg(err.Error())
 		os.Exit(1)
