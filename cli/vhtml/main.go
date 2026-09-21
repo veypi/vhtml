@@ -27,7 +27,6 @@ func main() {
 	cmd.Command = func() error { return serve(cfg) }
 
 	cmdServe := cmd.SubCommand("serve", "启动开发服务器（默认命令）：静态服务 ./ui + API 代理 + live reload")
-	cmdServe.AutoRegister(cfg)
 	cmdServe.Command = func() error { return serve(cfg) }
 
 	i18n.Register(cmd.SubCommand("i18n", "国际化（i18n）管理"), &cfg.I18n, &cfg.UI)

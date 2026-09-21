@@ -52,22 +52,18 @@ var (
 )
 
 // Register 把 scan/add 子命令注册到 parent（`vhtml i18n`）下。
-// ui 为全局 -ui 配置指针：扫描入口直接复用，并在子命令上暴露 -ui flag 以便单次覆盖。
+// ui 为全局 -ui 配置指针：子命令经 flags 继承机制直接复用，无需重复注册。
 func Register(parent *flags.Flags, c *Config, ui *string) {
 	cfg = c
 	uiDir = ui
 
 	cmdScan := parent.SubCommand("scan", "扫描代码中的 i18n key，自动排序、清理并报告缺失")
-	cmdScan.StringVar(ui, "ui", *ui, "前端目录（i18n 扫描入口，同全局 -ui）")
-	cmdScan.AutoRegister(c)
-	cmdScan.AutoRegister(&scanOpts)
+	cmdScan.AutoRegister(c, &scanOpts)
 	cmdScan.Command = runScan
 
 	cmdAdd := parent.SubCommand("add", "添加翻译 key，接收 JSON 格式数据（管道/-json/位置参数）")
 	cmdAdd.AllowArgs()
-	cmdAdd.StringVar(ui, "ui", *ui, "前端目录（i18n 扫描入口，同全局 -ui）")
-	cmdAdd.AutoRegister(c)
-	cmdAdd.AutoRegister(&addOpts)
+	cmdAdd.AutoRegister(c, &addOpts)
 	cmdAdd.Command = func() error { return runAdd(cmdAdd) }
 }
 
