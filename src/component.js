@@ -219,6 +219,8 @@ export async function setupRef(dom, data, parentRuntime, target, instance, singl
         if (scope) return scope.queueWatch(register)
         return register()
       },
+      // $scope 与生命周期脚本同源（此前 setup 遗漏：setup 里调用读成 undefined 直接 TypeError）
+      $scope: setupScope,
     }, sandboxOptions)
     if (!token.alive(segTicket)) return originData
     inst = instanceOf(dom, false)
