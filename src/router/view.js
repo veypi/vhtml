@@ -111,7 +111,9 @@ export class RouterView {
   #disposeParamsSourceListener = null
   #currentPage = null
   #routerPrefix = ''
-  #routePathPrefix = ''
+  // 路由表空间（routes.js path_prefix，默认 vrouter 所属模块挂载点）；null = 路由表尚未加载，
+  // 与“已加载且空间就是根（''）”必须区分：导航前缀兜底要靠它判断能不能用路由表空间。
+  #routePathPrefix = null
   #routeComponentPrefix = ''
   #fixedParams = {}
   #modulePath = ''
@@ -198,7 +200,7 @@ export class RouterView {
   get navigation() { return this.#nav }
   get affectsDocument() { return this.#nav?.affectsDocument !== false }
   get prefix() { return this.#routerPrefix }
-  get path_prefix() { return this.#routePathPrefix }
+  get path_prefix() { return this.#routePathPrefix || '' }
   get component_prefix() { return this.#routeComponentPrefix }
   get fixed_params() { return { ...this.#fixedParams } }
   get current() { return this.instance.data }
@@ -289,8 +291,14 @@ export class RouterView {
     if (mod?.router_prefix !== undefined) {
       return { value: normalizeScoped(mod.router_prefix || ''), source: '$mod.router_prefix', raw: mod.router_prefix }
     }
-    const raw = resolveScope(runtime)
-    return { value: normalizeScoped(raw), source: '$mod.scoped', raw }
+    // 兜底 = 路由表空间：导航发生在宿主的 vrouter 里，落点必须存在于宿主路由表，
+    // 所以按注册路由用的 #routePathPrefix 解析，而不是发起方模块的挂载点。
+    // 用发起方 $mod.scoped 会让库组件（自己模块挂在别处，如 vhtml-ui 的 /v）
+    // 在宿主页面里 push 相对路径时拼成 /v/xxx → 匹配不上 → catch-all 404。
+    // 路由表尚未加载（挂载期先建 history）时退回 vrouter 自身模块挂载点，
+    // 与 reloadRoutes 里 path_prefix 的默认值同源。
+    const raw = this.#routePathPrefix === null ? resolveScope(runtime) : this.#routePathPrefix
+    return { value: normalizeScoped(raw || ''), source: '$router.path_prefix', raw }
   }
 
   resolveRouterPrefix(node, runtime) {
@@ -794,6 +802,31 @@ export class RouterView {
     }
   }
 
+  /**
+   * 重定向 / 守卫落点的导航选项。落点是写在路由表里的路径，属于路由表
+   * 自身的空间，所以不能原样沿用发起方的 options：
+   * - navigationPrefix：导航可能由别的模块里的组件发起（如宿主页面里的
+   *   vhtml-ui 侧栏），options.runtime 的 $mod.scoped 会把目标拼成
+   *   /<组件模块前缀>/<path>，落到 catch-all 变 404；改按注册路由用的
+   *   #routePathPrefix 解析。
+   * - preserveTargetPath：那是“URL 已提交、路径原样保留”的语义（挂载/popstate），
+   *   落点需要正常参与前缀解析。
+   * - commit：挂载与历史导航传的是 commit:false（地址栏已经对了，不重写），
+   *   沿用会让地址栏停在被重定向前的路径（页面已是落点、URL 还是原路径）。
+   */
+  #redirectOptions(options) {
+    return { ...options, navigationPrefix: this.#routePathPrefix || '', preserveTargetPath: false, commit: true }
+  }
+
+  /** 发起重定向 / 守卫落点导航：mode 继承本次导航（挂载与 popstate 用 replace，不留无效历史；点击用 push）。 */
+  #navigateRedirect(target, mode, options) {
+    const { path, data } = splitRouteTarget(target)
+    const redirectOptions = this.#redirectOptions(options)
+    this.#swallowNav(mode === 'replace'
+      ? this.replace(path, data, redirectOptions)
+      : this.push(path, data, redirectOptions))
+  }
+
   /** resolving 阶段：路由守卫与页面构建。返回 { page, fromCache, to, cacheKey } 或 null。 */
   async #stageNavigation(matchedRoute, mode, options, isCurrent) {
     const { route, params, query } = matchedRoute
@@ -804,8 +837,7 @@ export class RouterView {
         from: matchedRouteDebugInfo(matchedRoute),
         redirectTarget,
       })
-      const { path: redirectPath, data: redirectData } = splitRouteTarget(redirectTarget)
-      this.#swallowNav(this.push(redirectPath, redirectData, options))
+      this.#navigateRedirect(redirectTarget, mode, options)
       return null
     }
     const to = {
@@ -820,8 +852,7 @@ export class RouterView {
       const result = await this.#beforeEnter(to, this.current, (next) => {
         if (next) {
           shouldContinue = false
-          const { path: nextPath, data: nextData } = splitRouteTarget(next)
-          this.#swallowNav(this.push(nextPath, nextData, options))
+          this.#navigateRedirect(next, mode, options)
         }
       })
       if (!isCurrent()) return null

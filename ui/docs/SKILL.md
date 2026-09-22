@@ -448,8 +448,8 @@ Route record fields:
 - `:params` injects fixed values into `$router.params`, guard `to.params`, and `component(path, params)` functions; matched path params override same-key fixed params.
 - `history`: default = browser routing (`window.location` + `window.history`); `"memory"` = isolated virtual history starting at `initial`; any other value resolves a named history registered via `registerRouterHistory(name, history)`.
 - Multiple `<vrouter>` instances per page are allowed.
-- Navigation prefix priority: `$router.prefix` > initiating component `$mod.router_prefix` > initiating component `$mod.scoped`.
-- Route registration prefixes come from route-module `path_prefix` / `component_prefix`, not from `prefix`.
+- Navigation prefix priority: `$router.prefix` > initiating component `$mod.router_prefix` > the router's own route space (`path_prefix`, default = `$mod.scoped` of the module owning the `<vrouter>`). Relative navigation lands in the space of the router you navigate in, never in the initiating component's module scope: a library component mounted elsewhere (e.g. a sidebar from `/v`) pushing `/keys` inside a host router at root resolves to `/keys`, not `/v/keys`.
+- Route registration prefixes come from route-module `path_prefix` / `component_prefix`, not from `prefix`. Setting `prefix` without a matching `path_prefix` puts navigation and the route table in different spaces, so nothing matches.
 - `@/path` bypasses router normalization and resolves to `/path`; `http(s)://` links are not intercepted.
 - `<a>` is intercepted only when compiled under a RouterView runtime, with automatic `active` attribute on path match.
 - Virtual routers inject bare `location` / `history` into `$sys`; outside a virtual router those names fall through to `window`. Virtual histories do not update `document.title` (their resolved `title` only lands on the host element's `__title`).

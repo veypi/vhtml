@@ -208,7 +208,7 @@ $data → $mod → $sys → expose → execArgs → window
 
 routes 模块对象支持 `{ routes, path_prefix, component_prefix, beforeEnter, afterEnter }`。`path_prefix` 在注册 routes 时加到每个 `route.path` 前面，默认是 vrouter 所在 `$mod.scoped`，显式设为 `''` 表示不加路径前缀。`component_prefix` 在注册 routes 时加到 `route.component` 前面，默认不加。
 
-`vrouter[prefix]` / `vrouter[:prefix]` 只写入 `$router.router_prefix`，用于覆盖导航前缀，不参与 routes 注册。导航标准化优先级是 `$router.router_prefix > 发起方 $mod.router_prefix > 发起方 $mod.scoped`。
+`vrouter[prefix]` / `vrouter[:prefix]` 只写入 `$router.prefix`，用于覆盖导航前缀，不参与 routes 注册。导航标准化优先级是 `$router.prefix > 发起方 $mod.router_prefix > 路由表空间`：第三层兜底取的是本 vrouter 注册路由用的 `path_prefix`（默认 = vrouter 所属 `$mod.scoped`），而不是发起方组件自己模块的挂载点——在谁的 vrouter 里导航就落在谁的空间，所以宿主页面里的库组件（如挂在 `/v` 的 vhtml-ui 侧栏）push `/keys` 会解析成宿主的 `/keys`，而不是 `/v/keys`。注意只写 `prefix` 而 routes 不写对应 `path_prefix` 时，导航空间与路由表空间不一致，目标会匹配不上任何路由。
 
 静态资源的预处理和运行时动态绑定使用同一套规则：`/assets/logo.svg` 会解析为 `$mod.scoped + /assets/logo.svg`；`@/assets/logo.svg` 会解析为 `/assets/logo.svg`；`http://`、`https://` 和 `//` 地址保持原样。
 

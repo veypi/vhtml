@@ -67,10 +67,10 @@ $mod.define('double', 0, { get() { return this.count * 2 } })
 
 - **保留 `$mod.router_prefix` 层**：`aic/agents/env.js:11`（agentui 默认 env，go:embed 于 aic/agents/agentui.go）经 `$mod.define("router_prefix", $mod.scoped.replace("/agents", "/a"))` 本地遮蔽设置——agent UI 资源路径为 `/agents/{id}`（后端 agentui 服务），平台前端路由为 `/a/{id}`（routes.js `/a/:agent_id/i` → `/agents/{id}/index.html`），该映射是 agent UI 内 `$router.push('/i/xxx')` 落到 `/a/{id}/i/xxx` 的必要通道（code_anylse goReq/goTrace 活例，删除后 push 目标变 `/agents/{id}/...` 平台路由不匹配）。agent ui 页面自身不持有 `<vrouter>` 节点，平台 RouterView `#routerPrefix` 恒空——无法用「vrouter 声明」替代。
 - **删三处兜底 wrapper**（aic/aiv/rses env.js 的 `mod.router_prefix = mod.router_prefix || $mod.scoped`）：其真实语义是「把子模块导航前缀**压平为 aic 根 scoped（''）**」而非「同值兜底」（闭包 $mod 是 aic 根，不是被注入子模块）；agent env.js 覆盖在后不受影响；rses loadModule aiv 遗留路径同删。
-- **链条不变**：`<vrouter>` 元素声明（prefix 属性 / :prefix 绑定）→ `$mod.router_prefix`（显式设置者）→ `$mod.scoped` 兜底。view.js `resolveNavigationPrefixInfo` 保留三分支，只删 wrapper。
+- **链条（2026-09-22 修订）**：`<vrouter>` 元素声明（prefix 属性 / :prefix 绑定）→ 发起方 `$mod.router_prefix`（显式设置者）→ **路由表空间 `#routePathPrefix`** 兜底（原为发起方 `$mod.scoped`）。view.js `resolveNavigationPrefixInfo` 保留三分支，只删 wrapper。第三层换源理由：导航发生在宿主 vrouter 里，落点必须存在于宿主路由表；发起方是别的模块的组件时（vhtml-ui 侧栏在 vbase 页面里）按发起方挂载点拼前缀 → `/v/keys` → catch-all 404。`#routePathPrefix` 初值改 `null`（区分未加载与根空间），挂载期建 history 时退回 vrouter 自身模块挂载点。
 - getter `$router.router_prefix` 改名 **`$router.prefix`**（不留别名）：全仓无模板/组件读取，仅 view.js 内部 `#routerPrefix` 引用 + compiler-attrs.js×3 / anchor.js 的 `router?.router_prefix` 调试字段同步——低收益，可选做。
 - `vbase/ui/ico.html:150` 模板读取 `scoped = $mod.router_prefix || $mod.scoped`（第二段 script 用 parentScoped 覆盖）——迁移时按「组件宿主 scoped」核对行为。
-- `router.test.js` 补两层（vrouter 声明 / $mod.router_prefix）用例，agent 页面导航回归（/a/{id}/i 打开 agent UI + 内链）。
+- `router.test.js` 已补三层前缀 + `@` 逃生口 + 守卫落点用例（2026-09-22）；**仍待做**：agent 页面导航回归（/a/{id}/i 打开 agent UI + 内链，需 aic 环境）。
 
 ### C. addWrapper 移除 + 全量迁移面
 

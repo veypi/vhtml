@@ -237,7 +237,7 @@ projected content 使用调用方 runtime（`$data`/`$sys`/`$mod`），fallback 
 
 `vrouter[:params]` 用来注入固定 `$router.params`，页面运行时、路由守卫 `to.params` 和 `component(path, params)` 动态组件路径函数都能读取。固定参数不参与 URL 标准化或路由匹配；匹配得到的动态参数优先级更高，同名时覆盖固定参数。
 
-`vrouter[prefix]` / `vrouter[:prefix]` 只写入 `$router.router_prefix`，用于覆盖导航前缀，不参与 routes 注册。导航标准化优先级是 `$router.router_prefix > 发起方 $mod.router_prefix > 发起方 $mod.scoped`。
+`vrouter[prefix]` / `vrouter[:prefix]` 只写入 `$router.prefix`，用于覆盖导航前缀，不参与 routes 注册。导航标准化优先级是 `$router.prefix > 发起方 $mod.router_prefix > 路由表空间`（第三层 = 本 vrouter 的 `path_prefix`，默认 vrouter 所属 `$mod.scoped`）：导航发生在宿主的 vrouter 里，落点必须存在于宿主路由表，因此兜底不能取发起方组件自己模块的挂载点（库组件跨模块 push 会被拼成 `/<组件模块前缀>/xxx` → catch-all 404）。`prefix` 与 `path_prefix` 不一致时导航空间与路由表空间分岔，目标匹配不上。
 
 静态资源的预处理和运行时动态绑定使用同一套 `$mod.scoped` 前缀规则；`@`、`http://`、`https://` 和 `//` 地址不加 scoped 前缀。
 

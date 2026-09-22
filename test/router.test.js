@@ -3,7 +3,7 @@
  *
  * 覆盖 todo 回归重点：快速连续导航、不同 layout 间返回、缓存页跨 layout
  * 跳转、query-only 快速路径、dropPage、memory history（OS 多窗口形态）、
- * 页缓存 LRU 上限。
+ * 页缓存 LRU 上限、导航前缀三层语义（跨模块导航）。
  *
  * RouterView 经 <vrouter history="memory"> 挂载（renderer mountRouter →
  * $router.mountView），测试经 instanceOf(vr).runtime.$sys.$router 直取视图。
@@ -58,14 +58,17 @@ const ROUTES = [
   { path: '/z', component: '/pg/z', layout: 'alt' },
 ]
 
-async function createRouter(initial = '/a', routes = ROUTES, beforeEnter = null) {
+async function createRouter(initial = '/a', routes = ROUTES, beforeEnter = null, extra = {}) {
   window.__c = {}
   const host = document.createElement('div')
   const vr = document.createElement('vrouter')
   vr.setAttribute('history', 'memory')
   vr.setAttribute('initial', initial)
+  // extra.attrs → vrouter 元素属性（如 prefix）；其余键 → 路由模块字段（如 path_prefix）
+  const { attrs, ...sourceExtra } = extra
+  for (const [key, value] of Object.entries(attrs || {})) vr.setAttribute(key, String(value))
   host.appendChild(vr)
-  setRouterRoutesSource(vr, beforeEnter ? { routes, beforeEnter } : { routes })
+  setRouterRoutesSource(vr, { routes, ...(beforeEnter ? { beforeEnter } : {}), ...sourceExtra })
   document.body.appendChild(host)
   const app = new VHTML({ target: host, data: {} })
   await app.ready
@@ -476,5 +479,88 @@ test('vrouter title: onTitleChange 订阅随导航触发', async () => {
   await flush()
   assert.deepEqual(seen, ['Page Two'])
   off()
+  app.destroy()
+})
+
+// ---- 导航前缀（navigation prefix）三层语义 ----
+// 优先级：$router.prefix（vrouter[prefix] 实例声明）> 发起方 $mod.router_prefix（模块声明，
+// 唯一的动态前缀通道，如 agent UI /agents/{id} → /a/{id}）> 路由表空间（#routePathPrefix：
+// routes.js path_prefix，默认 = vrouter 所属模块挂载点）。
+// 回归重点：兜底必须是路由表空间而不是发起方模块挂载点——库组件（vhtml-ui 挂在 /v）
+// 在宿主页面（vbase 挂在根）里 push 相对路径时，按发起方拼前缀会得到 /v/xxx → catch-all 404。
+const libRuntime = (extra = {}) => ({ $mod: { scoped: '/v', ...extra } })
+
+test('navigation prefix: 跨模块 push 落在宿主路由空间，不带发起方 $mod.scoped', async () => {
+  const { app, host, view } = await createRouter('/a')
+  assert.equal(view.path_prefix, '', '路由空间默认 = vrouter 所属模块挂载点（根）')
+  const info = view.normalizeRouteTarget('/b', null, { runtime: libRuntime() })
+  assert.equal(info.navigationPrefix, '')
+  assert.equal(info.path, '/b')
+
+  await view.push('/b', null, { runtime: libRuntime() })
+  await flush()
+  assert.ok(host.querySelector('.pg-b'), 'page b mounted')
+  assert.equal(view.current.fullPath, '/b')
+  app.destroy()
+})
+
+test('navigation prefix: 兜底取 routes.js path_prefix（与发起方挂载点无关）', async () => {
+  const { app, view } = await createRouter('/panel/a', ROUTES, null, { path_prefix: '/panel' })
+  assert.equal(view.path_prefix, '/panel')
+  const info = view.normalizeRouteTarget('/b', null, { runtime: libRuntime() })
+  assert.equal(info.navigationPrefix, '/panel')
+  assert.equal(info.path, '/panel/b')
+
+  await view.push('/b', null, { runtime: libRuntime() })
+  await flush()
+  assert.equal(view.current.fullPath, '/panel/b')
+  app.destroy()
+})
+
+test('navigation prefix: 发起方 $mod.router_prefix 优先于路由空间（agent UI 动态前缀通道）', async () => {
+  const { app, view } = await createRouter('/panel/a', ROUTES, null, { path_prefix: '/panel' })
+  const info = view.normalizeRouteTarget('/b', null, { runtime: libRuntime({ router_prefix: '/a/ab12' }) })
+  assert.equal(info.navigationPrefix, '/a/ab12')
+  assert.equal(info.path, '/a/ab12/b')
+  app.destroy()
+})
+
+test('navigation prefix: vrouter[prefix] 实例声明优先于发起方与路由空间', async () => {
+  const { app, view } = await createRouter('/panel/a', ROUTES, null, {
+    path_prefix: '/panel', attrs: { prefix: '/panel' },
+  })
+  assert.equal(view.prefix, '/panel')
+  const info = view.normalizeRouteTarget('/b', null, { runtime: libRuntime({ router_prefix: '/x' }) })
+  assert.equal(info.navigationPrefix, '/panel')
+  assert.equal(info.path, '/panel/b')
+  app.destroy()
+})
+
+test('navigation prefix: @ 逃生口跳过全部前缀层（跨空间链接仍可用）', async () => {
+  const { app, view } = await createRouter('/panel/a', ROUTES, null, { path_prefix: '/panel' })
+  const info = view.normalizeRouteTarget('@/a', null, { runtime: libRuntime({ router_prefix: '/x' }) })
+  assert.equal(info.bypassRouterPrefix, true)
+  assert.equal(info.path, '/a')
+  app.destroy()
+})
+
+test('guard redirect: 守卫 next(path) 落在路由表空间，不继承发起方前缀', async () => {
+  const routes = [
+    { path: '/x', component: '/pg/x' },
+    { path: '/a', component: '/pg/a', meta: { deny: true } },
+    { path: '/b', component: '/pg/b' },
+  ]
+  const beforeEnter = (to, from, next) => {
+    if (to.meta?.deny) next('/b')
+    else next()
+  }
+  const { app, host, view } = await createRouter('/x', routes, beforeEnter)
+  await flush()
+  assert.ok(host.querySelector('.pg-x'), 'initial page mounted')
+
+  await view.push('/a', null, { runtime: libRuntime() })
+  await flush()
+  assert.ok(host.querySelector('.pg-b'), '守卫落点页面已渲染')
+  assert.equal(view.current.fullPath, '/b', '落点按路由空间解析，不是 /v/b')
   app.destroy()
 })
