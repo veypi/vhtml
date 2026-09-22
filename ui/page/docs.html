@@ -350,7 +350,7 @@
         <h1>{{ $t('docs.content.template.title') }}</h1>
         <h2>{{ $t('docs.content.template.interpolation') }}</h2>
         <p>{{ $t('docs.content.template.interpolationDesc') }}</p>
-        <pre><code>&lt;p&gt;{{ '{{ message }}' }}&lt;/p&gt;</code></pre>
+        <pre><code>&lt;p&gt;{{ interpSample }}&lt;/p&gt;</code></pre>
         <h2>{{ $t('docs.content.template.attrBinding') }}</h2>
         <p>{{ $t('docs.content.template.attrBindingDesc') }}</p>
         <pre><code>&lt;!-- 动态属性 --&gt;
@@ -367,7 +367,7 @@
         <h2>{{ $t('docs.content.template.list') }}</h2>
         <p>{{ $t('docs.content.template.listDesc') }}</p>
         <pre><code>&lt;div v-for="(item, index) in list"&gt;
-  {{ '{{ index }}' }}: {{ '{{ item.name }}' }}
+  {{ vforSample }}
 &lt;/div&gt;</code></pre>
         <h2>{{ $t('docs.content.template.classBinding') }}</h2>
         <p>{{ $t('docs.content.template.classBindingDesc') }}</p>
@@ -401,7 +401,7 @@
   greeting = () => 'Hello, ' + name
 &lt;/script&gt;
 
-&lt;p&gt;{{ '{{ double }}' }}&lt;/p&gt;</code></pre>
+&lt;p&gt;{{ computedSample }}&lt;/p&gt;</code></pre>
       </div>
 
       <!-- 事件处理 -->
@@ -434,7 +434,7 @@
   &lt;meta name="description" content="按钮组件" /&gt;
 &lt;/head&gt;
 &lt;body&gt;
-  &lt;button @click="handleClick"&gt;{{ '{{ label }}' }}&lt;/button&gt;
+  &lt;button @click="handleClick"&gt;{{ labelSample }}&lt;/button&gt;
 &lt;/body&gt;
 &lt;script setup&gt;
   label = 'Click'
@@ -526,7 +526,7 @@ export default async ($mod) => {
         <h2>{{ $t('docs.content.i18n.translate') }}</h2>
         <p>{{ $t('docs.content.i18n.translateDesc') }}</p>
         <pre><code>&lt;!-- 模板中 --&gt;
-&lt;h1&gt;{{ '{{ $t("home.title") }}' }}&lt;/h1&gt;
+&lt;h1&gt;{{ i18nSample }}&lt;/h1&gt;
 
 &lt;!-- 脚本中 --&gt;
 &lt;script&gt;
@@ -629,6 +629,14 @@ export default async ($mod) => {
       openGroups.push(group);
     }
   };
+
+  // 文档样例里要展示插值写法本身（{{ x }}）：在模板里嵌套写 {{ '{{ x }}' }} 会被插值
+  // 扇描按第一个 }} 收尾截断（得到 '{{ x' → 语法错误），所以样例文本放 setup 常量再插值。
+  interpSample = '{{ message }}';
+  vforSample = '{{ index }}: {{ item.name }}';
+  computedSample = '{{ double }}';
+  labelSample = '{{ label }}';
+  i18nSample = '{{ $t("home.title") }}';
 
   firstPageCode = `<!DOCTYPE html>
 <html>
