@@ -5,7 +5,14 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
-## [Unreleased]
+## [0.11.2] - 2026-09-22
+
+### 变更（破坏性）
+- **导航前缀兜底改为路由表空间**：`resolveNavigationPrefixInfo` 第三分支从「发起方 `$mod.scoped`」改为「`#routePathPrefix`（routes.js `path_prefix`，默认 = vrouter 所属模块挂载点）」，source 标记 `$router.path_prefix`。`#routePathPrefix` 初值由 `''` 改 `null` 以区分「路由表尚未加载」与「空间就是根」（getter 仍返回 `''`）；未加载时（挂载期先建 history）退回 vrouter 自身模块挂载点，与 `reloadRoutes` 的 `path_prefix` 默认值同源。修复跨模块导航：库组件（vhtml-ui 侧栏，模块挂在 `/v`）在宿主（vbase，挂在根）的 vrouter 里 push 相对路径被拼成 `/v/keys` → catch-all 404。三层优先级链不变：`$router.prefix`（实例声明）> 发起方 `$mod.router_prefix`（模块声明，agent UI `/agents/{id}` → `/a/{id}` 的唯一动态通道）> 路由表空间。
+- **重定向 / 守卫落点按路由表空间解析**：新增 `#redirectOptions` / `#navigateRedirect`，`route.redirect` 与 `beforeEnter` 的 `next(path)` 不再原样继承发起方 options：`navigationPrefix` 取 `#routePathPrefix`（落点是写在路由表里的路径，属于路由表自身空间）、`preserveTargetPath: false`（落点要正常参与前缀解析）、`commit: true`（修正挂载期重定向后页面已换、地址栏停在原路径）。
+
+### 新增
+- **`router.test.js` 导航前缀三层用例**：跨模块 push 落在宿主路由空间（含 `path_prefix` 非根形态）、`$mod.router_prefix` 与 `vrouter[prefix]` 逐层优先、`@` 逃生口跳过全部前缀层、守卫落点不继承发起方前缀；`createRouter` 支持第四参（`attrs` → vrouter 属性，其余键 → 路由模块字段）。
 
 ## [0.11.1] - 2026-09-17
 
