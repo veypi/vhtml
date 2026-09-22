@@ -5,6 +5,11 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 并遵循 [语义化版本](https://semver.org/lang/zh-CN/spec/v2.0.0.html)。
 
+## [0.11.3] - 2026-09-23
+
+### 变更
+- 维护性发版（无功能变更）：生态版本基线同步。
+
 ## [0.11.2] - 2026-09-22
 
 ### 变更（破坏性）
