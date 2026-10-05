@@ -30,6 +30,7 @@ vhtml serve -p 8080 --open
 - 静态服务 `./ui` 目录（直读磁盘，改动即生效）
 - 浏览器 HTML 请求 miss 时回退渲染 `ui/root.html`（SPA，`{{.scoped}}` = `""`）
 - `/vhtml/vhtml.min.js` 提供框架运行时（内嵌于二进制）；`--src` 切换为 src 模块直读（vhtml 框架自身调试用）
+- 框架 npm 依赖通过 `dist/vendor/` 预打包，源码模式也无需配置 import map。修改依赖或 `src/vendor/` 后，在 vhtml 仓库运行 `npm run build`；普通框架源码仍可直接刷新调试。
 - 文件变更经 SSE 推送 reload，脚本自动注入 root.html，对用户文件零侵入
 
 ### i18n

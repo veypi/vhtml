@@ -18,6 +18,16 @@ import { normalizeTemplate } from './template-normalize.js'
 
 const FETCH_TIMEOUT = 10000
 
+// Keep DOM/CSS references compact; descriptor URLs remain canonical for
+// caching, module boundaries and relative imports. Foreign origins stay distinct.
+function templateRef(source) {
+  const url = new URL(source, window.location.origin)
+  url.pathname = url.pathname.replace(/\.html$/, '')
+  return url.origin === window.location.origin
+    ? url.pathname + url.search + url.hash
+    : url.href
+}
+
 class ResourceLoader {
   loadedLinks = new Set()
   loadedStyles = new Set()
@@ -30,7 +40,7 @@ class ResourceLoader {
     this.loadedStyles.add(key)
     const style = document.createElement('style')
     style.textContent = text
-    style.setAttribute('vref', url)
+    style.setAttribute('vref', templateRef(url))
     document.head.appendChild(style)
   }
 
@@ -82,8 +92,8 @@ class ResourceLoader {
           assertCurrent?.()
           this.loadStyle(
             execution.render.scopeStyles(
-              vcss.parse(css, descriptor.url),
-              descriptor.url
+              vcss.parse(css, descriptor.ref),
+              descriptor.ref
             ),
             descriptor.url
           )
@@ -105,9 +115,11 @@ class ResourceLoader {
 // This parser never fetches dependencies, evaluates code or modifies the live document.
 class TemplateParser {
   parse(text, mod, url) {
+    const ref = templateRef(url)
     const doc = new DOMParser().parseFromString(text, 'text/html')
     const descriptor = {
       url,
+      ref,
       scoped: getModulePath(mod),
       mod,
       body: document.createElement('div'),
@@ -121,7 +133,7 @@ class TemplateParser {
     doc.querySelectorAll('style').forEach((node) => {
       descriptor.styles += node.hasAttribute('unscoped')
         ? node.textContent
-        : vcss.parse(node.textContent, url)
+        : vcss.parse(node.textContent, ref)
       node.remove()
     })
     for (const node of doc.querySelectorAll('script')) {
@@ -167,12 +179,12 @@ class TemplateParser {
         descriptor.body.setAttribute(attr.name, attr.value)
       else descriptor.customAttrs[attr.name] = attr.value
     }
-    descriptor.body.setAttribute('vref', url)
+    descriptor.body.setAttribute('vref', ref)
     normalizeTemplate(descriptor.body)
     const mark = (node) => {
       for (const child of (node.content || node).childNodes) {
         if (child.nodeType !== 1) continue
-        child.setAttribute('vrefof', url)
+        child.setAttribute('vrefof', ref)
         mark(child)
       }
     }
@@ -216,7 +228,7 @@ export class TemplateLoader {
     if (render) text = await render.html(text)
     assertCurrent?.()
     const descriptor = this.parser.parse(text, mod, url)
-    if (render) descriptor.styles = render.scopeStyles(descriptor.styles, url)
+    if (render) descriptor.styles = render.scopeStyles(descriptor.styles, descriptor.ref)
     return this.resourceLoader.prepare(descriptor, assertCurrent)
   }
 

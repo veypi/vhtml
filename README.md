@@ -216,6 +216,16 @@ RouterView 内部统一使用 `/` 开头的绝对路径。routes 表按 `path_pr
 
 路由调试通过浏览器端 `localStorage.debug` 开启。开启后会输出 prefix、routes 加载、push/replace 匹配、history 回放、a 标签拦截和页面组件加载路径。
 
+原生执行器的未定义变量告警会直接显示来源文件、变量名和相关代码，例如：
+
+```text
+[vhtml] Unknown identifier "filterType"
+  Source: http://localhost:4000/page/agents.html
+  Expression: filterType === 'mine'
+```
+
+控制台附带结构化详情（组件、当前数据键及检查提示），也可从 `window.__vhtml_dev.errors` 中筛选 `kind === 'identifier'`、`severity === 'warning'`。同来源、同变量、同代码片段去重，不同页面分别报告。长 setup 脚本优先展示包含该名称的候选片段（也可能命中注释或字符串）；`script line` 相对于执行脚本，不是 HTML 文件行号。已声明但值为 `undefined` 的变量不会告警。模板状态应使用 setup 裸赋值，`const/let` 留在脚本私有作用域；模块服务使用 `$mod`。
+
 虚拟路由会向子孙运行时注入 `location` 和 `history`，组件中直接访问 `location`/`history` 会优先命中所属 vrouter；不在虚拟 vrouter 内时会继续穿透到 `window.location`/`window.history`。
 
 也可以注册命名虚拟路由，让多个 RouterView 共享同一套内存历史：

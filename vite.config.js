@@ -6,13 +6,21 @@
  */
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { readdirSync } from 'node:fs';
 
 export default defineConfig({
   build: {
     lib: {
-      entry: resolve(__dirname, 'src/index.js'),
+      // Stable dependency entries also make the unbundled Go debug server
+      // browser-loadable, without a host application's import map or npm setup.
+      entry: {
+        vhtml: resolve(__dirname, 'src/index.js'),
+        ...Object.fromEntries(readdirSync(resolve(__dirname, 'src/vendor'))
+          .filter(name => name.endsWith('.js'))
+          .map(name => [`vendor/${name.slice(0, -3)}`, resolve(__dirname, 'src/vendor', name)]))
+      },
       name: 'vhtml',
-      fileName: () => 'vhtml.min.js',
+      fileName: (_format, name) => name === 'vhtml' ? 'vhtml.min.js' : `${name}.js`,
       formats: ['es']
     },
     rollupOptions: {

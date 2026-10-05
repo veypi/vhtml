@@ -48,8 +48,8 @@ var uifs embed.FS
 //go:embed src/*
 var srcfs embed.FS
 
-//go:embed dist/vhtml.min.js
-var vhtmljs string
+//go:embed dist/*
+var distfs embed.FS
 
 // 为引用该库的提供vhtml.js静态服务
 // 使用方法:
@@ -62,20 +62,13 @@ func init() {
 		x.Header().Set("vhtml-scoped", Router.String())
 		x.Header().Set("vhtml-debug", debug)
 	}
-	var lfs fs.FS
-	if debug != "" && current != "" {
-		Router.Get("vhtml.min.js", func(x *vigo.X) { _ = x.File(path.Join(utils.CurrentDir(0), "src", "index.js")) })
-		srcfs, _ := ufs.NewLocalFS(path.Join(current, "src"))
-		uifs, _ := ufs.NewLocalFS(path.Join(current, "ui"))
-		lfs = ufs.NewMultiFS(srcfs, uifs)
-	} else {
-		Router.Get("vhtml.min.js", func(x *vigo.X) {
-			x.Header().Set("content-type", "text/javascript; charset=utf-8")
-			_, _ = x.Write([]byte(vhtmljs))
-		})
-		srcfs, _ := ufs.NewEmbedFS(srcfs, "src")
-		uifs, _ := ufs.NewEmbedFS(uifs, "ui")
-		lfs = ufs.NewMultiFS(srcfs, uifs)
+	srcMode := debug != "" && current != ""
+	Router.Get("vhtml.min.js", MinJSHandler(srcMode))
+	if !srcMode {
+		current = ""
+	}
+	var lfs fs.FS = ufs.NewMultiFS(frameworkFS(srcMode, current), resourceFS(srcfs, "src", current), resourceFS(uifs, "ui", current))
+	if !srcMode {
 		Router.Get("/{path:*}", renderEnv, ufs.NewHandler(&lfs, ufs.WithSpa("root.html", nil, func() map[string]any { return map[string]any{"scoped": Router.String()} }), ufs.WithETagCache(embedETags(lfs))))
 		return
 	}
@@ -92,6 +85,7 @@ func init() {
 func SPAHandler(router vigo.Router, uiFS embed.FS, args ...string) func(*vigo.X) {
 	return spaHandler(router, uiFS, utils.CurrentDir(1), args...)
 }
+
 // SpaConfig 导出 SPA 壳的 ufs.WithSpa 三元配置（壳文件名、壳内容、scoped 注入
 // resolver），供需要"文件优先 + 目录/缺失对浏览器导航成壳"协商语义的 UFS handler
 // 直接挂载（如 aic /fs/cloud 文件服务：文件直出不变；目录/缺失的导航回落壳，raw

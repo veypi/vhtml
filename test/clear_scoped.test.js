@@ -85,10 +85,56 @@ test('scoped clearing releases matching styles and their deduplication entries',
   resources.loadStyle('.a{color:red}', T)
   resources.loadStyle('.b{color:blue}', OTHER)
   loader.clearScoped('/skills/local/a')
-  assert.deepEqual([...document.head.querySelectorAll('style[vref]')].map(node => node.getAttribute('vref')), [OTHER])
+  assert.deepEqual([...document.head.querySelectorAll('style[vref]')].map(node => node.getAttribute('vref')), ['/other/b'])
   resources.loadStyle('.a{color:red}', T)
   resources.loadStyle('.b{color:blue}', OTHER)
   assert.equal(document.head.querySelectorAll('style[vref]').length, 2)
+})
+
+test('compact DOM references preserve canonical sources and distinguish foreign origins', async () => {
+  respond = url => url.pathname.endsWith('/env.js') ? response(url) : new Response(
+    '<head><style>body{color:red}.label{color:blue}</style></head><body><span class="label">ok</span><template><b>nested</b></template><script setup>value = 1</script></body>',
+    { headers: { 'vhtml-scoped': '/pkg' } }
+  )
+  const localURL = 'http://localhost/pkg/page.html?v=1'
+  const foreignURL = 'https://cdn.example.com/pkg/page.html?v=1'
+  const local = await loader.fetchUI(localURL)
+  const foreign = await loader.fetchUI(foreignURL)
+  assert.equal(local.url, localURL)
+  assert.equal(local.setup.source, localURL)
+  assert.equal(local.body.getAttribute('vref'), '/pkg/page?v=1')
+  assert.equal(local.body.querySelector('span').getAttribute('vrefof'), '/pkg/page?v=1')
+  assert.equal(local.body.querySelector('template').content.firstElementChild.getAttribute('vrefof'), '/pkg/page?v=1')
+  assert.match(local.styles, /\[vref="\/pkg\/page\?v=1"\]/)
+  assert.match(local.styles, /\[vrefof="\/pkg\/page\?v=1"\]/)
+  assert.equal(foreign.url, foreignURL)
+  assert.equal(foreign.body.getAttribute('vref'), 'https://cdn.example.com/pkg/page?v=1')
+  assert.equal(await loader.fetchUI('/pkg/page.html?v=1'), local)
+  loader.clearScoped('/pkg/page.html')
+  assert.equal(loader.scopeOf(localURL), null)
+  assert.equal(await loader.fetchUI(foreignURL), foreign)
+  assert.deepEqual([...document.head.querySelectorAll('style[vref]')].map(node => node.getAttribute('vref')), ['https://cdn.example.com/pkg/page?v=1'])
+})
+
+test('isolated inline and linked styles use the same compact reference as their host', async () => {
+  respond = url => {
+    if (url.pathname.endsWith('/env.js')) return response(url)
+    return new Response(url.pathname.endsWith('.css')
+      ? '.linked{color:blue}'
+      : '<head><style>.label{color:red}</style><link rel="stylesheet" href="/theme.css"></head><body><span class="label linked">ok</span></body>',
+    { headers: { 'vhtml-scoped': '/pkg', 'vhtml-unsafe': '1' } })
+  }
+  const descriptor = await loader.fetchUI('/pkg/page.html')
+  assert.equal(descriptor.body.getAttribute('vref'), '/pkg/page')
+  const styles = [...document.head.querySelectorAll('style[vref]')]
+  assert.equal(styles.length, 2)
+  for (const style of styles) {
+    assert.equal(style.getAttribute('vref'), '/pkg/page')
+    assert(style.textContent.includes('[vref="/pkg/page"]'))
+    assert(!style.textContent.includes('http://localhost'))
+  }
+  loader.clearScoped('/pkg/page.html')
+  assert.equal(document.head.querySelectorAll('style[vref]').length, 0)
 })
 
 test('scoped clearing rebuilds matching modules and aliases, preserving sibling modules', async () => {

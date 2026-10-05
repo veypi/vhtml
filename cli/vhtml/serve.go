@@ -41,7 +41,10 @@ func serve(cfg *Config) error {
 	// vhtml 框架运行时资源：/vhtml/vhtml.min.js + src 模块（--src 模式）
 	root.Extend("vhtml", vhtml.FrameworkRouter(cfg.Src))
 	// 兼容 root.html 以 {{.scoped}}/vhtml.min.js（scoped 为空）引用框架的场景
-	root.Get("vhtml.min.js", vhtml.MinJSHandler(cfg.Src))
+	root.Get("vhtml.min.js", func(x *vigo.X) {
+		// Keep relative imports (including build chunks) under the runtime router.
+		http.Redirect(x.ResponseWriter(), x.Request, "/vhtml/vhtml.min.js", http.StatusTemporaryRedirect)
+	})
 
 	// live reload
 	var hub *reloadHub

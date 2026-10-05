@@ -1,5 +1,4 @@
-import { newQuickJSWASMModuleFromVariant } from 'quickjs-emscripten-core'
-import variant from '@jitl/quickjs-singlefile-browser-release-sync'
+import { newQuickJSWASMModuleFromVariant, variant } from '../vendor/quickjs.js'
 import { prepareSource, expressionBody } from './source.js'
 import { createReactiveCore } from '../reactive-core.js'
 import { initializeRealm, createExecutionScope } from './realm.js'

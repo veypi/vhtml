@@ -3,8 +3,8 @@ import {
   templateElements,
   templateAttributes,
 } from './dom-schema.js'
-import { parse, parseFragment, serialize } from 'parse5'
-import * as css from 'css-tree'
+import { parse, parseFragment, serialize } from '../vendor/parse5.js'
+import * as css from '../vendor/css-tree.js'
 import { patchStyle, setBoundAttribute } from '../binding-values.js'
 import {
   HTML_NS,

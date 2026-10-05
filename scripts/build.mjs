@@ -19,7 +19,7 @@ import { readFileSync, writeFileSync, statSync, readdirSync } from 'node:fs'
 
 await build({ configFile: 'vite.config.js' })
 
-for (const file of readdirSync('dist').filter(name => name.endsWith('.js'))) {
+for (const file of readdirSync('dist', { recursive: true }).filter(name => name.endsWith('.js'))) {
   const out = `dist/${file}`
   const before = statSync(out).size
   const result = await minify(readFileSync(out, 'utf8'), {

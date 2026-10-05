@@ -1,5 +1,5 @@
-import { parse, parseExpressionAt } from 'acorn'
-import { full } from 'acorn-walk'
+import { parse, parseExpressionAt } from '../vendor/acorn.js'
+import { full } from '../vendor/acorn-walk.js'
 
 const syntax = {
   ecmaVersion: 'latest',

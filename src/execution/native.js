@@ -2,10 +2,46 @@ import { prepareSource } from './source.js'
 import { createExecutionScope } from './realm.js'
 import { parseImports, importModule, importNative } from '../imports.js'
 import { normalizeRoutesModule } from '../router/matcher.js'
-import { compileCode } from '../compile.js'
+import { compileCode, toPreview } from '../compile.js'
+import { recordError } from '../errors.js'
 
 const bindings = new WeakMap()
 const missed = new Set()
+const MAX_MISSED = 256
+
+function identifierCode(code, key) {
+  if (typeof code !== 'string') return ''
+  const lines = code.split('\n')
+  if (lines.length === 1) return toPreview(code)
+  // These are lines within the original script passed to the executor, not
+  // HTML file line numbers. Keep the relevant part of long setup scripts.
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`(^|[^\\p{ID_Continue}$])${escaped}(?![\\p{ID_Continue}$])`, 'u')
+  const matches = []
+  for (let i = 0; i < lines.length && matches.length < 3; i++) {
+    if (pattern.test(lines[i])) matches.push(`script line ${i + 1}: ${lines[i].trim()}`)
+  }
+  return toPreview(matches.join('\n') || code)
+}
+
+function reportMissing(key, data, runtime, diagnostic) {
+  if (typeof key !== 'string') return
+  const source = diagnostic.source || runtime.source || runtime.diagnostic?.vsrc || window.location.href
+  const code = identifierCode(diagnostic.code, key)
+  const identity = JSON.stringify([source, key, diagnostic.label, code])
+  if (missed.has(identity)) return
+  if (missed.size >= MAX_MISSED) missed.delete(missed.values().next().value)
+  missed.add(identity)
+  const hint = 'Check spelling and scope. Template state must be assigned in <script setup> (name = value); const/let stay private. Module services use $mod.'
+  const entry = recordError({
+    kind: 'identifier', severity: 'warning', identifier: key,
+    source, code, label: diagnostic.label || 'scope',
+    component: runtime.diagnostic ? { ...runtime.diagnostic } : undefined,
+    dataKeys: Object.keys(data || {}),
+    message: `Unknown identifier "${key}"`, hint,
+  })
+  console.warn(`[vhtml] Unknown identifier "${key}"\n  Source: ${source}\n  ${diagnostic.label || 'Scope'}: ${code || '(source unavailable)'}\n  ${hint}`, entry)
+}
 function platformValue(key) {
   const value = window[key]
   // Native methods requiring a Window receiver; constructors keep their identity.
@@ -13,21 +49,14 @@ function platformValue(key) {
   if (!bindings.has(value)) bindings.set(value, value.bind(window))
   return bindings.get(value)
 }
-export function nativeScope(data, runtime = {}, locals = {}) {
+export function nativeScope(data, runtime = {}, locals = {}, diagnostic = {}) {
   return createExecutionScope(
     data,
     runtime.$mod,
     runtime.$sys,
     locals,
     new Proxy(window, { get: (_target, key) => platformValue(key) }),
-    (key) => {
-      if (typeof key === 'string' && !missed.has(key)) {
-        missed.add(key)
-        console.warn(
-          `[vhtml] identifier "${key}" is not defined in data/$mod/$sys/window`
-        )
-      }
-    }
+    key => reportMissing(key, data, runtime, diagnostic)
   )
 }
 
@@ -103,7 +132,7 @@ export class NativeExecutor {
         ...locals,
         __vhtmlImport: (specifier, source) =>
           importModule(specifier, runtime, source),
-      })
+      }, { source: runtime.source || runtime.diagnostic?.vsrc || window.location.href, code, label: 'Expression' })
     )
   }
   async execute(
@@ -119,7 +148,7 @@ export class NativeExecutor {
         ...locals,
         __vhtmlImport: (specifier, source) =>
           importModule(specifier, runtime, source),
-      })
+      }, { source: source || runtime.source || runtime.diagnostic?.vsrc || window.location.href, code, label: 'Script' })
     )
   }
 }

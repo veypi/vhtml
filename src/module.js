@@ -282,6 +282,9 @@ export class ModuleContextManager {
     const { scoped } = entry
     const globals = this.globals
     return Object.freeze({
+      // Native env service guards share the same generation as define and $mod.
+      // Isolated env receives its own restricted context in ModuleExecutor.
+      globals,
       define: (key, value, options) => {
         this.assertCurrent(entry)
         const result = defineProperty(globals, key, value, options)

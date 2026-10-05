@@ -188,7 +188,7 @@ const server = http.createServer(async (req, res) => {
     )
     return
   }
-  if (/^\/dist\/[a-zA-Z0-9_.-]+\.js$/.test(path)) {
+  if (/^\/dist\/(?:vendor\/)?[a-zA-Z0-9_.-]+\.js$/.test(path)) {
     try {
       res.setHeader('Content-Type', 'text/javascript')
       res.end(await readFile(root + path))

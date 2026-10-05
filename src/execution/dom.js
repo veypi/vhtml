@@ -1,6 +1,6 @@
 import { createWeakHandles } from './handles.js'
 import { cssProperty } from './render-policy.js'
-import { parseFragment } from 'parse5'
+import { parseFragment } from '../vendor/parse5.js'
 import { instanceOf } from '../component-instance.js'
 import { moduleRecord } from './context.js'
 import { domSchema, htmlElements, templateAttributes } from './dom-schema.js'

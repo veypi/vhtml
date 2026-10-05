@@ -2,6 +2,8 @@
 
 ## Unreleased — 模块沙箱与运行时统一
 
+- 原生未定义标识符告警增加来源 URL、相关表达式/脚本片段、组件信息与检查提示，按来源和代码分别去重并限制去重记录数量；同步登记 `__vhtml_dev.errors`（`kind=identifier`、`severity=warning`）。异步 setup 回调保留原始脚本来源，脚本行号不冒充 HTML 行号。修复把合法 `undefined` 和已声明未赋值的全局属性误判成缺失变量。
+
 - 模板缓存合并为按 URL 登记的单记录，删除双 Map 和全局模板 epoch；修复局部清理误伤其他在途加载、依赖准备结束返回旧描述符及继续执行后续脚本的问题，保留 keepLive 语义。
 - env/routes/setup 静态与动态 import 共用原生加载、缓存穿透和超时入口；保留各入口的路径解析规则。
 - 删除无调用方的 mergeModulePatch、createScopeProxy 旧别名和仅测试使用的 loadEnv 分支；测试改走正常模块初始化路径。

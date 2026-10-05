@@ -19,7 +19,7 @@ export function createExecutionScope(
           return pool === data ? Reflect.get(target, key, receiver) : pool[key]
       }
       const value = platform[key]
-      if (value === undefined) missing?.(key)
+      if (value === undefined && !(key in platform)) missing?.(key)
       return value
     },
     set: (target, key, value, receiver) =>

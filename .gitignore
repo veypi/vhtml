@@ -112,3 +112,4 @@ coverage/
 .claude
 dist/*
 !dist/*.js
+!dist/vendor/

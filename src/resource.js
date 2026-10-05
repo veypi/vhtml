@@ -45,7 +45,7 @@ export function resourceKey(input, context) {
   return resourcesFor(context).resolve(input).href
 }
 
-// Cache invalidation compares canonical addresses, never a mixture of path forms.
+// Normalize both canonical cache keys and compact DOM style references.
 export function resourceMatcher(prefix) {
   if (!prefix || prefix === '/') return () => true
   const target = new URL(prefix, window.location.origin)
@@ -53,7 +53,7 @@ export function resourceMatcher(prefix) {
   const forms = path.endsWith('.html') ? [path, path.slice(0, -5)] : [path]
   return (key) => {
     if (typeof key !== 'string') return false
-    const url = new URL(key)
+    const url = new URL(key, window.location.origin)
     return (
       url.origin === target.origin &&
       forms.some(

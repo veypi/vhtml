@@ -21,6 +21,7 @@ await loadSrc()
 const { Wrap, Watch, Cancel } = await import('../src/reactive.js')
 const { Run } = await import('../src/sandbox.js')
 const { nativeScope } = await import('../src/execution/native.js')
+const { createExecutionScope } = await import('../src/execution/realm.js')
 const { errorLog } = await import('../src/errors.js')
 const { parseRef } = await import('../src/component.js')
 const { ComponentScope } = await import('../src/component-scope.js')
@@ -167,18 +168,76 @@ test('__vhtml_dev.errors exposes the registry', () => {
 })
 
 // ====================================================================
-// 5. 未命中标识符拼写警告（按 key 去重）
+// 5. 未命中标识符诊断（按来源、名称和代码去重）
 // ====================================================================
 
-test('missed identifier warns once per key', () => {
+test('declared undefined globals and built-in constants do not warn', () => {
   const cap = captureConsole()
-  Run('totallyMissingIdent', {})
-  Run('totallyMissingIdent + 1', {})
-  cap.restore()
-  const warns = cap.captured.warn
-    .flat()
-    .filter((s) => typeof s === 'string' && s.includes('totallyMissingIdent'))
-  assert.equal(warns.length, 1, 'deduped per identifier')
+  window.declaredUndefinedGlobal = undefined
+  try {
+    assert.equal(Run('undefined', {}), undefined)
+    assert.equal(Run('declaredUndefinedGlobal', {}), undefined)
+    assert.equal(Run('Infinity', {}), Infinity)
+    assert.ok(Number.isNaN(Run('NaN', {})))
+    assert.equal(cap.captured.warn.length, 0)
+  } finally {
+    delete window.declaredUndefinedGlobal
+    cap.restore()
+  }
+})
+
+test('execution scope distinguishes absent keys from present undefined values', () => {
+  const missing = []
+  const platform = Object.assign(Object.create({ inherited: undefined }), {
+    undefined, empty: undefined, zero: 0, no: false, nothing: null,
+  })
+  const scope = createExecutionScope({ local: undefined }, { module: undefined },
+    { system: undefined }, { lexical: undefined }, platform, key => missing.push(key))
+  for (const key of ['undefined', 'empty', 'inherited', 'local', 'module', 'system', 'lexical']) {
+    assert.equal(scope[key], undefined)
+  }
+  assert.equal(scope.zero, 0)
+  assert.equal(scope.no, false)
+  assert.equal(scope.nothing, null)
+  assert.deepEqual(missing, [])
+  assert.equal(scope.absentIdentifier, undefined)
+  assert.deepEqual(missing, ['absentIdentifier'])
+})
+
+test('missed identifier warns once per source and expression, and records useful context', () => {
+  const cap = captureConsole()
+  const runtime = { source: 'http://localhost/page/agents.html', diagnostic: { tag: 'div', vsrc: '/page/agents.html' } }
+  try {
+    Run('totallyMissingIdent', {}, runtime)
+    Run('totallyMissingIdent', {}, runtime)
+    Run('totallyMissingIdent + 1', {}, runtime)
+    Run('totallyMissingIdent', {}, { source: 'http://localhost/page/other.html' })
+    assert.equal(cap.captured.warn.length, 3, 'other expressions and pages remain visible')
+    const [message, detail] = cap.captured.warn[0]
+    assert.match(message, /page\/agents\.html/)
+    assert.match(message, /Expression: totallyMissingIdent/)
+    assert.equal(detail.identifier, 'totallyMissingIdent')
+    assert.deepEqual(detail.component, runtime.diagnostic)
+    assert.equal(detail.severity, 'warning')
+    assert.ok(errorLog.includes(detail))
+  } finally { cap.restore() }
+})
+
+test('late setup callbacks retain their script source and show the relevant code', async () => {
+  const { AsyncRun } = await import('../src/sandbox.js')
+  const cap = captureConsole()
+  const data = {}
+  try {
+    await AsyncRun(`${'// long setup\n'.repeat(40)}\nensurePage = () => unknownPageTotal`, data,
+      { source: 'http://localhost/ai/sessions.html', diagnostic: { vsrc: '/ai/sessions.html' } },
+      {}, 'http://localhost/ai/session-setup.js')
+    await Promise.resolve().then(data.ensurePage)
+    const [message, detail] = cap.captured.warn[0]
+    assert.match(message, /session-setup\.js/)
+    assert.match(detail.code, /script line 42: ensurePage = \(\) => unknownPageTotal/)
+    assert.equal(detail.component.vsrc, '/ai/sessions.html')
+    assert.equal(cap.captured.warn.length, 1)
+  } finally { cap.restore() }
 })
 
 // ====================================================================

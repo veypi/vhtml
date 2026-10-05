@@ -26,6 +26,11 @@ export function setupDom() {
   if (domReady) return
   domReady = true
   const win = new Window({ url: 'http://localhost/' })
+  // happy-dom omits these standard Window properties. Match browser lookup
+  // semantics, including their presence when the value itself is undefined.
+  for (const key of ['undefined', 'NaN', 'Infinity']) {
+    if (!(key in win)) Object.defineProperty(win, key, Object.getOwnPropertyDescriptor(globalThis, key))
+  }
   for (const key of GLOBAL_KEYS) {
     if (win[key] !== undefined) globalThis[key] = win[key]
   }
