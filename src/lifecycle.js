@@ -2,7 +2,7 @@
  * lifecycle.js — 生命周期脚本执行与代际令牌
  */
 import { watch } from './runtime-watch.js'
-import { AsyncRun, setCompileContext } from './sandbox.js'
+import { AsyncRun } from './sandbox.js'
 
 // ====================================================================
 // generation token — 异步挂载统一竞态契约（v0.10.1 阶段 5）
@@ -57,41 +57,45 @@ function createScriptContext(dom, inst, reason) {
   }
 }
 
-export function runScript(code, dom, inst, data, runtime, sandboxOptions = {}, reason) {
+export function runScript(code, dom, inst, data, runtime, reason, source) {
   const runtimeData = inst?.data || data || {}
   const activeRuntime = inst?.runtime || runtime || {}
   if (activeRuntime.$sys) {
     activeRuntime.$sys.$router = inst?.runtime?.$sys?.$router || null
   }
-  const options = inst?.unsafe ? { unsafe: true } : sandboxOptions
-  // 编译上下文仅覆盖本脚本的编译阶段（compileCode 在 AsyncRun 入口同步完成）
-  const restoreCompileCtx = setCompileContext({
-    tag: dom?.tagName?.toLowerCase() || '',
-    vref: dom?.getAttribute?.('vref') || '',
-    vsrc: dom?.getAttribute?.('vsrc') || '',
-  })
-  const pending = AsyncRun(code, runtimeData, activeRuntime, createScriptContext(dom, inst, reason), options)
-  restoreCompileCtx()
-  return pending
-    .catch((error) => {
-      // 运行期错误已由 sandbox executeAsyncFn 登记 + 报错；此处只接住编译错误（唯一 reject 来源）
-      const message = error?.message || String(error)
-      if (inst) inst._error = { kind: 'compile', message, code: code.trim().slice(0, 200) }
-      console.error('Lifecycle script error', {
-        vsrc: dom?.getAttribute?.('vsrc') || '',
-        vref: dom?.getAttribute?.('vref') || '',
-        scoped: activeRuntime?.$mod?.scoped || '',
+  const pending = AsyncRun(
+    code,
+    runtimeData,
+    activeRuntime,
+    createScriptContext(dom, inst, reason),
+    source
+  )
+  return pending.catch((error) => {
+    // 执行层已登记错误；生命周期边界只保存实例失败状态。
+    const message = error?.message || String(error)
+    if (inst)
+      inst._error = {
+        kind: error?.name === 'SyntaxError' ? 'compile' : 'expression',
         message,
-        stack: error?.stack || '',
-      })
-    })
+        code: code.trim().slice(0, 200),
+      }
+  })
 }
 
-export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime, sandboxOptions = {}) {
+export function registerScriptLifecycle(scriptNode, dom, inst, data, runtime) {
   // scriptNode 为解析期扁平化的纯数据记录：{ code, setup, active, deactive, dispose }
   const code = scriptNode.code
   const scope = inst?.scope
-  const run = (host, reason) => runScript(code, dom, inst, data, inst?.runtime || runtime, sandboxOptions, reason)
+  const run = (host, reason) =>
+    runScript(
+      code,
+      dom,
+      inst,
+      data,
+      inst?.runtime || runtime,
+      reason,
+      scriptNode.source
+    )
   if (scriptNode.active) {
     scope?.onActive(run)
     return

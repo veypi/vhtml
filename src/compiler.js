@@ -1,3 +1,4 @@
+import { moduleRecord } from './execution/context.js'
 /*
  * compiler.js — DOM 编译器
  * Copyright (C) 2024 veypi <i@veypi.com>
@@ -5,7 +6,14 @@
  * 结构指令和根节点分发。属性/事件编译在 compiler-attrs.js。
  */
 
-import { Wrap, IsWrapped, DataID, EnsureWrap, Cancel, mergeIntoProxy } from './reactive.js'
+import {
+  Wrap,
+  IsWrapped,
+  DataID,
+  EnsureWrap,
+  Cancel,
+  mergeIntoProxy,
+} from './reactive.js'
 import { Run } from './sandbox.js'
 import { compileAttrs, resolveComponentUrl } from './compiler-attrs.js'
 import { ComponentScope } from './component-scope.js'
@@ -14,7 +22,10 @@ import { compileStats, now } from './compile-stats.js'
 import { perfStats } from './perf-stats.js'
 import { preserveComment } from './template-normalize.js'
 import {
-  instanceOf, setInstance, metaOf, peekMeta,
+  instanceOf,
+  setInstance,
+  metaOf,
+  peekMeta,
   createInstance,
   disposeRuntimeSubtree,
   getNodeScope,
@@ -30,7 +41,7 @@ const vforRegex = /^\s*(?:\((\w+)\s*,\s*(\w+)\)|(\w+))\s+in\s+(.+?)\s*$/
 function getSourceNodes(dom) {
   if (dom.nodeName === 'TEMPLATE') {
     const source = dom.content || dom
-    return Array.from(source.childNodes).map(n => n.cloneNode(true))
+    return Array.from(source.childNodes).map((n) => n.cloneNode(true))
   }
   return [dom.cloneNode(true)]
 }
@@ -39,20 +50,23 @@ function getSourceNodes(dom) {
  * 结构源节点共享：源节点只读（仅用于 cloneNode），按内容全局共享，
  * 实现见 source-cache.js。避免每个实例化点各驻留一份模板克隆。
  */
-import { getSharedTemplateNodes, getSharedSourceCacheSize } from './source-cache.js'
+import {
+  getSharedTemplateNodes,
+  getSharedSourceCacheSize,
+} from './source-cache.js'
 export { getSharedSourceCacheSize }
 
 function getSharedSourceNodes(dom) {
   return getSharedTemplateNodes(
     dom.nodeName === 'TEMPLATE' ? 'h:' + dom.innerHTML : 'e:' + dom.outerHTML,
-    () => getSourceNodes(dom),
+    () => getSourceNodes(dom)
   )
 }
 
 /** 将一组节点按顺序插入到 refNode 之前（用 fragment 保持顺序） */
 export function insertBefore(nodes, refNode) {
   const frag = document.createDocumentFragment()
-  nodes.forEach(n => frag.appendChild(n))
+  nodes.forEach((n) => frag.appendChild(n))
   refNode.parentNode.insertBefore(frag, refNode)
 }
 
@@ -80,7 +94,9 @@ export function compileTextNode(dom, data, runtime, scope, cleanups) {
   const txt = dom.nodeValue
   if (!txt.includes('{{')) return
   const varRegex = /{{|}}/g
-  let match, nextStart = 0, start = -1
+  let match,
+    nextStart = 0,
+    start = -1
   const parts = []
   while ((match = varRegex.exec(txt)) !== null) {
     if (match[0] === '{{') {
@@ -94,19 +110,27 @@ export function compileTextNode(dom, data, runtime, scope, cleanups) {
     }
   }
   parts.push(txt.slice(nextStart))
-  if (!parts.some(part => typeof part === 'object')) return
+  if (!parts.some((part) => typeof part === 'object')) return
   // 一个文本节点一个 effect；最终字符串相等时不触碰 DOM。
-  const id = watch(runtimeScope, () => parts.map(part => {
-    if (typeof part === 'string') return part
-    let value = Run(part.expr, data, runtime)
-    if (typeof value === 'function') value = value()
-    else if (typeof value === 'object' && value) value = JSON.stringify(value)
-    return value
-  }).join(''), value => {
-    if (dom.nodeValue === value) return
-    dom.nodeValue = value
-    perfStats.textWrites++
-  })
+  const id = watch(
+    runtimeScope,
+    () =>
+      parts
+        .map((part) => {
+          if (typeof part === 'string') return part
+          let value = Run(part.expr, data, runtime)
+          if (typeof value === 'function') value = value()
+          else if (typeof value === 'object' && value)
+            value = JSON.stringify(value)
+          return value
+        })
+        .join(''),
+    (value) => {
+      if (dom.nodeValue === value) return
+      dom.nodeValue = value
+      perfStats.textWrites++
+    }
+  )
   if (cleanups) cleanups.push(() => Cancel(id))
 }
 
@@ -136,7 +160,7 @@ function removeVforItem(entry) {
   if (!entry) return
   perfStats.vforRowsDisposed++
   if (entry.textCleanups) {
-    entry.textCleanups.forEach(fn => fn())
+    entry.textCleanups.forEach((fn) => fn())
     entry.textCleanups = null
   }
   let n = entry.startMark.nextSibling
@@ -164,7 +188,7 @@ function moveItemBefore(itemStart, itemEnd, refNode) {
 }
 
 function normalizeVforIndex(key) {
-  return key === '0' ? 0 : (Number(key) || key)
+  return key === '0' ? 0 : Number(key) || key
 }
 
 function dedupeCacheKey(cacheKey, seen) {
@@ -214,7 +238,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     previousOrder = null
     parentScope?.removeCleanup(teardown)
     Cancel(watchId)
-    Object.keys(cache).forEach(key => {
+    Object.keys(cache).forEach((key) => {
       removeVforItem(cache[key])
       delete cache[key]
     })
@@ -248,10 +272,14 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     const bo = b !== null && typeof b === 'object'
     if (ao !== bo) return false
     if (!ao) return true
-    if (Array.isArray(a) || Array.isArray(b)) return Array.isArray(a) && Array.isArray(b)
+    if (Array.isArray(a) || Array.isArray(b))
+      return Array.isArray(a) && Array.isArray(b)
     const ka = Object.keys(a)
     const kb = Object.keys(b)
-    return ka.length === kb.length && ka.every(k => Object.prototype.hasOwnProperty.call(b, k))
+    return (
+      ka.length === kb.length &&
+      ka.every((k) => Object.prototype.hasOwnProperty.call(b, k))
+    )
   }
 
   // target 只负责求值与逐条读取（依赖注册期不做任何写入）：
@@ -259,9 +287,10 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const collect = () => {
     let items = Run(listExpr, data, runtime)
     if (typeof items === 'function') items = items()
-    if (typeof items === 'number') items = Array.from({ length: items }, (_, i) => i)
+    if (typeof items === 'number')
+      items = Array.from({ length: items }, (_, i) => i)
     if (!items) items = []
-    return Object.keys(items).map(key => ({ key, value: items[key] }))
+    return Object.keys(items).map((key) => ({ key, value: items[key] }))
   }
 
   // reconcile 在 callback 中执行（runTarget 返回、listen_tags 弹出之后）：
@@ -269,23 +298,30 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
   const reconcile = (order) => {
     if (!order || tornDown) return
     // 仍需 collect/比较 O(n)，但等价结果不建立 Set、不写行 scope、不动 DOM。
-    if (previousOrder && order.length === previousOrder.length && order.every((item, i) => {
-      const prev = previousOrder[i]
-      return item.key === prev.key && Object.is(item.value, prev.value)
-    })) {
+    if (
+      previousOrder &&
+      order.length === previousOrder.length &&
+      order.every((item, i) => {
+        const prev = previousOrder[i]
+        return item.key === prev.key && Object.is(item.value, prev.value)
+      })
+    ) {
       perfStats.vforNoops++
       return
     }
     perfStats.vforReconciles++
     const keep = new Set()
     const seen = Object.create(null)
-    order.forEach(item => {
-      item.ck = dedupeCacheKey(resolveCacheKey(item.key, item.value, seen), seen)
+    order.forEach((item) => {
+      item.ck = dedupeCacheKey(
+        resolveCacheKey(item.key, item.value, seen),
+        seen
+      )
       keep.add(item.ck)
     })
 
     // 移除过期条目
-    Object.keys(cache).forEach(key => {
+    Object.keys(cache).forEach((key) => {
       if (!keep.has(key)) {
         removeVforItem(cache[key])
         delete cache[key]
@@ -297,7 +333,12 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
     for (let i = order.length - 1; i >= 0; i--) {
       const { key, value, ck } = order[i]
       let entry = cache[ck]
-      if (entry && entry.data && ck.startsWith('unkeyed:') && !sameVforShape(entry.data[valueName], value)) {
+      if (
+        entry &&
+        entry.data &&
+        ck.startsWith('unkeyed:') &&
+        !sameVforShape(entry.data[valueName], value)
+      ) {
         // 位置键复用到不同形状的条目：不是同一条目，销毁重建而非 copyBind 合并——
         // 合并会先删旧键再通知，旧分支内的绑定会对错位数据瞬时求值（报错噪音）
         removeVforItem(entry)
@@ -311,7 +352,7 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
         const itemEnd = document.createComment('~/vitem')
         insertBefore([itemStart, itemEnd], refNode)
 
-        const clones = sourceNodes.map(n => n.cloneNode(true))
+        const clones = sourceNodes.map((n) => n.cloneNode(true))
         const itemData = createItemData(key, value)
 
         // 将 clone 插入 item 范围，再处理 v-if/v-else 链
@@ -328,7 +369,12 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
           }
         })
 
-        entry = { startMark: itemStart, endMark: itemEnd, data: itemData, textCleanups }
+        entry = {
+          startMark: itemStart,
+          endMark: itemEnd,
+          data: itemData,
+          textCleanups,
+        }
         cache[ck] = entry
       } else if (entry.data) {
         // 位置键复用：mergeIntoProxy 保持行身份（原 copyBind 的 merge 语义，
@@ -347,7 +393,10 @@ export function compileVfor(vfortxt, dom, data, runtime, ctx) {
 
   // equality: null —— 数组原地变异（splice/shift/...）后列表引用不变，
   // 变更门控（Object.is）会错误门掉，恒跑型订阅必须豁免
-  watchId = watch(parentScope, collect, reconcile, { equality: null, debug: `v-for ${vfortxt}` })
+  watchId = watch(parentScope, collect, reconcile, {
+    equality: null,
+    debug: `v-for ${vfortxt}`,
+  })
 }
 
 export function compileVif(nodes, data, runtime, ctx) {
@@ -358,13 +407,13 @@ export function compileVif(nodes, data, runtime, ctx) {
     if (!chain || chain.conds.length === 0) return
     const { conds, sourceBranches, startMark, endMark } = chain
 
-    const ifExpr = `[${conds.map(c => c === '' ? 'true' : `Boolean(${c})`).join(',')}].indexOf(true)`
+    const ifExpr = `[${conds.map((c) => (c === '' ? 'true' : `Boolean(${c})`)).join(',')}].indexOf(true)`
     let activeIndex = -1
 
     let branchTextCleanups = []
 
     function clearContent() {
-      branchTextCleanups.forEach(fn => fn())
+      branchTextCleanups.forEach((fn) => fn())
       branchTextCleanups = []
       let n = startMark.nextSibling
       while (n && n !== endMark) {
@@ -379,36 +428,47 @@ export function compileVif(nodes, data, runtime, ctx) {
       if (index < 0 || index >= sourceBranches.length) {
         return
       }
-      const clones = sourceBranches[index].map(n => n.cloneNode(true))
+      const clones = sourceBranches[index].map((n) => n.cloneNode(true))
       insertBefore(clones, endMark)
       const remaining = compileVif(clones, data, runtime, ctx)
-      remaining.forEach(n => {
+      remaining.forEach((n) => {
         if (n.nodeType === 1) {
           ensureStructuralBoundary(n, data, runtime)
           compileNode(n, data, runtime, ctx)
         } else if (n.nodeType === 3) {
-          compileTextNode(n, data, runtime, instanceOf(startMark.parentNode)?.scope, branchTextCleanups)
+          compileTextNode(
+            n,
+            data,
+            runtime,
+            instanceOf(startMark.parentNode)?.scope,
+            branchTextCleanups
+          )
         }
       })
     }
 
     const parentScope = instanceOf(startMark.parentNode)?.scope
-    const chainWatchId = watch(parentScope, () => Run(ifExpr, data, runtime), (targetIndex) => {
-      // 表达式求值失败（Run 捕获异常返回 undefined）时归一为 -1，
-      // 按无命中分支处理，避免非法下标进入 showBranch 崩溃中断整个 flush
-      if (typeof targetIndex !== 'number' || Number.isNaN(targetIndex)) targetIndex = -1
-      if (targetIndex === activeIndex) return
-      clearContent()
-      showBranch(targetIndex)
-      activeIndex = targetIndex
-    })
+    const chainWatchId = watch(
+      parentScope,
+      () => Run(ifExpr, data, runtime),
+      (targetIndex) => {
+        // 表达式求值失败（Run 捕获异常返回 undefined）时归一为 -1，
+        // 按无命中分支处理，避免非法下标进入 showBranch 崩溃中断整个 flush
+        if (typeof targetIndex !== 'number' || Number.isNaN(targetIndex))
+          targetIndex = -1
+        if (targetIndex === activeIndex) return
+        clearContent()
+        showBranch(targetIndex)
+        activeIndex = targetIndex
+      }
+    )
 
     // 标记扫尾连带取消：endMark 被外层区域拆除一并移除时，本链 watcher 随
     // 祖先 scope 存活即成僵尸（对脱落 endMark insertBefore 崩溃）；Cancel
     // 与 textCleanups 均幂等，与 scope dispose 路径并存安全
     metaOf(endMark).teardown = () => {
       Cancel(chainWatchId)
-      branchTextCleanups.forEach(fn => fn())
+      branchTextCleanups.forEach((fn) => fn())
       branchTextCleanups = []
     }
 
@@ -417,10 +477,17 @@ export function compileVif(nodes, data, runtime, ctx) {
 
   for (const node of nodes) {
     // 注释节点放行（包括我们的标记注释 ~vif, ~/vif）
-    if (node.nodeType !== 1) { result.push(node); continue }
+    if (node.nodeType !== 1) {
+      result.push(node)
+      continue
+    }
 
     // v-for 节点不参与 v-if 链
-    if (node.getAttribute('v-for')) { flushChain(); result.push(node); continue }
+    if (node.getAttribute('v-for')) {
+      flushChain()
+      result.push(node)
+      continue
+    }
 
     const vif = node.getAttribute('v-if')
     if (vif !== null) {
@@ -480,7 +547,7 @@ export function compileNode(dom, scopedData = {}, runtime, ctx, scope) {
   try {
     return compileNodeInner(dom, scopedData, runtime, ctx, scope)
   } finally {
-    compileStats.nodeMs += (now() - t0) - (compileStats.nodeMs - prevMs)
+    compileStats.nodeMs += now() - t0 - (compileStats.nodeMs - prevMs)
   }
 }
 
@@ -520,12 +587,19 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
       return
     }
     const src = dom.content || dom
-    const childs = compileVif(Array.from(src.childNodes), scopedData, activeRuntime, ctx)
+    const childs = compileVif(
+      Array.from(src.childNodes),
+      scopedData,
+      activeRuntime,
+      ctx
+    )
     dom.replaceWith(...childs)
     // 解包移除 template 自身：入口检查/分支边界可能已给它挂上 meta/实例，
     // 显式释放（子节点已移出，只清壳；无状态时幂等空转）
     disposeRuntimeSubtree(dom)
-    childs.forEach(c => compileNode(c, scopedData, activeRuntime, ctx, runtimeScope))
+    childs.forEach((c) =>
+      compileNode(c, scopedData, activeRuntime, ctx, runtimeScope)
+    )
     return
   }
 
@@ -538,19 +612,21 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
   if (nodeName.indexOf('-') !== -1) {
     let url = resolveComponentUrl(nodeName, activeRuntime)
     let singleMode = dom.hasAttribute('single')
-    ctx?.parseRef?.(url, dom, scopedData, activeRuntime, null, singleMode)
+    ctx
+      ?.parseRef?.(url, dom, scopedData, activeRuntime, { single: singleMode })
+      ?.catch(() => {})
     metaOf(dom).parsed = true
     return
   }
 
   if (dom.getAttribute(':vsrc')) {
-    if (activeRuntime?.__unsafe) {
-      console.warn('unsafe mode: :vsrc is blocked')
-      dom.removeAttribute(':vsrc')
-    } else {
+    {
       let code = dom.getAttribute(':vsrc')
       dom.removeAttribute(':vsrc')
-      let attrs = Array.from(dom.attributes).map(a => ({ name: a.name, value: a.value }))
+      let attrs = Array.from(dom.attributes).map((a) => ({
+        name: a.name,
+        value: a.value,
+      }))
       let oldChilds = Array.from(dom.childNodes)
       let currentVsrc = null
       watch(runtimeScope, () => {
@@ -567,12 +643,14 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
           return
         }
         currentVsrc = vsrc
-        Array.from(dom.attributes).forEach(a => dom.removeAttribute(a.name))
-        Array.from(dom.children).forEach(child => disposeRuntimeSubtree(child))
+        Array.from(dom.attributes).forEach((a) => dom.removeAttribute(a.name))
+        Array.from(dom.children).forEach((child) =>
+          disposeRuntimeSubtree(child)
+        )
         dom.innerHTML = ''
-        attrs.forEach(a => dom.setAttribute(a.name, a.value))
-        oldChilds.forEach(c => dom.appendChild(c.cloneNode(true)))
-        ctx?.parseRef?.(vsrc, dom, scopedData, activeRuntime, null, false)
+        attrs.forEach((a) => dom.setAttribute(a.name, a.value))
+        oldChilds.forEach((c) => dom.appendChild(c.cloneNode(true)))
+        ctx?.parseRef?.(vsrc, dom, scopedData, activeRuntime)?.catch(() => {})
         metaOf(dom).parsed = true
       })
     }
@@ -580,12 +658,13 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
   }
 
   if (dom.getAttribute('vsrc')) {
-    if (activeRuntime?.__unsafe) {
-      console.warn('unsafe mode: vsrc is blocked')
-      dom.removeAttribute('vsrc')
-    } else {
+    {
       let singleMode = dom.hasAttribute('single')
-      ctx?.parseRef?.(dom.getAttribute('vsrc'), dom, scopedData, activeRuntime, null, singleMode)
+      ctx
+        ?.parseRef?.(dom.getAttribute('vsrc'), dom, scopedData, activeRuntime, {
+          single: singleMode,
+        })
+        ?.catch(() => {})
       metaOf(dom).parsed = true
     }
     return
@@ -598,16 +677,36 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
     compileAttrs(dom, scopedData, activeRuntime, ctx)
     metaOf(dom).parsed = true
     let oldHTML = null
+    const renderPolicy = moduleRecord(activeRuntime)?.execution.render
+    let htmlVersion = 0
     watch(runtimeScope, () => {
       let innerHTML = Run(vhtmlCode, scopedData, activeRuntime)
       if (innerHTML === oldHTML) return
       oldHTML = innerHTML
-      Array.from(dom.children).forEach(child => disposeRuntimeSubtree(child))
-      dom.innerHTML = innerHTML
-      let childs = compileVif(Array.from(dom.childNodes), scopedData, activeRuntime, ctx)
-      for (let n of childs) {
-        compileNode(n, scopedData, activeRuntime, ctx, runtimeScope)
+      Array.from(dom.children).forEach((child) => disposeRuntimeSubtree(child))
+      const version = ++htmlVersion
+      const applyHTML = (safeHTML) => {
+        if (version !== htmlVersion || runtimeScope?.phase === 'disposed')
+          return
+        dom.innerHTML = safeHTML
+        let childs = compileVif(
+          Array.from(dom.childNodes),
+          scopedData,
+          activeRuntime,
+          ctx
+        )
+        for (let n of childs) {
+          compileNode(n, scopedData, activeRuntime, ctx, runtimeScope)
+        }
       }
+      if (renderPolicy)
+        renderPolicy
+          .html(innerHTML, { fragment: true, scripts: false })
+          .then(applyHTML)
+          .catch((error) =>
+            console.error('[vhtml] HTML binding rejected', error)
+          )
+      else applyHTML(innerHTML)
     })
     return
   }
@@ -627,7 +726,12 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
   // <select> 需要先编译子元素（option），再编译属性（v:value），
   // 否则 v:value 初始同步时 v-for 生成的 option 尚不存在，无法匹配选中项
   if (nodeName === 'select') {
-    const childs = compileVif(Array.from(dom.childNodes), scopedData, activeRuntime, ctx)
+    const childs = compileVif(
+      Array.from(dom.childNodes),
+      scopedData,
+      activeRuntime,
+      ctx
+    )
     for (const n of childs) {
       compileNode(n, scopedData, activeRuntime, ctx, runtimeScope)
     }
@@ -637,7 +741,12 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
   }
 
   compileAttrs(dom, scopedData, activeRuntime, ctx)
-  const childs = compileVif(Array.from(dom.childNodes), scopedData, activeRuntime, ctx)
+  const childs = compileVif(
+    Array.from(dom.childNodes),
+    scopedData,
+    activeRuntime,
+    ctx
+  )
   for (const n of childs) {
     compileNode(n, scopedData, activeRuntime, ctx, runtimeScope)
   }

@@ -15,6 +15,7 @@ import { createMemoryHistory, registerRouterHistory } from './router.js'
 import { warnObserverFallback } from './component-scope.js'
 import { perfStats } from './perf-stats.js'
 import { normalizeTemplate } from './template-normalize.js'
+import { moduleRecord } from './execution/context.js'
 
 class VHTML {
   static _globalStyled = false
@@ -25,9 +26,10 @@ class VHTML {
       target = options.target
       scoped = options.scoped || ''
     }
-    this._el = typeof target === 'string'
-      ? document.getElementById(target) || document.querySelector(target)
-      : target
+    this._el =
+      typeof target === 'string'
+        ? document.getElementById(target) || document.querySelector(target)
+        : target
 
     this._scoped = scoped || ''
     this._data = EnsureWrap(options.data || {})
@@ -42,7 +44,8 @@ class VHTML {
     // 拿到与内部一致的对象做 clearScoped/scopeOf（生产 bundle 与 debug src 图双形态
     // 同一实例；直接 import /vhtml/loader.js 在生产是另一份模块实例，清不到本缓存）
     this.templateLoader = templateLoader
-    this.ready = options.autoMount === false ? Promise.resolve(this) : this.mount()
+    this.ready =
+      options.autoMount === false ? Promise.resolve(this) : this.mount()
   }
 
   // ===================================================================
@@ -71,7 +74,25 @@ class VHTML {
 
     const mod = await templateLoader.getModule(this._scoped)
     this._runtime = createRuntimeContext(null, mod)
-    this._ctx.ensureBoundary(this._el, this._data, this._runtime)
+    const boundary = this._ctx.ensureBoundary(
+      this._el,
+      this._data,
+      this._runtime
+    )
+    const execution = moduleRecord(mod)?.execution
+    if (execution?.createData) {
+      this._el.innerHTML = await execution.render.html(this._el.innerHTML, {
+        fragment: true,
+        scripts: false,
+      })
+      this._data = execution.createData(
+        this._el,
+        boundary.scope,
+        this._runtime,
+        this._data
+      )
+      boundary.data = this._data
+    }
     this._ctx.compileNode(this._el, this._data, this._runtime, this._ctx)
 
     this._mounted = true
@@ -119,10 +140,16 @@ class VHTML {
   /**
    * 加载并挂载组件到指定 DOM 节点
    */
-  async parseRef(vsrc, dom, data = {}, runtime = {}, target = null, singleMode = false) {
+  async parseRef(vsrc, dom, data = {}, runtime = {}, options = {}) {
     if (!this._ctx) return
     data = EnsureWrap(data)
-    return this._ctx.parseRef(vsrc, dom, data, runtime, target, singleMode)
+    return this._ctx.parseRef(
+      vsrc,
+      dom,
+      data,
+      runtime?.[RUNTIME] ? runtime : this._runtime,
+      options
+    )
   }
 
   // ===================================================================
@@ -151,7 +178,12 @@ class VHTML {
   // ===================================================================
 
   _startObserver() {
-    const config = { attributes: false, childList: true, subtree: true, characterData: false }
+    const config = {
+      attributes: false,
+      childList: true,
+      subtree: true,
+      characterData: false,
+    }
     this._observer = new MutationObserver((mutationsList) => {
       this._collectRemoved(mutationsList)
     })
@@ -160,7 +192,8 @@ class VHTML {
 
   _collectRemoved(records) {
     for (const record of records) {
-      for (const node of record.removedNodes) this._scheduleDisposeNodeScope(node)
+      for (const node of record.removedNodes)
+        this._scheduleDisposeNodeScope(node)
     }
   }
 
@@ -177,7 +210,8 @@ class VHTML {
   }
 
   _scheduleDisposalFlush() {
-    if (this._moSuspended || this._disposeTask || !this._moPendingRemoved.size) return
+    if (this._moSuspended || this._disposeTask || !this._moPendingRemoved.size)
+      return
     const task = { frame: null, timer: null }
     this._disposeTask = task
     const drain = () => {
@@ -216,7 +250,10 @@ class VHTML {
       }
       if (covered) continue
       perfStats.disposalRoots++
-      if (disposeRuntimeSubtree(node, true) && (node.hasAttribute('vrefof') || node.hasAttribute('vref'))) {
+      if (
+        disposeRuntimeSubtree(node, true) &&
+        (node.hasAttribute('vrefof') || node.hasAttribute('vref'))
+      ) {
         warnObserverFallback(node)
       }
     }

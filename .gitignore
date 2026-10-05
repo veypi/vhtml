@@ -54,7 +54,8 @@ $RECYCLE.BIN/
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -110,4 +111,4 @@ node_modules/
 coverage/
 .claude
 dist/*
-!dist/vhtml.min.js
+!dist/*.js

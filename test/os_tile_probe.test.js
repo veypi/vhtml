@@ -43,7 +43,7 @@ bodyStyle = () => {
 }
 <\/script></html>`
 
-const fakeHeaders = { get: () => null, entries: () => [][Symbol.iterator]() }
+const fakeHeaders = new Headers()
 globalThis.fetch = async (url) => {
   const u = String(url)
   if (u.includes('/x/win.html')) return { ok: true, status: 200, headers: fakeHeaders, text: async () => childHtml }

@@ -11,27 +11,8 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Window } from 'happy-dom'
-
-const win = new Window({ url: 'http://localhost/' })
-
-for (const key of [
-  'Node', 'Element', 'HTMLElement', 'SVGElement',
-  'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement',
-  'Text', 'Comment', 'DocumentFragment',
-  'Event', 'CustomEvent', 'MutationObserver',
-  'NodeFilter', 'localStorage', 'getComputedStyle', 'history',
-]) {
-  if (win[key] !== undefined) globalThis[key] = win[key]
-}
-globalThis.window = win
-globalThis.document = win.document
-globalThis.requestAnimationFrame = win.requestAnimationFrame.bind(win)
-globalThis.cancelAnimationFrame = win.cancelAnimationFrame.bind(win)
-// happy-dom 不实现 dialog 方法；sandbox.js 加载期即引用，装桩即可（测试不调用）
-globalThis.alert = () => {}
-globalThis.prompt = () => ''
-globalThis.confirm = () => false
+import { setupDom } from './harness.js'
+setupDom()
 
 const { default: VHTML } = await import('../src/index.js')
 const { Wrap } = await import('../src/reactive.js')

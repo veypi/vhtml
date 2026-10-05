@@ -52,3 +52,108 @@ export function sameStyle(a, b) {
   }
   return true
 }
+
+// Shared by live native styles and the isolated policy's pending declaration.
+export function patchStyle(style, next, previous) {
+  let writes = 0
+  for (const key of previous.keys()) {
+    if (!next.has(key) && style.getPropertyValue(key)) {
+      style.removeProperty(key)
+      writes++
+    }
+  }
+  for (const [key, [value, priority]] of next) {
+    if (style.getPropertyValue(key) === value && style.getPropertyPriority(key) === priority)
+      continue
+    style.setProperty(key, value, priority)
+    writes++
+  }
+  return writes
+}
+
+export function setBoundAttribute(dom, key, value) {
+  if (typeof value === 'function') {
+    value = value()
+  }
+  // 属性名映射表
+  const propertyMap = {
+    htmlfor: 'htmlFor',
+    readonly: 'readOnly',
+    maxlength: 'maxLength',
+    minlength: 'minLength',
+    cellspacing: 'cellSpacing',
+    cellpadding: 'cellPadding',
+    rowspan: 'rowSpan',
+    colspan: 'colSpan',
+    tabindex: 'tabIndex',
+    usemap: 'useMap',
+    frameborder: 'frameBorder',
+    contenteditable: 'contentEditable',
+    spellcheck: 'spellcheck',
+    autocapitalize: 'autocapitalize',
+  }
+
+  // 需要使用 DOM 属性设置的属性
+  const domProperties = new Set([
+    'value',
+    'checked',
+    'selected',
+    'disabled',
+    'readOnly',
+    'maxLength',
+    'minLength',
+    'htmlFor',
+    'tabIndex',
+    'scrollTop',
+    'scrollLeft',
+    'scrollWidth',
+    'scrollHeight',
+    'clientWidth',
+    'clientHeight',
+    'offsetWidth',
+    'offsetHeight',
+    'style',
+    'dataset',
+  ])
+
+  // 布尔属性
+  const booleanAttributes = new Set([
+    'checked',
+    'selected',
+    'disabled',
+    'readonly',
+    'required',
+    'hidden',
+    'autofocus',
+    'multiple',
+    'novalidate',
+  ])
+
+  // 转换属性名
+  const lowerKey = key.toLowerCase()
+  const mappedKey = propertyMap[lowerKey] || key
+
+  // 设置属性的策略：
+  if (domProperties.has(mappedKey)) {
+    // DOM 属性
+    if (value === undefined) {
+      dom[mappedKey] = ''
+    } else {
+      dom[mappedKey] = value
+    }
+  } else if (booleanAttributes.has(lowerKey)) {
+    // 布尔属性
+    if (value) {
+      dom.setAttribute(lowerKey, '')
+    } else {
+      dom.removeAttribute(lowerKey)
+    }
+  } else {
+    // 其他属性使用 setAttribute
+    if (value === undefined) {
+      dom.removeAttribute(key)
+    } else {
+      dom.setAttribute(key, value)
+    }
+  }
+}

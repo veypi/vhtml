@@ -18,7 +18,9 @@
     "dev": "vite build --watch --mode development",
     "preview": "vite preview",
     "prepublishOnly": "npm run build",
-    "test": "node --max-old-space-size=1024 --test"
+    "test": "node --max-old-space-size=1024 --test",
+    "test:build": "node scripts/check-sandbox-build.mjs",
+    "test:browser": "node scripts/sandbox-server.mjs"
   },
   "keywords": [
     "javascript",
@@ -28,8 +30,17 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "axios": "1.12.2",
+    "chart.js": "4.5.1",
+    "d3": "7.9.0",
+    "dayjs": "1.11.13",
+    "echarts": "6.0.0",
     "happy-dom": "^20.11.2",
+    "jquery": "3.7.1",
+    "lodash": "4.17.21",
+    "marked": "16.3.0",
     "terser": "^5.19.0",
+    "three": "0.180.0",
     "vite": "^5.3.0"
   },
   "repository": {
@@ -38,5 +49,13 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "@jitl/quickjs-singlefile-browser-release-sync": "0.32.0",
+    "acorn": "8.15.0",
+    "acorn-walk": "8.3.4",
+    "css-tree": "3.1.0",
+    "parse5": "8.0.0",
+    "quickjs-emscripten-core": "0.32.0"
   }
 }

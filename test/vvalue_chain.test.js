@@ -34,6 +34,7 @@ const fixtures = {
 
 const origFetch = globalThis.fetch
 globalThis.fetch = async (url) => {
+  url = new URL(String(url), 'http://localhost').pathname
   const body = fixtures[String(url)] || '<html><body>not found</body></html>'
   return new Response(body, {
     status: fixtures[String(url)] ? 200 : 404,
@@ -141,7 +142,7 @@ test('R4: 动态字面量键 settings[\'app.name\'] 绑定正常', async () => {
 // R5: 含转义序列的字符串键必须回退旧语义（新 Function 求值），
 //     不得静默绑到错误的键上（如 'anb'/'a b'/'xny'）
 // ====================================================================
-test('R5: 含转义序列的字符串键回退旧语义（不静默绑错键）', async () => {
+test('R5: 静态属性路径支持转义字符串键', async () => {
   const nl = 'a\nb'
   const { app, host } = await mount(
     `<input class="esc" v:value="settings['a\\nb']" />`,
@@ -160,31 +161,10 @@ test('R5: 含转义序列的字符串键回退旧语义（不静默绑错键）'
 // ====================================================================
 // R6: __proto__ 链拒绝静态解析（回退旧语义），不得触发原型改写
 // ====================================================================
-test('R6: __proto__ 链不回退为静态路径（原型不被污染）', async () => {
-  const { app, host } = await mount(
-    '<input class="proto" v:value="obj.__proto__.x" />',
-    { obj: { a: 1 } },
-  )
-  const input = host.querySelector('input.proto')
-  await type(input, 'polluted')
-  // 写入应被拒绝或落在旧语义对象上；全局原型绝不能被改写
-  assert.equal(Object.prototype.x, undefined, 'Object.prototype 不得被污染')
-  assert.equal(app._data.obj?.x, undefined, 'obj 自身无 x 字段（__proto__ 不参与 getPath/setPath）')
-
-  app.destroy()
-})
-
-// ====================================================================
-// R7: 保留字/字面量作根标识符拒绝静态解析（旧语义为 warn 放弃）
-// ====================================================================
-test('R7: 保留字根标识符不静默绑定（v:value="true" 安全 no-op）', async () => {
-  const { app, host } = await mount(
-    '<input class="kw" v:value="true" />',
-    { data: {} },
-  )
-  const input = host.querySelector('input.kw')
-  await type(input, 'x')
-  assert.equal(app._data['true'], undefined, '不得绑定到 data["true"]')
-
-  app.destroy()
+test('invalid or dynamic binding paths fail explicitly without executing code', async () => {
+  const { bindingPath } = await import('../src/renderer.js')
+  for (const code of ['obj.__proto__.x', 'true', 'items[index]', 'getItem().value']) {
+    assert.throws(() => bindingPath(code, {}), /static property path/)
+  }
+  assert.equal({}.x, undefined)
 })

@@ -1,9 +1,11 @@
+import { resourceKey } from './resource.js'
+import { moduleRecord } from './execution/context.js'
 /*
  * compiler-attrs.js — 属性、事件和 URL 绑定编译
  */
 
 import { Wrap } from './reactive.js'
-import { classValue, styleValue, sameStyle } from './binding-values.js'
+import { classValue, styleValue, sameStyle, patchStyle, setBoundAttribute } from './binding-values.js'
 import { perfStats } from './perf-stats.js'
 import { Run } from './sandbox.js'
 import moduleContextManager from './module.js'
@@ -28,27 +30,17 @@ function ensureRefPool(data) {
   return data.$refs
 }
 
-const RESOURCE_URL_ATTRS = new Set(['href', 'src', 'srcset', 'poster', 'data', 'action', 'formaction'])
+const RESOURCE_URL_ATTRS = new Set([
+  'href',
+  'src',
+  'srcset',
+  'poster',
+  'data',
+  'action',
+  'formaction',
+])
 const ANCHOR_ROUTER_TARGET_ATTR = 'data-vhtml-router-href'
 const anchorRouteTargets = new WeakMap()
-
-function normalizePath(path, minDepth = 0) {
-  const segments = path.split('/').filter(s => s !== '')
-  const result = []
-  for (const seg of segments) {
-    if (seg === '.') continue
-    if (seg === '..') {
-      if (result.length > minDepth) result.pop()
-    } else {
-      result.push(seg)
-    }
-  }
-  return '/' + result.join('/')
-}
-
-function runtimeScoped(runtime) {
-  return runtime?.$mod?.scoped ?? runtime?.scoped
-}
 
 function debugAnchor(_runtime, router, message, detail = undefined) {
   logDebug('anchor', message, detail, {
@@ -69,21 +61,12 @@ function sanitizeUrl(url) {
   return url
 }
 
-function resolveScopedUrl(rawUrl, runtime, scoped) {
+function resolveResourceUrl(rawUrl, _dom, runtime) {
   if (!rawUrl || rawUrl.startsWith('#')) return rawUrl
-  rawUrl = sanitizeUrl(rawUrl)
-  if (rawUrl.startsWith('@')) return rawUrl.slice(1)
-  if (/^https?:\/\//.test(rawUrl)) return rawUrl
-  if (rawUrl.startsWith('//') || rawUrl.startsWith('blob:') || rawUrl.startsWith('data:')) return rawUrl
-  if (scoped === undefined) scoped = runtimeScoped(runtime)
-  if (scoped && isRelativeHref(rawUrl)) {
-    const minDepth = scoped.split('/').filter(s => s).length
-    if (rawUrl.startsWith('/') && (rawUrl === scoped || rawUrl.startsWith(`${scoped}/`))) {
-      return normalizePath(rawUrl, minDepth)
-    }
-    return normalizePath(scoped + (rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`), minDepth)
-  }
-  return rawUrl
+  const url = resourceKey(sanitizeUrl(rawUrl), runtime)
+  // Attribute spelling stays origin-relative; resource identity always stays absolute.
+  const origin = window.location.origin
+  return url.startsWith(origin + '/') ? url.slice(origin.length) : url
 }
 
 function isAnchorHref(dom, attrName) {
@@ -134,9 +117,10 @@ function readAnchorRouteTarget(dom) {
 function resolveAnchorHref(rawUrl, runtime, dom, options = {}) {
   rememberAnchorRouteTarget(dom, rawUrl, options.persistTarget)
   const router = runtime?.$sys?.$router
-  const resolved = (!router || typeof router.resolveHref !== 'function')
-    ? stripRouteEscape(rawUrl)
-    : router.resolveHref(rawUrl)
+  const resolved =
+    !router || typeof router.resolveHref !== 'function'
+      ? stripRouteEscape(rawUrl)
+      : router.resolveHref(rawUrl)
   debugAnchor(runtime, router, 'anchor href resolved', {
     phase: options.phase || 'unknown',
     rawUrl,
@@ -151,52 +135,55 @@ function resolveAnchorHref(rawUrl, runtime, dom, options = {}) {
   return resolved
 }
 
-function resolveStaticResourceUrl(rawUrl, _dom, runtime) {
-  return resolveScopedUrl(rawUrl, runtime)
-}
-
-function resolveDynamicResourceUrl(rawUrl, _dom, runtime) {
-  return resolveScopedUrl(rawUrl, runtime)
-}
-
 function resolveStaticUrlAttr(rawUrl, dom, attrName, runtime) {
   if (isAnchorHref(dom, attrName)) {
-    return resolveAnchorHref(rawUrl, runtime, dom, { persistTarget: true, phase: 'static-url-attr' })
+    return resolveAnchorHref(rawUrl, runtime, dom, {
+      persistTarget: true,
+      phase: 'static-url-attr',
+    })
   }
-  return resolveStaticResourceUrl(rawUrl, dom, runtime)
+  return resolveResourceUrl(rawUrl, dom, runtime)
 }
 
 function resolveDynamicUrlAttr(rawUrl, dom, attrName, runtime) {
   if (isAnchorHref(dom, attrName)) {
-    return resolveAnchorHref(rawUrl, runtime, dom, { phase: 'dynamic-url-attr' })
+    return resolveAnchorHref(rawUrl, runtime, dom, {
+      phase: 'dynamic-url-attr',
+    })
   }
-  return resolveDynamicResourceUrl(rawUrl, dom, runtime)
+  return resolveResourceUrl(rawUrl, dom, runtime)
 }
 
-function resolveSrcset(srcset, dom, runtime, resolver = resolveStaticResourceUrl) {
+function resolveSrcset(srcset, dom, runtime, resolver = resolveResourceUrl) {
   if (!srcset || typeof srcset !== 'string') return srcset
-  return srcset.split(',').map(entry => {
-    const trimmed = entry.trim()
-    const parts = trimmed.split(/\s+/)
-    if (parts.length > 0 && isRelativeHref(parts[0])) {
-      parts[0] = resolver(parts[0], dom, runtime)
-    }
-    return parts.join(' ')
-  }).join(', ')
+  return srcset
+    .split(',')
+    .map((entry) => {
+      const trimmed = entry.trim()
+      const parts = trimmed.split(/\s+/)
+      if (parts.length > 0 && isRelativeHref(parts[0])) {
+        parts[0] = resolver(parts[0], dom, runtime)
+      }
+      return parts.join(' ')
+    })
+    .join(', ')
 }
 
 function prepareUrlAttrs(dom, runtime) {
   if (!dom || dom.nodeType !== 1) return
-  RESOURCE_URL_ATTRS.forEach(attrName => {
+  RESOURCE_URL_ATTRS.forEach((attrName) => {
     if (dom.hasAttribute(`:${attrName}`)) {
       dom.removeAttribute(attrName)
       return
     }
     if (!dom.hasAttribute(attrName)) return
+    if (moduleRecord(runtime)?.meta.unsafe && !isAnchorHref(dom, attrName))
+      return
     const rawValue = dom.getAttribute(attrName)
-    const resolved = attrName === 'srcset'
-      ? resolveSrcset(rawValue, dom, runtime)
-      : resolveStaticUrlAttr(rawValue, dom, attrName, runtime)
+    const resolved =
+      attrName === 'srcset'
+        ? resolveSrcset(rawValue, dom, runtime)
+        : resolveStaticUrlAttr(rawValue, dom, attrName, runtime)
     dom.setAttribute(attrName, resolved)
   })
 }
@@ -204,7 +191,9 @@ function prepareUrlAttrs(dom, runtime) {
 export function prepareStaticUrlAttrs(root, runtime) {
   if (!root) return
   if (root.nodeType === 1) prepareUrlAttrs(root, runtime)
-  root.querySelectorAll?.('*')?.forEach(node => prepareUrlAttrs(node, runtime))
+  root
+    .querySelectorAll?.('*')
+    ?.forEach((node) => prepareUrlAttrs(node, runtime))
 }
 
 function syncAnchorActive(dom) {
@@ -241,7 +230,8 @@ function syncAnchorActive(dom) {
   })
   if (!router) {
     const currentHref = stripRouteEscape(target)
-    if (currentHref !== dom.getAttribute('href')) dom.setAttribute('href', currentHref)
+    if (currentHref !== dom.getAttribute('href'))
+      dom.setAttribute('href', currentHref)
     debugAnchor(runtime, router, 'anchor first compile skipped: no router', {
       target,
       hrefAfter: dom.getAttribute('href') || '',
@@ -249,8 +239,10 @@ function syncAnchorActive(dom) {
     return
   }
   const currentHref = router.resolveHref?.(target) || stripRouteEscape(target)
-  if (currentHref !== dom.getAttribute('href')) dom.setAttribute('href', currentHref)
-  const getTarget = () => anchorRouteTargets.get(dom) || dom.getAttribute('href')
+  if (currentHref !== dom.getAttribute('href'))
+    dom.setAttribute('href', currentHref)
+  const getTarget = () =>
+    anchorRouteTargets.get(dom) || dom.getAttribute('href')
   const unbind = bindAnchorRouter(dom, router, getTarget)
   scope?.addCleanup(unbind)
   const syncActive = () => syncRouterAnchor(dom, router)
@@ -267,6 +259,9 @@ function syncAnchorActive(dom) {
 
 export function compileAttr(dom, name, value, data, runtime, ctx) {
   const scope = instanceOf(dom)?.scope
+  const execution = moduleRecord(runtime)?.execution
+  const renderPolicy = execution?.render
+  const refValue = () => (execution?.dom ? execution.dom.value(dom) : dom)
   if (name.startsWith(':')) {
     const attrName = name.slice(1)
     if (isRouterRoutesBinding(dom, attrName)) {
@@ -291,18 +286,21 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
       // 名称变化时迁移挂载（旧 key 置 null），组件销毁时清理
       const refPool = ensureRefPool(data)
       if (refPool) {
+        const nodeRef = refValue()
         let currentName = null
         const unmountRef = () => {
-          if (currentName && refPool[currentName] === dom) refPool[currentName] = null
+          if (currentName && refPool[currentName] === nodeRef)
+            refPool[currentName] = null
           currentName = null
         }
         watch(scope, () => {
           const res = value ? Run(value, data, runtime) : data[attrName]
-          const nextName = res === null || res === undefined ? '' : String(res).trim()
+          const nextName =
+            res === null || res === undefined ? '' : String(res).trim()
           if (nextName === (currentName || '')) return
           unmountRef()
           if (nextName) {
-            refPool[nextName] = dom
+            refPool[nextName] = nodeRef
             currentName = nextName
           }
         })
@@ -311,14 +309,22 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
     } else {
       watch(scope, () => {
         let res = value ? Run(value, data, runtime) : data[attrName]
+        if (renderPolicy) {
+          renderPolicy
+            .attribute(dom, attrName, res, { binding: true })
+            .catch((error) =>
+              console.error('[vhtml] Attribute binding rejected', error)
+            )
+          return
+        }
         if (RESOURCE_URL_ATTRS.has(attrName) && res) {
           if (attrName === 'srcset') {
-            res = resolveSrcset(res, dom, runtime, resolveDynamicResourceUrl)
+            res = resolveSrcset(res, dom, runtime, resolveResourceUrl)
           } else {
             res = resolveDynamicUrlAttr(res, dom, attrName, runtime)
           }
         }
-        utils.SetAttr(dom, attrName, res)
+        setBoundAttribute(dom, attrName, res)
         if (isAnchorHref(dom, attrName)) {
           const router = instanceOf(dom)?.runtime?.$sys?.$router
           syncRouterAnchor(dom, router)
@@ -332,24 +338,21 @@ export function compileAttr(dom, name, value, data, runtime, ctx) {
     return true
   }
   if (name.startsWith('v:')) {
-    const args = ctx?.findLastAccess?.(value, data)
-    const ok = args && ((args.chain && args.root !== undefined) || (args.data && args.key))
-    if (ok) {
-      // bind 支持 { root, chain }（惰性路径链）与 { data, key }（旧语义 fallback）
-      return utils.BindInputDomValue(
-        dom, args,
-        (target, callback) => watch(scope, target, callback),
-        scope,
-      )
-    }
-    console.warn('not found variables in:' + value)
+    const args = ctx.bindingPath(value, data)
+    return utils.BindInputDomValue(
+      dom,
+      args,
+      (target, callback) => watch(scope, target, callback),
+      scope
+    )
   } else if (name === 'ref') {
     const refName = value?.trim?.() || ''
     const refPool = ensureRefPool(data)
     if (refName && refPool) {
-      refPool[refName] = dom
+      const nodeRef = refValue()
+      refPool[refName] = nodeRef
       scope?.addCleanup(() => {
-        if (refPool[refName] === dom) refPool[refName] = null
+        if (refPool[refName] === nodeRef) refPool[refName] = null
       })
     }
     return true
@@ -366,32 +369,46 @@ export function handleStyle(dom, attrName, value, data, runtime) {
   if (attrName === 'class') {
     const staticTokens = new Set(dom.classList)
     let previous = new Set()
-    watch(scope, () => classValue(evaluate()), normalized => {
-      const next = new Set(normalized ? normalized.split(' ') : [])
-      const remove = [...previous].filter(token => !next.has(token) && !staticTokens.has(token) && dom.classList.contains(token))
-      const add = [...next].filter(token => !dom.classList.contains(token))
-      if (remove.length) { dom.classList.remove(...remove); perfStats.classWrites++ }
-      if (add.length) { dom.classList.add(...add); perfStats.classWrites++ }
-      previous = next
-    })
+    watch(
+      scope,
+      () => classValue(evaluate()),
+      (normalized) => {
+        const next = new Set(normalized ? normalized.split(' ') : [])
+        const remove = [...previous].filter(
+          (token) =>
+            !next.has(token) &&
+            !staticTokens.has(token) &&
+            dom.classList.contains(token)
+        )
+        const add = [...next].filter((token) => !dom.classList.contains(token))
+        if (remove.length) {
+          dom.classList.remove(...remove)
+          perfStats.classWrites++
+        }
+        if (add.length) {
+          dom.classList.add(...add)
+          perfStats.classWrites++
+        }
+        previous = next
+      }
+    )
     return
   }
+  const renderPolicy = moduleRecord(runtime)?.execution.render
   let previous = new Map()
-  watch(scope, () => styleValue(evaluate(), dom.ownerDocument), next => {
-    for (const key of previous.keys()) {
-      if (!next.has(key) && dom.style.getPropertyValue(key)) {
-        dom.style.removeProperty(key)
-        perfStats.styleWrites++
-      }
-    }
-    // 对照实际声明：移除 shorthand 可能顺带清除仍需保留的 longhand。
-    for (const [key, [value, priority]] of next) {
-      if (dom.style.getPropertyValue(key) === value && dom.style.getPropertyPriority(key) === priority) continue
-      dom.style.setProperty(key, value, priority)
-      perfStats.styleWrites++
-    }
-    previous = next
-  }, { equality: sameStyle })
+  watch(
+    scope,
+    () => styleValue(evaluate(), dom.ownerDocument),
+    (next) => {
+      if (renderPolicy)
+        renderPolicy.styles(dom, next, previous).catch((error) =>
+          console.error('[vhtml] Style binding rejected', error)
+        )
+      else perfStats.styleWrites += patchStyle(dom.style, next, previous)
+      previous = next
+    },
+    { equality: sameStyle }
+  )
 }
 
 export function handleEvent(dom, name, value, data, runtime, ctx) {
@@ -420,7 +437,11 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
     }
     return
   }
-  if ((evt === 'keydown' || evt === 'keyup' || evt === 'keypress') && dom.tagName !== 'INPUT' && dom.tagName !== 'TEXTAREA') {
+  if (
+    (evt === 'keydown' || evt === 'keyup' || evt === 'keypress') &&
+    dom.tagName !== 'INPUT' &&
+    dom.tagName !== 'TEXTAREA'
+  ) {
     dom.setAttribute('tabindex', '0')
   }
   let func = (event) => {
@@ -428,7 +449,7 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
     if (typeof cb === 'function') cb(event)
   }
   let delayedTimer = null
-  actionName.slice(1).forEach(modifier => {
+  actionName.slice(1).forEach((modifier) => {
     if (modifier.startsWith('delay')) {
       let delay = modifier.slice(5)
       if (!delay) delay = 1000
@@ -467,7 +488,10 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
     ins: 'insert',
   }
   const listener = (event) => {
-    if (actionName.length > 1 && (evt === 'keydown' || evt === 'keyup' || evt === 'keypress')) {
+    if (
+      actionName.length > 1 &&
+      (evt === 'keydown' || evt === 'keyup' || evt === 'keypress')
+    ) {
       const rawKeyName = actionName[1]
       const keyName = KEY_ALIASES[rawKeyName] || rawKeyName
       if (keyName !== event.key?.toLowerCase()) return
@@ -485,18 +509,23 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
 }
 
 export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
-  Array.from(dom.attributes).forEach(attr => {
+  Array.from(dom.attributes).forEach((attr) => {
     if (compileAttr(dom, attr.name, attr.value, data, runtime, ctx)) {
       dom.removeAttribute(attr.name)
     }
   })
 
-  if (dom.nodeName === 'A') syncAnchorActive(dom)
+  if (dom.nodeName === 'A' && !moduleRecord(runtime)?.meta.unsafe)
+    syncAnchorActive(dom)
+  if (dom.nodeName === 'FORM' && moduleRecord(runtime)?.meta.unsafe)
+    instanceOf(dom)?.scope?.addEventListener(dom, 'submit', (event) =>
+      event.preventDefault()
+    )
 
   if (customAttrs) {
     const inst = instanceOf(dom, false)
     const d = inst?.data
-    Object.keys(customAttrs).forEach(key => {
+    Object.keys(customAttrs).forEach((key) => {
       compileAttr(dom, key, customAttrs[key], d, runtime, ctx)
     })
   }
@@ -514,9 +543,13 @@ export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
 
 export function resolveComponentUrl(nodeName, runtime) {
   const mod = runtime?.$mod
+  if (moduleRecord(runtime)?.meta.unsafe)
+    return '/' + nodeName.split('-').join('/')
   const parts = nodeName.split('-')
   const firstSegment = parts[0]
-  const aliases = mod?.scoped ? moduleContextManager.getAliases(mod.scoped) : null
+  const aliases = mod?.scoped
+    ? moduleContextManager.getAliases(mod.scoped)
+    : null
   if (aliases?.[firstSegment]) {
     const aliasBase = aliases[firstSegment]
     const rest = parts.slice(1).join('/')

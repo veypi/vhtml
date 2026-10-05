@@ -135,18 +135,20 @@ test('module context: builtins locked, $mod.define bound, registry recorded', ()
   assert.ok(reg.some((r) => r.name === 'entry' && r.target === '/x'))
 })
 
-test('manager.define: writes globals, records $globals, warns outside env loading', () => {
+test('env context define writes globals and records its target', async () => {
   const manager = new ModuleContextManager()
+  await manager.getModule('/demo')
+  const entry = manager.modMap.get('/demo')
   const warnings = []
   const origWarn = console.warn
   console.warn = (msg) => warnings.push(String(msg))
   try {
-    manager.define('$g1', 42)
+    manager.environmentContext(entry).define('$g1', 42)
   } finally {
     console.warn = origWarn
   }
   assert.strictEqual(manager.globals.$g1, 42)
-  assert.ok(warnings.some((w) => w.includes('outside env.js loading')))
+  assert.equal(warnings.length, 0)
   assert.ok(window.__vhtml_dev.defines.some((r) => r.name === '$g1' && r.target === '$globals'))
 })
 

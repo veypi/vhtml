@@ -10,26 +10,8 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Window } from 'happy-dom'
-
-const win = new Window({ url: 'http://localhost/' })
-
-for (const key of [
-  'Node', 'Element', 'HTMLElement', 'SVGElement',
-  'HTMLInputElement', 'HTMLTextAreaElement', 'HTMLSelectElement',
-  'Text', 'Comment', 'DocumentFragment',
-  'Event', 'CustomEvent', 'MutationObserver',
-  'NodeFilter', 'localStorage', 'getComputedStyle', 'history',
-]) {
-  if (win[key] !== undefined) globalThis[key] = win[key]
-}
-globalThis.window = win
-globalThis.document = win.document
-globalThis.requestAnimationFrame = win.requestAnimationFrame.bind(win)
-globalThis.cancelAnimationFrame = win.cancelAnimationFrame.bind(win)
-globalThis.alert = () => {}
-globalThis.prompt = () => ''
-globalThis.confirm = () => false
+import { setupDom } from './harness.js'
+setupDom()
 
 const { default: VHTML } = await import('../src/index.js')
 const { metaOf, instanceOf } = await import('../src/component-instance.js')

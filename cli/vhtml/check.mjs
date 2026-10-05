@@ -27,9 +27,9 @@ if (!corePath) {
   console.error('[vhtml check] VHTML_COMPILE_CORE not set (path to compile.js required)')
   process.exit(2)
 }
-let compileCode
+let compileCode, prepareSource, parseAccessChain
 try {
-  ;({ compileCode } = await import(pathToFileURL(corePath).href))
+  ;({ compileCode, prepareSource, parseAccessChain } = await import(pathToFileURL(corePath).href))
 } catch (e) {
   console.error(`[vhtml check] cannot load compile core at ${corePath}: ${e.message}`)
   process.exit(2)
@@ -51,7 +51,7 @@ const vforRegex = /^\s*(?:\((\w+)\s*,\s*(\w+)\)|(\w+))\s+in\s+(.+?)\s*$/
 const KNOWN_V = new Set([
   'v-if', 'v-else-if', 'v-else', 'v-for', 'v-show', 'v-html',
   'vslot', 'vslot-inherit', 'vref', 'vrefof', 'vsrc', 'no-vhtml',
-  'single', 'unsafe',
+  'single',
 ])
 const VOID_TAGS = new Set([
   'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
@@ -63,31 +63,23 @@ const AUTOCLOSE_OK = new Set([
   'thead', 'tbody', 'tfoot', 'colgroup', 'html', 'head', 'body',
 ])
 
-// compileCode 编译失败会经 errors.js reportError 打 console.error——
-// 检查器自己产出 findings，静默化避免重复噪音
-const origError = console.error
 function tryCompile(code, isAsync) {
-  console.error = () => {}
   try {
-    compileCode(code, { async: isAsync })
+    compileCode(prepareSource(code, 'vhtml-check', { setup: true }).source, { async: isAsync })
     return null
   } catch (e) {
     return String(e?.message || e).split('\n')[0].slice(0, 160)
-  } finally {
-    console.error = origError
   }
 }
 
 const firstLine = (s) => String(s).split('\n')[0].slice(0, 160)
 const blankKeepNewlines = (m) => m.replace(/[^\n]/g, ' ')
 
-// 静态 import 剥离：与运行时 imports.js parseImports 同一正则——setup 脚本的
-// import 语句在运行时被剥离后另行以 ESM 加载（绑定注入 data），剩余代码才
-// 进 AsyncRun 编译；检查器照此预处理，保证「检查语义 = 运行时语义」
-const staticImportRegex = /^[\s/]*import\s+([\w{},\s]+)\s+from\s+['"][^'"]+['"][;\s]*$/gm
-const stripStaticImports = (code) => code.replace(staticImportRegex, '')
-
 function checkAttr(file, line, col, name, value) {
+  if (name.startsWith('v:')) {
+    if (!parseAccessChain(value)) add(file, line, col, 'E', 'syntax', `${name} requires a static property path`)
+    return
+  }
   if (name === 'v-for') {
     const mm = vforRegex.exec(value)
     if (!mm) {
@@ -159,7 +151,7 @@ function checkFile(file) {
   work = work.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/g, (m, attrs, body, off) => {
     if (!/\bsrc\s*=/.test(attrs) && body.trim()) {
       const [line, col] = lineCol(off)
-      const err = tryCompile(stripStaticImports(body).trim(), true)
+      const err = tryCompile(body.trim(), true)
       if (err) add(file, line, col, 'E', 'syntax', `script block: ${err}`)
     }
     return blankKeepNewlines(m)
