@@ -29,6 +29,12 @@ export function setupDom() {
   for (const key of GLOBAL_KEYS) {
     if (win[key] !== undefined) globalThis[key] = win[key]
   }
+  const transport = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    const url = new URL(String(input), 'http://localhost')
+    if (url.origin === 'http://localhost' && url.pathname.endsWith('/env.js')) return Promise.resolve(new Response('', { status: 404 }))
+    return transport(input, init)
+  }
   globalThis.window = win
   globalThis.document = win.document
   globalThis.requestAnimationFrame = win.requestAnimationFrame.bind(win)

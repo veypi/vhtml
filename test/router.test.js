@@ -17,7 +17,7 @@ const { instanceOf } = await import('../src/component-instance.js')
 const { setRouterRoutesSource } = await import('../src/router.js')
 
 // ---- fetch 打桩：页面与 layout 组件 ----
-const fakeHeaders = { get: () => null, entries: () => [][Symbol.iterator]() }
+const fakeHeaders = new Headers()
 const page = (cls, setup) => `<!DOCTYPE html><html><head><title>t</title></head><body><div class="${cls}">${cls}</div></body>
 <script setup>
 ${setup || ''}
@@ -36,7 +36,7 @@ window.__c.lay1 = (window.__c.lay1 || 0) + 1
 }
 const realFetch = globalThis.fetch
 const stubFetch = async (url) => {
-  const u = String(url).split('?')[0]
+  const u = new URL(String(url), 'http://localhost').pathname
   if (u === '/pg/slow.html') {
     await new Promise((r) => setTimeout(r, 80))   // 慢页面：导航竞态窗口
     return { ok: true, status: 200, headers: fakeHeaders, text: async () => page('pg-slow') }
@@ -563,4 +563,31 @@ test('guard redirect: 守卫 next(path) 落在路由表空间，不继承发起�
   assert.ok(host.querySelector('.pg-b'), '守卫落点页面已渲染')
   assert.equal(view.current.fullPath, '/b', '落点按路由空间解析，不是 /v/b')
   app.destroy()
+})
+
+test('staging route state stays private until commit, including a failed setup', async () => {
+  TEMPLATES['/pg/private-state.html'] = page('private-state', `window.__stagedPath = $router.current.path; await window.__stageWait`)
+  TEMPLATES['/pg/failed-state.html'] = page('failed-state', `throw new Error('setup failed')`)
+  let release
+  window.__stageWait = new Promise(resolve => { release = resolve })
+  const { app, host, view } = await createRouter('/a', [...ROUTES,
+    {path:'/private-state',component:'/pg/private-state'}, {path:'/failed-state',component:'/pg/failed-state'}])
+  const currentPage = view.activePage
+  const { Watch, Cancel } = await import('../src/reactive.js')
+  const seen = []
+  const watcher = Watch(() => view.current.path, value => seen.push(value))
+  try {
+    const pending = view.push('/private-state')
+    for (let i=0; i<20 && !window.__stagedPath; i++) await flush(5)
+    assert.equal(window.__stagedPath, '/private-state')
+    assert.equal(view.current.path, '/a')
+    assert.equal(currentPage.runtime().$sys.$router.current.path, '/a')
+    assert(host.querySelector('.pg-a'))
+    release(); await pending; await flush()
+    assert.equal(view.current.path, '/private-state')
+    assert.deepEqual(seen, ['/a', '/private-state'])
+    await assert.rejects(view.push('/failed-state'), /setup failed/)
+    assert.equal(view.current.path, '/private-state')
+    assert(host.querySelector('.private-state'))
+  } finally { Cancel(watcher); app.destroy(); delete window.__stageWait; delete window.__stagedPath }
 })

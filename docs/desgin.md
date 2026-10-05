@@ -19,7 +19,7 @@
 表达式解析优先级固定为：
 
 ```text
-$data → $mod → $sys → expose → execArgs → window
+$data → $mod → $sys → 平台对象
 ```
 
 ### `$data`
@@ -39,7 +39,6 @@ $data → $mod → $sys → expose → execArgs → window
 | `$i18n` | I18n 实例 |
 | `$t(key, params)` | 翻译函数 |
 | `fetch(url, options)` | scoped fetch，相对路径自动加 scoped 前缀 |
-| `restrictedFetch` | unsafe 模式专用受限 fetch |
 
 后端可通过 `vhtml-*` 响应头注入自定义配置到 `$mod`（如 `vhtml-app` → `$mod.app`）。
 
@@ -57,39 +56,13 @@ $data → $mod → $sys → expose → execArgs → window
 
 不属于 `$mod`，代表"当前组件最近祖先 `<vrouter>` 对应的 RouterView"。同一模块内多个 `<vrouter>` 各自维护自己的 `$router`。
 
-### expose
+## 执行器与模块沙箱
 
-sandbox 内置 API 分层：
+模块首次登记时，根据后端 `vhtml-scoped` 和 `vhtml-unsafe` 响应头选择原生或隔离执行器，并在选择后执行 env.js。unsafe 是模块初始化常量，前端没有组件级标记、状态传播或权限切换。
 
-| 层级 | 内容 |
-|------|------|
-| native | `console`, `Math`, `Date`, `JSON`, `Array`, `Object`, `parseInt`, `parseFloat`, `RegExp`, `TextDecoder` 等 |
-| framework | `alert`, `prompt`, `confirm`, `setTimeout`, `setInterval`, `clearTimeout`, `clearInterval`, `requestAnimationFrame` |
-| global | `window`, `document`, `history`, `fetch`(原生), `btoa`, `getComputedStyle` |
+`src/resource.js` 统一资源解析与传输；`src/execution/` 分别负责原生执行、QuickJS 引擎、值句柄、平台能力和渲染限制；`src/reactive-core.js` 为两个引擎提供同一份响应式算法。`sandbox.js` 只负责执行分派与错误登记。隔离重点是 JS 与框架提供的能力；DOM/CSS 保持共享，不使用 Shadow DOM，不承诺 CSS 继承或原生跨根关联的严格隔离。
 
-## 沙盒执行引擎
-
-sandbox.js 基于 `with + Proxy` 实现：
-
-- `createScopeProxy(data, runtime, execArgs, options)` 创建沙盒作用域
-- `options.unsafe` 或 `runtime.__unsafe` 控制模式：`false` 时暴露 global 层，`true` 时仅 native + framework 层且无 window 兜底
-- 原型链：`expose → execArgs`，execArgs 携带 `$node`/`$watch`/`$scope`/`$event` 等执行上下文
-- `Run(code, data, runtime, execArgs, options)` — 同步表达式
-- `AsyncRun(code, data, runtime, execArgs, options)` — 异步脚本
-
-## unsafe 沙盒
-
-组件标记 `unsafe` 属性后进入受限模式，**传染所有子孙组件**。
-
-传染路径：`parseRef` 检查 `dom.hasAttribute('unsafe') || parentInstance?.unsafe`，设置 `instance.unsafe = true` 和 `componentRuntime.__unsafe = true`。compiler 中 `Run()` 调用通过 `runtime.__unsafe` 自动感知模式。
-
-受限内容：
-
-- `fetch` → `$mod.restrictedFetch`，拒绝外部 URL 和跨 scoped 请求
-- `document` / `window` / `history` 从 expose 移除，无 window fallback
-- 外部 `<script src="...">` 不加载（loader.js `loadHeads` 跳过）
-- `<script setup>` 中 `import` 移除（imports.js）
-- `$mod` 框架 key 通过 `Object.defineProperty(writable: false)` 锁定，`$mod.scoped = 'x'` 静默失败
+具体能力、网络前缀、隔离边界和不支持的 API 见 [模块沙箱](module-sandbox.md)。
 
 ## 模块上下文
 
@@ -146,7 +119,6 @@ slotContents: 插槽内容
 sourceNodes: 原始子节点快照 (v-if 恢复用)
 vforData: v-for 当前迭代数据
 slotOutletState: 插槽出口状态
-unsafe: bool (沙盒模式标记)
 ```
 
 ### DOM 接口

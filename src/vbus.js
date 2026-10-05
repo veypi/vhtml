@@ -6,6 +6,7 @@
  */
 
 
+export function createEventBusClass() {
 function escapeRegExp(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -203,4 +204,8 @@ class EventBus {
   }
 }
 
-export default EventBus;
+
+return EventBus
+}
+
+export default createEventBusClass()

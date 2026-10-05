@@ -15,20 +15,20 @@
  */
 import { build } from 'vite'
 import { minify } from 'terser'
-import { readFileSync, writeFileSync, statSync } from 'node:fs'
+import { readFileSync, writeFileSync, statSync, readdirSync } from 'node:fs'
 
 await build({ configFile: 'vite.config.js' })
 
-const out = 'dist/vhtml.min.js'
-const before = statSync(out).size
-const code = readFileSync(out, 'utf8')
-const result = await minify(code, {
-  ecma: 2020,
-  module: true,
-  compress: { passes: 2, toplevel: true },
-  mangle: { toplevel: true },
-  format: { comments: false },
-})
-writeFileSync(out, result.code)
-const after = statSync(out).size
-console.log(`terser: ${before} -> ${after} bytes`)
+for (const file of readdirSync('dist').filter(name => name.endsWith('.js'))) {
+  const out = `dist/${file}`
+  const before = statSync(out).size
+  const result = await minify(readFileSync(out, 'utf8'), {
+    ecma: 2020,
+    module: true,
+    compress: { passes: 2, toplevel: true },
+    mangle: { toplevel: true },
+    format: { comments: false },
+  })
+  writeFileSync(out, result.code)
+  console.log(`terser: ${file}: ${before} -> ${statSync(out).size} bytes`)
+}

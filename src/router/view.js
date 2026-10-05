@@ -1,24 +1,50 @@
+import { resourceKey, resourcesFor } from '../resource.js'
+import { NativeExecutor } from '../execution/native.js'
+import { moduleRecord } from '../execution/context.js'
 /*
  * router/view.js — RouterView：导航状态机（idle → resolving → commit）、
  * layout 外壳缓存（视图所有）、页缓存 LRU、路由表与事件源注册
  */
 
 import { Wrap } from '../reactive.js'
-import { createRuntimeContext, getModulePath, normalizeScoped, resolveScopedUrl, resolveScope, withImportBust } from '../module.js'
+import {
+  createRuntimeContext,
+  getModulePath,
+  normalizeScoped,
+} from '../module.js'
 import { isRouterNavigableHref } from '../url.js'
 import { debug as logDebug, warn as logWarn } from '../debug.js'
 import { reportError } from '../errors.js'
 import { createGenToken } from '../lifecycle.js'
-import { normalizeFetchUrl, templateLoader } from '../loader.js'
-import { instanceOf, setInstance, createInstance, disposeRuntimeSubtree } from '../component-instance.js'
+import { templateLoader } from '../loader.js'
 import {
-  isHttpUrl, hasRouterEscape, stripRouterEscape, splitRouteTarget,
-  hasPathPrefix, ensureAbsolutePath, normalizePathname, normalizeRouteInputPath,
-  joinRoutePath, routeDebugList, normalizeRoutePrefix, normalizeFixedParams,
-  matchedRouteDebugInfo, isCatchAllRoute, routeHash,
+  instanceOf,
+  setInstance,
+  createInstance,
+  disposeRuntimeSubtree,
+} from '../component-instance.js'
+import {
+  isHttpUrl,
+  hasRouterEscape,
+  stripRouterEscape,
+  splitRouteTarget,
+  hasPathPrefix,
+  ensureAbsolutePath,
+  normalizePathname,
+  normalizeRouteInputPath,
+  joinRoutePath,
+  routeDebugList,
+  normalizeRoutePrefix,
+  normalizeFixedParams,
+  matchedRouteDebugInfo,
+  isCatchAllRoute,
+  routeHash,
 } from './util.js'
 import { getBrowserHistory, resolveRouterHistory } from './history.js'
-import { RouteMatcher, parseUrlString, normalizeRoutesModule } from './matcher.js'
+import {
+  RouteMatcher,
+  parseUrlString,
+} from './matcher.js'
 import { AnchorClickRuntime } from './anchor.js'
 import { Page, prepareLayoutDom, normalizeLayoutUrl } from './page.js'
 
@@ -32,9 +58,11 @@ export function setRouterRoutesSource(node, source) {
   const oldSource = routerRoutesSources.get(node)
   if (existed && oldSource === source) return
   routerRoutesSources.set(node, source)
-  node.dispatchEvent?.(new CustomEvent('vhtml-router-routes-change', {
-    detail: { source },
-  }))
+  node.dispatchEvent?.(
+    new CustomEvent('vhtml-router-routes-change', {
+      detail: { source },
+    })
+  )
 }
 
 function getRouterRoutesSource(node) {
@@ -42,7 +70,11 @@ function getRouterRoutesSource(node) {
   return node?.getAttribute?.('routes') || '/routes.js'
 }
 
-export function setRouterPrefixSource(node, source, sourceName = 'vrouter[:prefix]') {
+export function setRouterPrefixSource(
+  node,
+  source,
+  sourceName = 'vrouter[:prefix]'
+) {
   if (!node) return
   const hadSource = routerPrefixSources.has(node)
   const oldEntry = routerPrefixSources.get(node)
@@ -50,26 +82,45 @@ export function setRouterPrefixSource(node, source, sourceName = 'vrouter[:prefi
     if (!hadSource) return
     routerPrefixSources.delete(node)
   } else {
-    if (hadSource && oldEntry?.value === source && oldEntry?.source === sourceName) return
+    if (
+      hadSource &&
+      oldEntry?.value === source &&
+      oldEntry?.source === sourceName
+    )
+      return
     routerPrefixSources.set(node, { value: source, source: sourceName })
   }
-  node.dispatchEvent?.(new CustomEvent('vhtml-router-prefix-change', {
-    detail: { source },
-  }))
+  node.dispatchEvent?.(
+    new CustomEvent('vhtml-router-prefix-change', {
+      detail: { source },
+    })
+  )
 }
 
 function readRouterPrefixSource(node) {
   if (routerPrefixSources.has(node)) {
     const entry = routerPrefixSources.get(node)
-    return { exists: true, value: entry?.value, source: entry?.source || 'vrouter[:prefix]' }
+    return {
+      exists: true,
+      value: entry?.value,
+      source: entry?.source || 'vrouter[:prefix]',
+    }
   }
   if (node.hasAttribute('prefix')) {
-    return { exists: true, value: node.getAttribute('prefix') || '', source: 'vrouter[prefix]' }
+    return {
+      exists: true,
+      value: node.getAttribute('prefix') || '',
+      source: 'vrouter[prefix]',
+    }
   }
   return { exists: false, value: '', source: '' }
 }
 
-export function setRouterParamsSource(node, source, sourceName = 'vrouter[:params]') {
+export function setRouterParamsSource(
+  node,
+  source,
+  sourceName = 'vrouter[:params]'
+) {
   if (!node) return
   const hadSource = routerParamsSources.has(node)
   const oldEntry = routerParamsSources.get(node)
@@ -77,12 +128,19 @@ export function setRouterParamsSource(node, source, sourceName = 'vrouter[:param
     if (!hadSource) return
     routerParamsSources.delete(node)
   } else {
-    if (hadSource && oldEntry?.value === source && oldEntry?.source === sourceName) return
+    if (
+      hadSource &&
+      oldEntry?.value === source &&
+      oldEntry?.source === sourceName
+    )
+      return
     routerParamsSources.set(node, { value: source, source: sourceName })
   }
-  node.dispatchEvent?.(new CustomEvent('vhtml-router-params-change', {
-    detail: { source },
-  }))
+  node.dispatchEvent?.(
+    new CustomEvent('vhtml-router-params-change', {
+      detail: { source },
+    })
+  )
 }
 
 function readRouterParamsSource(node) {
@@ -126,9 +184,6 @@ export class RouterView {
   // 页缓存 LRU 上限（per-RouterView：OS 多窗口每窗一个 memory vrouter，
   // 互不驱逐）；Map 插入序即最近使用序，命中时 delete+set 提升
   #pageCacheLimit = 8
-  // 最近一次提交的路由快照：staging 中间态被作废/阻断时回滚到此（而非
-  // 导航进入时的 current —— 那可能已是前一个在途导航写入的中间态）
-  #lastCommitted = null
   // vrouter 标题（双源）：路由注册 title（字符串/函数/async 函数，函数收 params，
   // 优先）→ 页面 <title>（兜底）。系统 vrouter（affectsDocument）同步 document.title；
   // 所有 vrouter 都写宿主 DOM 对象 __title 属性（OS 窗口名等外部消费），支持订阅。
@@ -138,7 +193,9 @@ export class RouterView {
   #titleSeq = 0
   #titleListeners = new Set()
 
-  get title() { return this.#title }
+  get title() {
+    return this.#title
+  }
 
   // 汇总生效标题并落定三处出口（DOM 属性 / document.title / 订阅者）
   #applyTitle() {
@@ -170,9 +227,12 @@ export class RouterView {
     Promise.resolve()
       .then(() => instances({ $mod, params }))
       .then((items) => {
-        const hit = (items || []).find((it) => it?.params
-          && Object.entries(it.params).every(([k, v]) => params[k] === v))
-        finish(hit ? (hit.name || '') : '')
+        const hit = (items || []).find(
+          (it) =>
+            it?.params &&
+            Object.entries(it.params).every(([k, v]) => params[k] === v)
+        )
+        finish(hit ? hit.name || '' : '')
       })
       .catch(() => finish(''))
   }
@@ -195,40 +255,108 @@ export class RouterView {
     this.instance.router = this
   }
 
-  get routes() { return [...this.#stringRoutes, ...this.#regexRoutes] }
-  get history() { return this.#history.slice() }
-  get navigation() { return this.#nav }
-  get affectsDocument() { return this.#nav?.affectsDocument !== false }
-  get prefix() { return this.#routerPrefix }
-  get path_prefix() { return this.#routePathPrefix || '' }
-  get component_prefix() { return this.#routeComponentPrefix }
-  get fixed_params() { return { ...this.#fixedParams } }
-  get current() { return this.instance.data }
-  get query() { return this.instance.data?.query || {} }
-  get params() { return this.instance.data?.params || {} }
-  get modulePath() { return this.#modulePath || getModulePath(this.runtime || {}) }
-  get routesSource() { return this.#routesSource }
-  get runtime() { return this.instance.runtime }
-  get activePage() { return this.#currentPage }
-  set activePage(value) { this.#currentPage = value || null }
-  get navigationState() { return this.#navInFlight === null ? 'idle' : 'resolving' }
-  get beforeEnter() { return this.#beforeEnter }
-  set beforeEnter(value) { this.#beforeEnter = typeof value === 'function' ? value : null }
-  get afterEnter() { return this.#afterEnter }
-  set afterEnter(value) { this.#afterEnter = typeof value === 'function' ? value : null }
-  get listeners() { return this.#listeners }
-  get hostNode() { return this.#hostNode }
-  set hostNode(value) { this.#hostNode = value || null }
-  get renderer() { return this.#renderer }
-  set renderer(value) { this.#renderer = value || null }
-  get disposeNavListener() { return this.#disposeNavListener || null }
-  set disposeNavListener(value) { this.#disposeNavListener = value || null }
-  get disposeRoutesSourceListener() { return this.#disposeRoutesSourceListener || null }
-  set disposeRoutesSourceListener(value) { this.#disposeRoutesSourceListener = value || null }
-  get disposePrefixSourceListener() { return this.#disposePrefixSourceListener || null }
-  set disposePrefixSourceListener(value) { this.#disposePrefixSourceListener = value || null }
-  get disposeParamsSourceListener() { return this.#disposeParamsSourceListener || null }
-  set disposeParamsSourceListener(value) { this.#disposeParamsSourceListener = value || null }
+  get routes() {
+    return [...this.#stringRoutes, ...this.#regexRoutes]
+  }
+  get history() {
+    return this.#history.slice()
+  }
+  get navigation() {
+    return this.#nav
+  }
+  get affectsDocument() {
+    return this.#nav?.affectsDocument !== false
+  }
+  get prefix() {
+    return this.#routerPrefix
+  }
+  get path_prefix() {
+    return this.#routePathPrefix || ''
+  }
+  get component_prefix() {
+    return this.#routeComponentPrefix
+  }
+  get fixed_params() {
+    return { ...this.#fixedParams }
+  }
+  get current() {
+    return this.instance.data
+  }
+  get query() {
+    return this.instance.data?.query || {}
+  }
+  get params() {
+    return this.instance.data?.params || {}
+  }
+  get modulePath() {
+    return this.#modulePath || getModulePath(this.runtime || {})
+  }
+  get routesSource() {
+    return this.#routesSource
+  }
+  get runtime() {
+    return this.instance.runtime
+  }
+  get activePage() {
+    return this.#currentPage
+  }
+  set activePage(value) {
+    this.#currentPage = value || null
+  }
+  get navigationState() {
+    return this.#navInFlight === null ? 'idle' : 'resolving'
+  }
+  get beforeEnter() {
+    return this.#beforeEnter
+  }
+  set beforeEnter(value) {
+    this.#beforeEnter = typeof value === 'function' ? value : null
+  }
+  get afterEnter() {
+    return this.#afterEnter
+  }
+  set afterEnter(value) {
+    this.#afterEnter = typeof value === 'function' ? value : null
+  }
+  get listeners() {
+    return this.#listeners
+  }
+  get hostNode() {
+    return this.#hostNode
+  }
+  set hostNode(value) {
+    this.#hostNode = value || null
+  }
+  get renderer() {
+    return this.#renderer
+  }
+  set renderer(value) {
+    this.#renderer = value || null
+  }
+  get disposeNavListener() {
+    return this.#disposeNavListener || null
+  }
+  set disposeNavListener(value) {
+    this.#disposeNavListener = value || null
+  }
+  get disposeRoutesSourceListener() {
+    return this.#disposeRoutesSourceListener || null
+  }
+  set disposeRoutesSourceListener(value) {
+    this.#disposeRoutesSourceListener = value || null
+  }
+  get disposePrefixSourceListener() {
+    return this.#disposePrefixSourceListener || null
+  }
+  set disposePrefixSourceListener(value) {
+    this.#disposePrefixSourceListener = value || null
+  }
+  get disposeParamsSourceListener() {
+    return this.#disposeParamsSourceListener || null
+  }
+  set disposeParamsSourceListener(value) {
+    this.#disposeParamsSourceListener = value || null
+  }
 
   mergeParams(params = {}) {
     return { ...this.#fixedParams, ...(params || {}) }
@@ -278,18 +406,30 @@ export class RouterView {
   resolveRouterPrefixInfo(node, runtime) {
     const nodePrefix = readRouterPrefixSource(node)
     if (nodePrefix.exists) {
-      return { value: normalizeScoped(nodePrefix.value || ''), source: nodePrefix.source, raw: nodePrefix.value }
+      return {
+        value: normalizeScoped(nodePrefix.value || ''),
+        source: nodePrefix.source,
+        raw: nodePrefix.value,
+      }
     }
     return { value: '', source: '', raw: '' }
   }
 
   resolveNavigationPrefixInfo(runtime) {
     if (this.#routerPrefix) {
-      return { value: this.#routerPrefix, source: '$router.prefix', raw: this.#routerPrefix }
+      return {
+        value: this.#routerPrefix,
+        source: '$router.prefix',
+        raw: this.#routerPrefix,
+      }
     }
     const mod = runtime?.$mod || runtime || null
     if (mod?.router_prefix !== undefined) {
-      return { value: normalizeScoped(mod.router_prefix || ''), source: '$mod.router_prefix', raw: mod.router_prefix }
+      return {
+        value: normalizeScoped(mod.router_prefix || ''),
+        source: '$mod.router_prefix',
+        raw: mod.router_prefix,
+      }
     }
     // 兜底 = 路由表空间：导航发生在宿主的 vrouter 里，落点必须存在于宿主路由表，
     // 所以按注册路由用的 #routePathPrefix 解析，而不是发起方模块的挂载点。
@@ -297,8 +437,15 @@ export class RouterView {
     // 在宿主页面里 push 相对路径时拼成 /v/xxx → 匹配不上 → catch-all 404。
     // 路由表尚未加载（挂载期先建 history）时退回 vrouter 自身模块挂载点，
     // 与 reloadRoutes 里 path_prefix 的默认值同源。
-    const raw = this.#routePathPrefix === null ? resolveScope(runtime) : this.#routePathPrefix
-    return { value: normalizeScoped(raw || ''), source: '$router.path_prefix', raw }
+    const raw =
+      this.#routePathPrefix === null
+        ? getModulePath(runtime)
+        : this.#routePathPrefix
+    return {
+      value: normalizeScoped(raw || ''),
+      source: '$router.path_prefix',
+      raw,
+    }
   }
 
   resolveRouterPrefix(node, runtime) {
@@ -314,14 +461,57 @@ export class RouterView {
     return new Proxy(Object.create(null), {
       get(_target, key) {
         if (key === '__routerView') return router
-        if (key === 'push') return (to, data, options = {}) => router.push(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
-        if (key === 'replace') return (to, data, options = {}) => router.replace(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
-        if (key === 'matchTo') return (to, data, options = {}) => router.matchTo(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
-        if (key === 'matchRoute') return (to, data, options = {}) => router.matchRoute(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
-        if (key === 'normalizeRouteTarget') return (to, data, options = {}) => router.normalizeRouteTarget(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
-        if (key === 'resolveHref') return (to, data, options = {}) => router.resolveHref(to, data, { ...(options || {}), runtime: options?.runtime || runtime })
-        if (key === 'setQuery') return (patch, options = {}) => router.setQuery(patch, { ...options, runtime: options.runtime || runtime })
-        if (key === 'setParams') return (patch, options = {}) => router.setParams(patch, { ...options, runtime: options.runtime || runtime })
+        const current = runtime.routeState || router.current
+        if (key === 'current') return current
+        if (key === 'params' || key === 'query') return current[key] || {}
+        if (key === 'push')
+          return (to, data, options = {}) =>
+            router.push(to, data, {
+              ...(options || {}),
+              runtime: options?.runtime || runtime,
+            })
+        if (key === 'replace')
+          return (to, data, options = {}) =>
+            router.replace(to, data, {
+              ...(options || {}),
+              runtime: options?.runtime || runtime,
+            })
+        if (key === 'matchTo')
+          return (to, data, options = {}) =>
+            router.matchTo(to, data, {
+              ...(options || {}),
+              runtime: options?.runtime || runtime,
+            })
+        if (key === 'matchRoute')
+          return (to, data, options = {}) =>
+            router.matchRoute(to, data, {
+              ...(options || {}),
+              runtime: options?.runtime || runtime,
+            })
+        if (key === 'normalizeRouteTarget')
+          return (to, data, options = {}) =>
+            router.normalizeRouteTarget(to, data, {
+              ...(options || {}),
+              runtime: options?.runtime || runtime,
+            })
+        if (key === 'resolveHref')
+          return (to, data, options = {}) =>
+            router.resolveHref(to, data, {
+              ...(options || {}),
+              runtime: options?.runtime || runtime,
+            })
+        if (key === 'setQuery')
+          return (patch, options = {}) =>
+            router.setQuery(patch, {
+              ...options,
+              runtime: options.runtime || runtime,
+            })
+        if (key === 'setParams')
+          return (patch, options = {}) =>
+            router.setParams(patch, {
+              ...options,
+              runtime: options.runtime || runtime,
+            })
         const value = router[key]
         return typeof value === 'function' ? value.bind(router) : value
       },
@@ -332,9 +522,18 @@ export class RouterView {
     })
   }
 
+  createPageRuntime(parent, matchedRoute) {
+    const runtime = createRuntimeContext(parent, parent?.$mod)
+    runtime.routeState = Wrap(this.snapshotRoute(matchedRoute))
+    runtime.$sys.$router = this.createRuntimeProxy(runtime)
+    return runtime
+  }
+
   onChange(listener) {
     this.#listeners.add(listener)
-    return () => { this.#listeners.delete(listener) }
+    return () => {
+      this.#listeners.delete(listener)
+    }
   }
 
   #notifyListeners(to, from) {
@@ -354,8 +553,8 @@ export class RouterView {
     }
   }
 
-  /** 与 #snapshot 同构的目标路由快照（staging 写入与 commit 写入同一来源）。 */
-  #snapshotFromMatched(matchedRoute) {
+  /** 构建运行时与提交状态使用同一快照规则。 */
+  snapshotRoute(matchedRoute) {
     return this.#snapshot({
       path: matchedRoute.path,
       fullPath: matchedRoute.fullPath,
@@ -368,28 +567,9 @@ export class RouterView {
     })
   }
 
-  /** staging 期写入目标快照：只动 current（响应式），不推历史/不提交 URL/不通知监听者。 */
-  #stageApplyState(matchedRoute) {
-    Object.assign(this.current, this.#snapshotFromMatched(matchedRoute))
-  }
-
-  /** 回滚 current 到导航前的提交快照：删除快照不存在的 key、跳过 undefined。 */
-  #restoreSnapshot(snapshot) {
-    const target = this.current
-    const keys = new Set([...Object.keys(target), ...Object.keys(snapshot)])
-    for (const key of keys) {
-      if (!(key in snapshot)) {
-        if (key in target) delete target[key]
-      } else if (snapshot[key] !== undefined) {
-        target[key] = snapshot[key]
-      }
-    }
-  }
-
   #setRouterPath(matchedRoute, mode = 'push', options = {}) {
     const previousSnapshot = this.#snapshot(this.current)
-    const nextSnapshot = this.#snapshotFromMatched(matchedRoute)
-    this.#lastCommitted = nextSnapshot
+    const nextSnapshot = this.snapshotRoute(matchedRoute)
     Object.assign(this.current, nextSnapshot)
     if (mode === 'replace' && this.#history.length > 0) {
       this.#history[this.#history.length - 1] = nextSnapshot
@@ -415,7 +595,10 @@ export class RouterView {
     if (hasRouterEscape(path)) path = stripRouterEscape(path)
     path = normalizePathname(ensureAbsolutePath(path))
     if (escaped || options.preserveTargetPath) return path
-    const prefix = options.prefix === undefined ? this.#routerPrefix : normalizeScoped(options.prefix || '')
+    const prefix =
+      options.prefix === undefined
+        ? this.#routerPrefix
+        : normalizeScoped(options.prefix || '')
     if (prefix && !hasPathPrefix(path, prefix)) {
       return normalizePathname(joinRoutePath(prefix, path))
     }
@@ -432,33 +615,55 @@ export class RouterView {
     return componentPrefix
   }
 
-  normalizeRouteResourcePath(path, componentPrefix = this.#routeComponentPrefix) {
+  normalizeRouteResourcePath(
+    path,
+    componentPrefix = this.#routeComponentPrefix
+  ) {
     const prefix = this.routeComponentPrefix(componentPrefix)
     if (!prefix || typeof path !== 'string') return path
-    if (!path || path.startsWith('@') || isHttpUrl(path) || path.startsWith('//')) return path
+    if (
+      !path ||
+      path.startsWith('@') ||
+      isHttpUrl(path) ||
+      path.startsWith('//')
+    )
+      return path
     if (path === prefix || path.startsWith(`${prefix}/`)) return path
     return normalizePathname(joinRoutePath(prefix, path))
   }
 
-  normalizeRouteComponent(component, componentPrefix = this.#routeComponentPrefix) {
+  normalizeRouteComponent(
+    component,
+    componentPrefix = this.#routeComponentPrefix
+  ) {
     if (!componentPrefix) return component
-    if (typeof component === 'string') return this.normalizeRouteResourcePath(component, componentPrefix)
+    if (typeof component === 'string')
+      return this.normalizeRouteResourcePath(component, componentPrefix)
     if (typeof component === 'function') {
-      return (path, params) => this.normalizeRouteResourcePath(component(path, params), componentPrefix)
+      return (path, params) =>
+        this.normalizeRouteResourcePath(
+          component(path, params),
+          componentPrefix
+        )
     }
     return component
   }
 
   addRoute(route, options = {}) {
     if (!route.path) throw new Error('Route must have a path')
-    const routePath = this.normalizeRouterPath(route.path, { prefix: options.pathPrefix || '' })
+    const routePath = this.normalizeRouterPath(route.path, {
+      prefix: options.pathPrefix || '',
+    })
     const routeConfig = {
       path: routePath,
-      component: this.normalizeRouteComponent(route.component, options.componentPrefix || ''),
+      component: this.normalizeRouteComponent(
+        route.component,
+        options.componentPrefix || ''
+      ),
       redirect: route.redirect,
       error_redirect: route.error_redirect,
       meta: route.meta || {},
-      nav: route.nav || null,   // 路由节点导航元数据（name/icon/keywords/instances；instances 是 vrouter title 的实例名源）
+      nav: route.nav || null, // 路由节点导航元数据（name/icon/keywords/instances；instances 是 vrouter title 的实例名源）
       children: route.children || [],
       matcher: new RouteMatcher(routePath),
       layout: route.layout || '',
@@ -467,27 +672,35 @@ export class RouterView {
     if (this.#isRegexPath(routePath)) this.#regexRoutes.push(routeConfig)
     else this.#stringRoutes.push(routeConfig)
     if (route.children?.length > 0) {
-      route.children.forEach(child => {
-        const childPath = hasRouterEscape(child.path) ? child.path : joinRoutePath(routePath, child.path)
+      route.children.forEach((child) => {
+        const childPath = hasRouterEscape(child.path)
+          ? child.path
+          : joinRoutePath(routePath, child.path)
         const layout = child.layout || route.layout || ''
         const meta = { ...route.meta, ...child.meta }
-        this.addRoute({ ...child, path: childPath, parent: routeConfig, layout, meta }, options)
+        this.addRoute(
+          { ...child, path: childPath, parent: routeConfig, layout, meta },
+          options
+        )
       })
     }
   }
 
   addRoutes(routes, options = {}) {
-    routes.forEach(route => this.addRoute(route, options))
-    this.#debug('routes registered', this.debugContext({
-      count: routes.length,
-      pathPrefix: options.pathPrefix || '',
-      componentPrefix: options.componentPrefix || '',
-    }))
+    routes.forEach((route) => this.addRoute(route, options))
+    this.#debug(
+      'routes registered',
+      this.debugContext({
+        count: routes.length,
+        pathPrefix: options.pathPrefix || '',
+        componentPrefix: options.componentPrefix || '',
+      })
+    )
   }
 
   resetRoutes() {
     this.activePage?.deactive()
-    this.#pageCache.forEach(page => page.destroy())
+    this.#pageCache.forEach((page) => page.destroy())
     // layout 外壳为视图所有：缓存表整体重置前必须显式销毁存活条目，
     // 否则实例/watchers 随 Map 丢弃泄漏（reloadRoutes 每次热更新丢一份）
     for (const [, entry] of this.#layoutCache) {
@@ -532,9 +745,10 @@ export class RouterView {
       // 当作 query 分隔符，字符串模板无法表达"移除可选段"，请直接写最终路径）
       if (/\/:[A-Za-z_]/.test(path) || /\*[A-Za-z_]/.test(path)) return null
     }
-    const navigationPrefix = options.navigationPrefix === undefined
-      ? this.resolveNavigationPrefix(options.runtime || this.runtime)
-      : options.navigationPrefix
+    const navigationPrefix =
+      options.navigationPrefix === undefined
+        ? this.resolveNavigationPrefix(options.runtime || this.runtime)
+        : options.navigationPrefix
     path = this.normalizeRouterPath(path, {
       prefix: navigationPrefix,
       bypassRouterPrefix,
@@ -549,13 +763,29 @@ export class RouterView {
     const { path, query, params, hash, bypassRouterPrefix } = routeInfo
     for (const route of this.#stringRoutes) {
       if (route.path === path && (route.component || route.redirect)) {
-        return { route, params: { ...params }, matched: path, path, query, hash, bypassRouterPrefix }
+        return {
+          route,
+          params: { ...params },
+          matched: path,
+          path,
+          query,
+          hash,
+          bypassRouterPrefix,
+        }
       }
     }
     for (const route of this.#regexRoutes) {
       const match = route.matcher.match(path)
       if (match && (route.component || route.redirect)) {
-        return { route, params: { ...match.params, ...params }, matched: match.matched, path, query, hash, bypassRouterPrefix }
+        return {
+          route,
+          params: { ...match.params, ...params },
+          matched: match.matched,
+          path,
+          query,
+          hash,
+          bypassRouterPrefix,
+        }
       }
     }
     return null
@@ -567,18 +797,25 @@ export class RouterView {
     const { route, params, query, path, hash } = matchResult
     let search = ''
     if (query && Object.keys(query).length > 0) {
-      search = `?${Object.entries(query).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join('&')}`
+      search = `?${Object.entries(query)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&')}`
     }
     const fullPath = `${path || matchResult.path}${search}${hash || ''}`
     return {
-      route, params, query, path: path || matchResult.path,
-      fullPath, matched: [route],
+      route,
+      params,
+      query,
+      path: path || matchResult.path,
+      fullPath,
+      matched: [route],
       bypassRouterPrefix: matchResult.bypassRouterPrefix,
     }
   }
 
   resolveHref(to, data = null, options = {}) {
-    if (typeof to === 'string' && isHttpUrl(stripRouterEscape(to))) return stripRouterEscape(to)
+    if (typeof to === 'string' && isHttpUrl(stripRouterEscape(to)))
+      return stripRouterEscape(to)
     return this.matchTo(to, data, options)?.fullPath || stripRouterEscape(to)
   }
 
@@ -590,7 +827,8 @@ export class RouterView {
     const config = route.cacheKey
     if (config === false) return null
     // 默认 key = path（不含 query/hash）：query 变化只更新路由状态，不重挂页面
-    if (config === undefined || config === true) return matchedRoute.path || matchedRoute.fullPath.split(/[?#]/)[0]
+    if (config === undefined || config === true)
+      return matchedRoute.path || matchedRoute.fullPath.split(/[?#]/)[0]
     if (typeof config === 'string') return config
     if (typeof config === 'function') return config(matchedRoute)
     return matchedRoute.path || matchedRoute.fullPath.split(/[?#]/)[0]
@@ -623,16 +861,20 @@ export class RouterView {
    * 在后续导航 commit 的 tryMount 树遍历时才执行（挂载钩子资格制，
    * 未接入文档前永不执行），缓存未提交的外壳无脚本副作用。
    */
-  async #ensureLayoutEntry(layout, runtime) {
+  async #ensureLayoutEntry(layout, runtime, matchedRoute) {
     if (!layout) return null
     const cached = this.#getCachedLayout(layout)
     if (cached) return cached
     const url = normalizeLayoutUrl(layout)
     const layoutParser = await templateLoader.fetchUI(url, runtime)
-    if (layoutParser.err) throw new Error(`load layout failed: ${url} ${layoutParser.err}`)
+    runtime = this.createPageRuntime(runtime, matchedRoute)
     const dom = prepareLayoutDom(layoutParser.body.cloneNode(true))
-    await this.#renderer.parseRef(`/layout/${layout}`, dom, {}, runtime, null, { single: true, keepOnDetach: true })
-    const entry = { dom, instance: instanceOf(dom, false) }
+    await this.#renderer.parseRef(`/layout/${layout}`, dom, {}, runtime, {
+      target: layoutParser,
+      single: true,
+      keepOnDetach: true,
+    })
+    const entry = { dom, instance: instanceOf(dom, false), runtime }
     this.#layoutCache.set(url, entry)
     return entry
   }
@@ -645,8 +887,12 @@ export class RouterView {
   #releaseLayoutIfUnreferenced(page) {
     const entry = page?.layoutEntry
     if (!entry?.dom) return
-    if (this.#currentPage && this.#currentPage !== page &&
-        this.#currentPage.layoutDom === entry.dom) return
+    if (
+      this.#currentPage &&
+      this.#currentPage !== page &&
+      this.#currentPage.layoutDom === entry.dom
+    )
+      return
     for (const [, other] of this.#pageCache) {
       if (other !== page && other.layoutDom === entry.dom) return
     }
@@ -701,7 +947,8 @@ export class RouterView {
       this.activePage = null
       this.#releaseLayoutIfUnreferenced(page)
       page.destroy()
-      if (matchedRoute) this.#swallowNav(this.#navigateTo(matchedRoute, 'replace'))
+      if (matchedRoute)
+        this.#swallowNav(this.#navigateTo(matchedRoute, 'replace'))
       return true
     }
     this.#releaseLayoutIfUnreferenced(page)
@@ -757,47 +1004,39 @@ export class RouterView {
    */
   async #navigateTo(matchedRoute, mode = 'push', options = {}) {
     if (!matchedRoute) return
-    // 去重必须在 issue() 之前：issue() 作废在途票据。staging 写入目标快照后，
-    // 正在构建的页面自身 setup 的 URL 同步 watcher（首轮立即回调）会发起同目标
-    // 导航——若进入 #navigateTo 领票会作废正在构建的导航，构建静默中止永不提交；
-    // 直接加载该路由时 activePage 为空、无任何短路可兜底，退化成无限构建循环卡死页面。
-    // 同目标导航直接吸收，不同目标照常作废在途导航（真实用户意图优先）
+    // setup may request its own target; absorb it without invalidating that build.
     if (this.#navInFlight && this.#stagedFullPath === matchedRoute.fullPath) {
-      this.#debug('navigation skipped: same target as in-flight', matchedRouteDebugInfo(matchedRoute))
+      this.#debug(
+        'navigation skipped: same target as in-flight',
+        matchedRouteDebugInfo(matchedRoute)
+      )
       return
     }
     if (this.activePage && this.current?.fullPath === matchedRoute.fullPath) {
-      this.#debug('navigation skipped: already active', matchedRouteDebugInfo(matchedRoute))
+      this.#debug(
+        'navigation skipped: already active',
+        matchedRouteDebugInfo(matchedRoute)
+      )
       return
     }
     const ticket = this.#navToken.issue()
     this.#navInFlight = ticket
     this.#stagedFullPath = matchedRoute.fullPath
     const isCurrent = () => this.#navToken.alive(ticket)
-    // current 是提交态，但 staging 构建的页面 setup/模板要在构建时读到
-    // 目标路由的 params/query（v0.10.2 曾把 #setRouterPath 移到 commit，
-    // 导致新页面首次构建读到的路由参数恒为空）。修法：进入 staging 前先
-    // 写入目标快照（不提交 URL/历史/监听者），导航被作废/阻断/redirect 时
-    // 回滚到进入前的提交快照；正常 commit 由 #setRouterPath 覆盖（同值）。
-    // 回滚目标 = 最近一次 commit 的快照；尚无提交时回落当前状态（mount 初始态）
-    const prevSnapshot = this.#lastCommitted || this.#snapshot(this.current)
     let staged = null
-    let committed = false
     try {
-      staged = await this.#stageNavigation(matchedRoute, mode, options, isCurrent)
-      if (staged?.committed === true) {
-        // query-only 快速路径已在 #stageNavigation 内完成提交，无 commit
-        committed = true
-      } else if (staged) {
+      staged = await this.#stageNavigation(
+        matchedRoute,
+        mode,
+        options,
+        isCurrent
+      )
+      if (staged && !staged.committed)
         this.#commitNavigation(staged, matchedRoute, mode, options)
-        committed = true
-      }
     } finally {
       if (this.#navInFlight === ticket) {
         this.#navInFlight = null
         this.#stagedFullPath = null
-        // 未提交的终止（作废/阻断/redirect）：回滚 staging 写入的中间态
-        if (!committed) this.#restoreSnapshot(prevSnapshot)
       }
     }
   }
@@ -815,16 +1054,23 @@ export class RouterView {
    *   沿用会让地址栏停在被重定向前的路径（页面已是落点、URL 还是原路径）。
    */
   #redirectOptions(options) {
-    return { ...options, navigationPrefix: this.#routePathPrefix || '', preserveTargetPath: false, commit: true }
+    return {
+      ...options,
+      navigationPrefix: this.#routePathPrefix || '',
+      preserveTargetPath: false,
+      commit: true,
+    }
   }
 
   /** 发起重定向 / 守卫落点导航：mode 继承本次导航（挂载与 popstate 用 replace，不留无效历史；点击用 push）。 */
   #navigateRedirect(target, mode, options) {
     const { path, data } = splitRouteTarget(target)
     const redirectOptions = this.#redirectOptions(options)
-    this.#swallowNav(mode === 'replace'
-      ? this.replace(path, data, redirectOptions)
-      : this.push(path, data, redirectOptions))
+    this.#swallowNav(
+      mode === 'replace'
+        ? this.replace(path, data, redirectOptions)
+        : this.push(path, data, redirectOptions)
+    )
   }
 
   /** resolving 阶段：路由守卫与页面构建。返回 { page, fromCache, to, cacheKey } 或 null。 */
@@ -832,7 +1078,10 @@ export class RouterView {
     const { route, params, query } = matchedRoute
     const mergedParams = this.mergeParams(params || {})
     if (route.redirect) {
-      const redirectTarget = typeof route.redirect === 'function' ? route.redirect(matchedRoute) : route.redirect
+      const redirectTarget =
+        typeof route.redirect === 'function'
+          ? route.redirect(matchedRoute)
+          : route.redirect
       this.#debug('route redirect', {
         from: matchedRouteDebugInfo(matchedRoute),
         redirectTarget,
@@ -841,11 +1090,14 @@ export class RouterView {
       return null
     }
     const to = {
-      path: matchedRoute.path, fullPath: matchedRoute.fullPath,
-      params: mergedParams, query,
+      path: matchedRoute.path,
+      fullPath: matchedRoute.fullPath,
+      params: mergedParams,
+      query,
       hash: routeHash(matchedRoute.fullPath, this.#nav),
       meta: route.meta,
-      layout: route.layout, matched: [route],
+      layout: route.layout,
+      matched: [route],
     }
     if (this.#beforeEnter) {
       let shouldContinue = true
@@ -867,10 +1119,6 @@ export class RouterView {
     }
     const cacheKey = this.resolveCacheKey(route, matchedRoute)
 
-    // staging 期写入目标路由状态（见 #navigateTo 注释）：页面/外壳构建时
-    // 读到目标 params/query；URL/历史/监听者留到 commit。
-    this.#stageApplyState(matchedRoute)
-
     // —— query/hash-only 快速路径 ——
     // cacheKey 相同、path 相同、layout 相同且页面已激活：仅 query/hash 变化，
     // 页面与 layout 均已就绪，只需同步 URL 与路由状态（current 是响应式 Wrap，
@@ -878,7 +1126,8 @@ export class RouterView {
     // 避免生命周期抖动（定时器/订阅被短暂停掉再恢复）及与首次导航的竞态。
     const currentPage = this.activePage
     const isQueryOnly = !!(
-      currentPage && cacheKey &&
+      currentPage &&
+      cacheKey &&
       currentPage.matchedRoute &&
       currentPage.matchedRoute.path === matchedRoute.path &&
       currentPage.matchedRoute.route?.layout === matchedRoute.route?.layout &&
@@ -888,7 +1137,8 @@ export class RouterView {
       this.#setRouterPath(matchedRoute, mode, options)
       currentPage.updateRouter(matchedRoute)
       this.#touchCache(cacheKey)
-      if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)
+      if (typeof this.#afterEnter === 'function')
+        this.#afterEnter(to, this.current)
       return { committed: true }
     }
 
@@ -900,26 +1150,40 @@ export class RouterView {
     }
 
     // —— 缓存未命中：确保外壳就绪后游离构建新页面 ——
-    const page = new Page(this, this.#renderer, this.#hostNode, matchedRoute, cacheKey)
+    const page = new Page(
+      this,
+      this.#renderer,
+      this.#hostNode,
+      matchedRoute,
+      cacheKey
+    )
     this.#debug('build page', {
       matched: matchedRouteDebugInfo(matchedRoute),
-      component: typeof route.component === 'function' ? '[function]' : route.component,
+      component:
+        typeof route.component === 'function' ? '[function]' : route.component,
       htmlPath: page.htmlPath,
-      fetchUrl: normalizeFetchUrl(page.htmlPath, this.modulePath),
+      fetchUrl: resourceKey(page.htmlPath, this.runtime),
       cacheKey,
       modulePath: this.modulePath,
     })
     let buildResult
     let layoutEntry = null
     try {
-      layoutEntry = await this.#ensureLayoutEntry(to.layout, this.runtime)
-      if (!isCurrent()) { page.destroy(); return null }
+      layoutEntry = await this.#ensureLayoutEntry(
+        to.layout,
+        this.runtime,
+        matchedRoute
+      )
+      if (!isCurrent()) {
+        page.destroy()
+        return null
+      }
       buildResult = await page.build(this.runtime, layoutEntry)
     } catch (error) {
       this.#warn('mount page failed', {
         matched: matchedRouteDebugInfo(matchedRoute),
         htmlPath: page.htmlPath,
-        fetchUrl: normalizeFetchUrl(page.htmlPath, this.modulePath),
+        fetchUrl: resourceKey(page.htmlPath, this.runtime),
         modulePath: this.modulePath,
         error,
       })
@@ -928,7 +1192,10 @@ export class RouterView {
         // 组件 404 不再抛穿杀整个应用（白屏 = 视觉静默空白）；错误暴露走
         // 红盒 + warn + errors 登记表。在应用内导航失败仍走下方抛穿：
         // #swallowNav 登记吃掉、当前页保持不变。
-        if (!isCurrent()) { page.destroy(); return null }
+        if (!isCurrent()) {
+          page.destroy()
+          return null
+        }
         reportError('navigation', error?.message || String(error), {
           ...this.#logContext(),
           stack: error?.stack || '',
@@ -939,10 +1206,15 @@ export class RouterView {
       page.destroy()
       throw error
     }
-    if (!isCurrent()) { page.destroy(); return null }
+    if (!isCurrent()) {
+      page.destroy()
+      return null
+    }
     if (buildResult?.redirect) {
       page.destroy()
-      const { path: redirectPath, data: redirectData } = splitRouteTarget(buildResult.redirect)
+      const { path: redirectPath, data: redirectData } = splitRouteTarget(
+        buildResult.redirect
+      )
       this.#swallowNav(this.replace(redirectPath, redirectData, options))
       return null
     }
@@ -950,22 +1222,30 @@ export class RouterView {
   }
 
   /** commit 阶段：同步原子切换。 */
-  #commitNavigation({ page, fromCache, to, cacheKey }, matchedRoute, mode, options) {
+  #commitNavigation(
+    { page, fromCache, to, cacheKey },
+    matchedRoute,
+    mode,
+    options
+  ) {
     const oldPage = this.#currentPage
     // 同外壳导航只退场内容，layout 保持在树上（省去拆装与生命周期抖动）
-    const sharesLayout = !!(oldPage && oldPage !== page &&
-      page.layoutDom && oldPage.layoutDom === page.layoutDom)
+    const sharesLayout = !!(
+      oldPage &&
+      oldPage !== page &&
+      page.layoutDom &&
+      oldPage.layoutDom === page.layoutDom
+    )
     oldPage?.deactive({ skipLayout: sharesLayout })
     this.#setRouterPath(matchedRoute, mode, options)
-    if (fromCache && page.matchedRoute.fullPath !== matchedRoute.fullPath) {
-      page.updateRouter(matchedRoute)
-    }
+    page.updateRouter(matchedRoute)
     if (cacheKey && !fromCache) this.#pageCache.set(cacheKey, page)
     page.activate()
-    this.#setRouteTitle(matchedRoute)   // 路由注册名优先于页面 <title>（page.activate 已回写页面源）
+    this.#setRouteTitle(matchedRoute) // 路由注册名优先于页面 <title>（page.activate 已回写页面源）
     this.#trimPageCache()
     this.activePage = page
-    if (typeof this.#afterEnter === 'function') this.#afterEnter(to, this.current)
+    if (typeof this.#afterEnter === 'function')
+      this.#afterEnter(to, this.current)
   }
 
   /**
@@ -978,20 +1258,28 @@ export class RouterView {
   async push(to, data = null, options = {}) {
     const matchedRoute = this.matchTo(to, data, options)
     if (!matchedRoute) {
-      this.#warn('push skipped: no route matched', this.debugContext({
-        target: to,
-        data,
-        normalized: this.normalizeRouteTarget(to, data, options),
-        navigationPrefix: this.resolveNavigationPrefixInfo(options.runtime || this.runtime),
-      }))
+      this.#warn(
+        'push skipped: no route matched',
+        this.debugContext({
+          target: to,
+          data,
+          normalized: this.normalizeRouteTarget(to, data, options),
+          navigationPrefix: this.resolveNavigationPrefixInfo(
+            options.runtime || this.runtime
+          ),
+        })
+      )
       return
     }
     if (isCatchAllRoute(matchedRoute.route)) {
-      this.#warn('push matched catch-all route', this.debugContext({
-        target: to,
-        data,
-        matched: matchedRouteDebugInfo(matchedRoute),
-      }))
+      this.#warn(
+        'push matched catch-all route',
+        this.debugContext({
+          target: to,
+          data,
+          matched: matchedRouteDebugInfo(matchedRoute),
+        })
+      )
     } else {
       this.#debug('push matched', {
         target: to,
@@ -1004,20 +1292,28 @@ export class RouterView {
   async replace(to, data = null, options = {}) {
     const matchedRoute = this.matchTo(to, data, options)
     if (!matchedRoute) {
-      this.#warn('replace skipped: no route matched', this.debugContext({
-        target: to,
-        data,
-        normalized: this.normalizeRouteTarget(to, data, options),
-        navigationPrefix: this.resolveNavigationPrefixInfo(options.runtime || this.runtime),
-      }))
+      this.#warn(
+        'replace skipped: no route matched',
+        this.debugContext({
+          target: to,
+          data,
+          normalized: this.normalizeRouteTarget(to, data, options),
+          navigationPrefix: this.resolveNavigationPrefixInfo(
+            options.runtime || this.runtime
+          ),
+        })
+      )
       return
     }
     if (isCatchAllRoute(matchedRoute.route)) {
-      this.#warn('replace matched catch-all route', this.debugContext({
-        target: to,
-        data,
-        matched: matchedRouteDebugInfo(matchedRoute),
-      }))
+      this.#warn(
+        'replace matched catch-all route',
+        this.debugContext({
+          target: to,
+          data,
+          matched: matchedRouteDebugInfo(matchedRoute),
+        })
+      )
     } else {
       this.#debug('replace matched', {
         target: to,
@@ -1035,31 +1331,45 @@ export class RouterView {
    * silent=true 时只同步 URL 与 current（响应式），不重新挂载页面。
    */
   setQuery(patch = {}, options = {}) {
+    const current = options.runtime?.routeState || this.current
     const mode = options.mode === 'push' ? 'push' : 'replace'
-    const query = options.merge === false ? {} : { ...(this.current.query || {}) }
+    const query = options.merge === false ? {} : { ...(current.query || {}) }
     Object.entries(patch || {}).forEach(([key, value]) => {
       if (value === null || value === undefined) delete query[key]
       // 空字符串：写入 ?key=（置空）。等价检查中“缺失 === 空串”归一，读取侧语义一致；
       // 若当前已是空串形态（?key=）则跳过导航，避免冗余。
       else query[key] = value
     })
-    const target = { path: this.current.path, query, hash: this.current.hash }
-    if (options.silent === true) return this.#syncLocation(target, mode, options)
+    const target = { path: current.path, query, hash: current.hash }
+    if (options.silent === true)
+      return this.#syncLocation(target, mode, options)
     // 目标 query 与当前等价（空值归一：缺失 === ''）时跳过导航。
     // 否则 $watch 初始化等场景 setQuery 会触发冗余导航，与首次导航形成竞态：
     // 旧导航 mount 完成后 navId 过期销毁 page，把正在解析中的 layout 子组件
     // （vparsing 中）实例 purge 掉，组件永久隐藏。
-    const curQuery = this.current.query || {}
+    const curQuery = current.query || {}
     const patchKeys = new Set(Object.keys(patch || {}))
     const keys = new Set([...Object.keys(curQuery), ...Object.keys(query)])
     for (const k of keys) {
       // 显式删除（null/undefined）但当前仍残留（含空串形态 ?key=）→ 必须导航清除。
       // 缺失与 '' 归一相等会掩盖此差异，若不强制导航，?key= 会残留在 URL 上删不掉。
-      if (patchKeys.has(k) && query[k] === undefined && curQuery[k] !== undefined) {
-        return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+      if (
+        patchKeys.has(k) &&
+        query[k] === undefined &&
+        curQuery[k] !== undefined
+      ) {
+        return this[mode](
+          target.path,
+          { query: target.query, hash: target.hash },
+          options
+        )
       }
       if ((curQuery[k] ?? '') !== (query[k] ?? '')) {
-        return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+        return this[mode](
+          target.path,
+          { query: target.query, hash: target.hash },
+          options
+        )
       }
     }
   }
@@ -1071,26 +1381,36 @@ export class RouterView {
    * options: 同 setQuery。
    */
   setParams(patch = {}, options = {}) {
+    const current = options.runtime?.routeState || this.current
     const mode = options.mode === 'push' ? 'push' : 'replace'
-    const template = this.current.matched?.[0]?.path
+    const template = current.matched?.[0]?.path
     if (!template || !/[:*]/.test(template)) {
-      this.#warn('setParams skipped: current route has no param template', this.debugContext({
-        patch,
-        currentPath: this.current.path,
-        routePath: template || '',
-      }))
+      this.#warn(
+        'setParams skipped: current route has no param template',
+        this.debugContext({
+          patch,
+          currentPath: current.path,
+          routePath: template || '',
+        })
+      )
       return
     }
-    const source = options.merge === false
-      ? { ...(patch || {}) }
-      : { ...(this.current.params || {}), ...(patch || {}) }
+    const source =
+      options.merge === false
+        ? { ...(patch || {}) }
+        : { ...(current.params || {}), ...(patch || {}) }
     const target = {
       path: this.#fillRouteTemplate(template, source),
-      query: { ...(this.current.query || {}) },
-      hash: this.current.hash,
+      query: { ...(current.query || {}) },
+      hash: current.hash,
     }
-    if (options.silent === true) return this.#syncLocation(target, mode, options)
-    return this[mode](target.path, { query: target.query, hash: target.hash }, options)
+    if (options.silent === true)
+      return this.#syncLocation(target, mode, options)
+    return this[mode](
+      target.path,
+      { query: target.query, hash: target.hash },
+      options
+    )
   }
 
   // 用 params 反向填充路由模板生成 path，替换顺序与 RouteMatcher.pathToRegexp 一致
@@ -1121,16 +1441,30 @@ export class RouterView {
 
   // 仅同步 URL 与 current（silent 模式），不触发守卫与页面挂载流程
   #syncLocation(target, mode, options = {}) {
-    const matchedRoute = this.matchTo(target.path, { query: target.query, hash: target.hash }, options)
+    const matchedRoute = this.matchTo(
+      target.path,
+      { query: target.query, hash: target.hash },
+      options
+    )
     if (!matchedRoute) {
-      this.#warn('sync location skipped: no route matched', this.debugContext({
-        target,
-        normalized: this.normalizeRouteTarget(target.path, { query: target.query, hash: target.hash }, options),
-      }))
+      this.#warn(
+        'sync location skipped: no route matched',
+        this.debugContext({
+          target,
+          normalized: this.normalizeRouteTarget(
+            target.path,
+            { query: target.query, hash: target.hash },
+            options
+          ),
+        })
+      )
       return
     }
     if (this.activePage && this.current?.fullPath === matchedRoute.fullPath) {
-      this.#debug('sync location skipped: already active', matchedRouteDebugInfo(matchedRoute))
+      this.#debug(
+        'sync location skipped: already active',
+        matchedRouteDebugInfo(matchedRoute)
+      )
       return
     }
     this.#debug('sync location (silent)', {
@@ -1138,34 +1472,53 @@ export class RouterView {
       mode,
       matched: matchedRouteDebugInfo(matchedRoute),
     })
+    const pageState = options.runtime?.routeState
+    if (
+      pageState &&
+      pageState !== this.activePage?.instance.runtime?.routeState
+    ) {
+      return this[mode](
+        target.path,
+        { query: target.query, hash: target.hash },
+        options
+      )
+    }
     this.#setRouterPath(matchedRoute, mode, options)
-    if (this.activePage) this.activePage.matchedRoute = matchedRoute
+    this.activePage?.updateRouter(matchedRoute)
   }
 
-  go(n) { this.#nav.go(n) }
-  back() { this.#nav.back() }
-  forward() { this.#nav.forward() }
+  go(n) {
+    this.#nav.go(n)
+  }
+  back() {
+    this.#nav.back()
+  }
+  forward() {
+    this.#nav.forward()
+  }
 
   resolveRoutesUrl(source = this.#routesSource, runtime = this.runtime || {}) {
-    const routesSource = source || '/routes.js'
-    if (/^https?:\/\//.test(routesSource)) return routesSource
-    if (routesSource.startsWith('/')) return resolveScopedUrl(routesSource, getModulePath(runtime))
-    return resolveScopedUrl(`/${routesSource.replace(/^\.?\//, '')}`, getModulePath(runtime))
+    return resourceKey(source || '/routes.js', runtime)
   }
 
   async loadRoutes(source = this.#routesSource) {
     const isInlineRoutes = source && typeof source !== 'string'
-    const routesUrl = isInlineRoutes ? '' : this.resolveRoutesUrl(source, this.runtime || {})
-    this.#debug('load routes', this.debugContext({
-      routesUrl,
-      routesSourceType: isInlineRoutes ? typeof source : 'url',
-    }))
-    try {
-      const rawRoutesModule = isInlineRoutes ? await source : await import(withImportBust(routesUrl))
-      const routeModule = await normalizeRoutesModule(rawRoutesModule, {
-        $mod: this.runtime?.$mod || null,
-        router: this,
+    const routesUrl = isInlineRoutes
+      ? ''
+      : this.resolveRoutesUrl(source, this.runtime || {})
+    this.#debug(
+      'load routes',
+      this.debugContext({
+        routesUrl,
+        routesSourceType: isInlineRoutes ? typeof source : 'url',
       })
+    )
+    try {
+      const execution =
+        moduleRecord(this.runtime)?.execution ||
+        new NativeExecutor(resourcesFor(this.runtime))
+      const context = { $mod: this.runtime?.$mod || null, router: this }
+      const routeModule = await execution.routes(source, context)
       this.#debug('routes loaded', {
         routesUrl,
         count: routeModule.routes.length,
@@ -1186,31 +1539,47 @@ export class RouterView {
     this.#routesSource = source || '/routes.js'
     this.resetRoutes()
     const routeModule = await this.loadRoutes(this.#routesSource)
-    this.#routePathPrefix = routeModule.path_prefix === undefined
-      ? normalizeRoutePrefix(resolveScope(this.runtime))
-      : normalizeRoutePrefix(routeModule.path_prefix)
-    this.#routeComponentPrefix = normalizeRoutePrefix(routeModule.component_prefix || '')
+    this.#routePathPrefix =
+      routeModule.path_prefix === undefined
+        ? normalizeRoutePrefix(getModulePath(this.runtime))
+        : normalizeRoutePrefix(routeModule.path_prefix)
+    this.#routeComponentPrefix = normalizeRoutePrefix(
+      routeModule.component_prefix || ''
+    )
     this.#beforeEnter = routeModule.beforeEnter || null
     this.#afterEnter = routeModule.afterEnter || null
     this.addRoutes(routeModule.routes, {
       pathPrefix: this.#routePathPrefix,
       componentPrefix: this.#routeComponentPrefix,
     })
-    await this.handleNavigation({ type: 'replace', to: this.#nav.href, committed: true })
+    await this.handleNavigation({
+      type: 'replace',
+      to: this.#nav.href,
+      committed: true,
+    })
   }
 
   async reloadPrefix() {
-    const routerPrefixInfo = this.resolveRouterPrefixInfo(this.#hostNode, this.runtime)
+    const routerPrefixInfo = this.resolveRouterPrefixInfo(
+      this.#hostNode,
+      this.runtime
+    )
     const nextPrefix = routerPrefixInfo.value
     if (nextPrefix === this.#routerPrefix) return
-    this.#debug('router prefix changed', this.debugContext({
-      nextPrefix,
-      routerPrefixSource: routerPrefixInfo.source,
-      routerPrefixRaw: routerPrefixInfo.raw,
-    }))
+    this.#debug(
+      'router prefix changed',
+      this.debugContext({
+        nextPrefix,
+        routerPrefixSource: routerPrefixInfo.source,
+        routerPrefixRaw: routerPrefixInfo.raw,
+      })
+    )
     this.#routerPrefix = nextPrefix
     this.#disposeNavListener?.()
-    this.#nav = resolveRouterHistory(this.#hostNode, this.resolveNavigationPrefix(this.runtime))
+    this.#nav = resolveRouterHistory(
+      this.#hostNode,
+      this.resolveNavigationPrefix(this.runtime)
+    )
     if (this.#nav?.affectsDocument === false) {
       if (this.#nav.location) this.runtime.$sys.location = this.#nav.location
       if (this.#nav.history) this.runtime.$sys.history = this.#nav.history
@@ -1229,17 +1598,27 @@ export class RouterView {
     Object.assign(this.current, {
       params: nextParams,
     })
-    this.#lastCommitted = this.#snapshot(this.current)
-    this.#debug('router params changed', this.debugContext({
-      params: nextParams,
-    }))
+    if (this.activePage)
+      this.activePage.updateRouter(this.activePage.matchedRoute)
+    this.#debug(
+      'router params changed',
+      this.debugContext({
+        params: nextParams,
+      })
+    )
     this.#notifyListeners(this.current, previousSnapshot)
   }
 
   async handleNavigation(event) {
     if (event?.source === this) return
-    const target = event?.type === 'popstate' ? (event.url || event.to) : (event?.to || event?.url)
-    const method = event?.type === 'replace' || event?.type === 'popstate' ? 'replace' : 'push'
+    const target =
+      event?.type === 'popstate'
+        ? event.url || event.to
+        : event?.to || event?.url
+    const method =
+      event?.type === 'replace' || event?.type === 'popstate'
+        ? 'replace'
+        : 'push'
     if (!target) return
     const normalizeOptions = {
       preserveTargetPath: event?.committed === true,
@@ -1247,11 +1626,14 @@ export class RouterView {
     }
     const matchedRoute = this.matchTo(target, null, normalizeOptions)
     if (!matchedRoute) {
-      this.#debug('history navigation skipped: no route matched', this.debugContext({
-        event,
-        target,
-        normalized: this.normalizeRouteTarget(target, null, normalizeOptions),
-      }))
+      this.#debug(
+        'history navigation skipped: no route matched',
+        this.debugContext({
+          event,
+          target,
+          normalized: this.normalizeRouteTarget(target, null, normalizeOptions),
+        })
+      )
       return
     }
     this.#debug('history navigation matched', {
@@ -1260,18 +1642,28 @@ export class RouterView {
       method,
       matched: matchedRouteDebugInfo(matchedRoute),
     })
-    await this.#navigateTo(matchedRoute, method, { commit: event?.committed !== true })
+    await this.#navigateTo(matchedRoute, method, {
+      commit: event?.committed !== true,
+    })
   }
 
   async mount(renderer, node, runtime) {
     this.#hostNode = node
     this.#renderer = renderer
-    const routerRuntime = createRuntimeContext(runtime || null, runtime?.$mod || runtime || null, { $router: this })
+    const routerRuntime = createRuntimeContext(
+      runtime || null,
+      runtime?.$mod || runtime || null,
+      { $router: this }
+    )
     this.#modulePath = getModulePath(routerRuntime || {})
     const routerPrefixInfo = this.resolveRouterPrefixInfo(node, routerRuntime)
     this.#routerPrefix = routerPrefixInfo.value
     this.#fixedParams = normalizeFixedParams(readRouterParamsSource(node))
-    if (!this.#nav) this.#nav = resolveRouterHistory(node, this.resolveNavigationPrefix(routerRuntime))
+    if (!this.#nav)
+      this.#nav = resolveRouterHistory(
+        node,
+        this.resolveNavigationPrefix(routerRuntime)
+      )
     if (this.#nav?.affectsDocument === false) {
       if (this.#nav.location) routerRuntime.$sys.location = this.#nav.location
       if (this.#nav.history) routerRuntime.$sys.history = this.#nav.history
@@ -1283,12 +1675,15 @@ export class RouterView {
     Object.assign(this.current, {
       params: this.mergeParams({}),
     })
-    this.#debug('mount router', this.debugContext({
-      routerPrefixSource: routerPrefixInfo.source,
-      routerPrefixRaw: routerPrefixInfo.raw,
-      initial: node.getAttribute('initial') || '',
-      history: node.getAttribute('history') || 'browser',
-    }))
+    this.#debug(
+      'mount router',
+      this.debugContext({
+        routerPrefixSource: routerPrefixInfo.source,
+        routerPrefixRaw: routerPrefixInfo.raw,
+        initial: node.getAttribute('initial') || '',
+        history: node.getAttribute('history') || 'browser',
+      })
+    )
     this.resetRoutes()
     this.#disposeNavListener?.()
     this.#disposeNavListener = this.#nav.onChange((event) => {
@@ -1296,23 +1691,29 @@ export class RouterView {
     })
     this.#disposeRoutesSourceListener?.()
     const onRoutesSourceChange = (event) => {
-      this.reloadRoutes(event?.detail?.source).catch(error => {
+      this.reloadRoutes(event?.detail?.source).catch((error) => {
         this.#warn('routes reload failed', this.debugContext({ error }))
       })
     }
     node.addEventListener('vhtml-router-routes-change', onRoutesSourceChange)
     this.#disposeRoutesSourceListener = () => {
-      node.removeEventListener('vhtml-router-routes-change', onRoutesSourceChange)
+      node.removeEventListener(
+        'vhtml-router-routes-change',
+        onRoutesSourceChange
+      )
     }
     this.#disposePrefixSourceListener?.()
     const onPrefixSourceChange = () => {
-      this.reloadPrefix().catch(error => {
+      this.reloadPrefix().catch((error) => {
         this.#warn('router prefix reload failed', this.debugContext({ error }))
       })
     }
     node.addEventListener('vhtml-router-prefix-change', onPrefixSourceChange)
     this.#disposePrefixSourceListener = () => {
-      node.removeEventListener('vhtml-router-prefix-change', onPrefixSourceChange)
+      node.removeEventListener(
+        'vhtml-router-prefix-change',
+        onPrefixSourceChange
+      )
     }
     this.#disposeParamsSourceListener?.()
     const onParamsSourceChange = (event) => {
@@ -1320,7 +1721,10 @@ export class RouterView {
     }
     node.addEventListener('vhtml-router-params-change', onParamsSourceChange)
     this.#disposeParamsSourceListener = () => {
-      node.removeEventListener('vhtml-router-params-change', onParamsSourceChange)
+      node.removeEventListener(
+        'vhtml-router-params-change',
+        onParamsSourceChange
+      )
     }
     await this.reloadRoutes(this.#routesSource)
   }
@@ -1333,13 +1737,25 @@ export class RouterRuntime {
   #browserHistory = getBrowserHistory()
   #views = new WeakMap()
 
-  constructor() { this.#anchorClick.init() }
+  constructor() {
+    this.#anchorClick.init()
+  }
 
-  push(to) { this.#browserHistory.request('push', to) }
-  replace(to) { this.#browserHistory.request('replace', to) }
-  go(n) { this.#browserHistory.go(n) }
-  back() { this.#browserHistory.back() }
-  forward() { this.#browserHistory.forward() }
+  push(to) {
+    this.#browserHistory.request('push', to)
+  }
+  replace(to) {
+    this.#browserHistory.request('replace', to)
+  }
+  go(n) {
+    this.#browserHistory.go(n)
+  }
+  back() {
+    this.#browserHistory.back()
+  }
+  forward() {
+    this.#browserHistory.forward()
+  }
 
   mountView(renderer, node, runtime) {
     let view = this.#views.get(node)

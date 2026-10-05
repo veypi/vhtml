@@ -2,8 +2,8 @@
  * error-contract.test.js — v0.10.3 沙箱与错误契约
  *
  * 覆盖：
- *   1. unsafe 防误触加固：$data/$mod/$sys 与裸 data 函数的 .constructor 逃逸封堵，
- *      且 safeView 不破坏响应式依赖注册
+ *   1. 原生作用域身份：$data/$mod/$sys 与裸 data 函数的 .constructor 逃逸封堵，
+ *      且执行器值接口不破坏响应式依赖注册
  *   2. $emit 冲突名 fail-fast（DOM 内置事件名 throw）
  *   3. 编译失败必须暴露（throw + 登记表），不再返回 null 静默失效
  *   4. 运行期表达式错误登记（__vhtml_dev.errors）
@@ -19,7 +19,8 @@ import { loadSrc, flush } from './harness.js'
 
 await loadSrc()
 const { Wrap, Watch, Cancel } = await import('../src/reactive.js')
-const { Run, createScopeProxy } = await import('../src/sandbox.js')
+const { Run } = await import('../src/sandbox.js')
+const { nativeScope } = await import('../src/execution/native.js')
 const { errorLog } = await import('../src/errors.js')
 const { parseRef } = await import('../src/component.js')
 const { ComponentScope } = await import('../src/component-scope.js')
@@ -46,7 +47,7 @@ function stubCtx() {
     compileNode() {},
     suspendMO() {},
     resumeMO() {},
-    findLastAccess() { return null },
+    bindingPath() { throw new Error("Unexpected binding") },
   }
 }
 
@@ -62,21 +63,21 @@ function stubTarget(setupCode = null) {
 async function mountStub(setupCode = null, options = {}) {
   const dom = document.createElement('div')
   document.body.appendChild(dom)
-  await parseRef('', dom, {}, {}, stubTarget(setupCode), options, stubCtx())
-  return { dom, instance: instanceOf(dom, false) }
+  const error = await parseRef('', dom, {}, {}, { ...options, target: stubTarget(setupCode) }, stubCtx()).then(() => null, error => error)
+  return { dom, instance: instanceOf(dom, false), error }
 }
 
 // ====================================================================
-// 1. unsafe 防误触加固
+// 1. 原生作用域身份
 // ====================================================================
 
-test('safeFunction covers $data/$mod/$sys and bare data functions', () => {
+test('native scope preserves native function identity in data/mod/sys', () => {
   const data = Wrap({ n: 1, fn: (x) => x * 2 })
   const runtime = {
     $mod: { helper: () => 'mod' },
     $sys: { emit: () => 'sys' },
   }
-  const scope = createScopeProxy(data, runtime)
+  const scope = nativeScope(data, runtime)
 
   // 正常调用不受影响
   assert.equal(scope.fn(2), 4)
@@ -85,15 +86,14 @@ test('safeFunction covers $data/$mod/$sys and bare data functions', () => {
   assert.equal(scope.helper(), 'mod')
   assert.equal(scope.emit(), 'sys')
 
-  // .constructor / __proto__ 逃逸链全部封堵
-  assert.equal(scope.fn.constructor, undefined, 'bare data function')
-  assert.equal(scope.$data.fn.constructor, undefined, '$data view function')
-  assert.equal(scope.helper.constructor, undefined, '$mod function')
-  assert.equal(scope.emit.constructor, undefined, '$sys function')
-  assert.equal(scope.fn.__proto__, undefined)
+  assert.equal(scope.fn, data.fn)
+  assert.equal(scope.$data, data)
+  assert.equal(scope.$mod, runtime.$mod)
+  assert.equal(scope.$sys, runtime.$sys)
+
 })
 
-test('safeView preserves reactive dependency registration', async () => {
+test('native scope preserves reactive dependency registration', async () => {
   const data = Wrap({ n: 1 })
   let seen = []
   const cap = captureConsole()
@@ -112,14 +112,14 @@ test('locked (read-only, non-configurable) function props: no proxy invariant vi
   const mod = {}
   mod.$t = (k) => `t:${k}`
   Object.defineProperty(mod, '$t', { value: mod.$t, writable: false, configurable: false, enumerable: true })
-  const scope = createScopeProxy(Wrap({}), { $mod: mod })
+  const scope = nativeScope(Wrap({}), { $mod: mod })
   assert.equal(scope.$mod.$t('a'), 't:a', 'locked function callable through $mod view')
   assert.equal(scope.$t('b'), 't:b', 'locked function callable through bare $mod branch')
 
   const rawData = {}
   rawData.fn = () => 7
   Object.defineProperty(rawData, 'fn', { value: rawData.fn, writable: false, configurable: false, enumerable: true })
-  const scope2 = createScopeProxy(Wrap(rawData), {})
+  const scope2 = nativeScope(Wrap(rawData), {})
   assert.equal(scope2.fn(), 7, 'locked data function callable through scope proxy')
 })
 
@@ -217,9 +217,9 @@ test('setup $watch first evaluation sees bound props (no timer needed)', async (
   dom.setAttribute(':greeting', 'parent.msg')
   document.body.appendChild(dom)
   const cap = captureConsole()
-  await parseRef('', dom, { parent: { msg: 'hello' } }, {}, stubTarget(
+  await parseRef('', dom, { parent: { msg: 'hello' } }, {}, { target: stubTarget(
     '$data.greeting = ""\n$watch(() => $data.greeting, v => window.__seen.push(v))',
-  ), {}, stubCtx())
+  ) }, stubCtx())
   cap.restore()
   // 同步断言：排空发生在 props 绑定之后、同帧之内（旧实现需等 50ms 定时器）
   assert.deepEqual(window.__seen, ['hello'], 'first callback fires with the bound prop value')
@@ -240,7 +240,7 @@ test('parseRef options.keepOnDetach marks the instance; data-keep attribute is d
   dom2.setAttribute('data-keep', '')
   document.body.appendChild(dom2)
   const cap2 = captureConsole()
-  await parseRef('', dom2, {}, {}, stubTarget(), {}, stubCtx())
+  await parseRef('', dom2, {}, {}, { target: stubTarget() }, stubCtx())
   cap2.restore()
   const inst2 = instanceOf(dom2, false)
   assert.equal(inst2.keepOnDetach, false, 'attribute channel removed')
@@ -255,7 +255,8 @@ test('parseRef options.keepOnDetach marks the instance; data-keep attribute is d
 test('mount failure renders a visible error placeholder instead of blank', async () => {
   const cap = captureConsole()
   const before = errorLog.length
-  const { dom, instance } = await mountStub('this is ((( broken')
+  const { dom, instance, error } = await mountStub('this is ((( broken')
+  assert.ok(error instanceof SyntaxError, 'mount rejects with the original failure')
   cap.restore()
   const pre = dom.querySelector('pre.vhtml-error')
   assert.ok(pre, 'placeholder rendered')

@@ -16,7 +16,6 @@ export class ComponentInstance {
     this.slotContents = null
     this.vforData = null
     this.slotOutletState = null
-    this.unsafe = false
     // 组件级最近一次错误（v0.10.3 错误契约）：{ kind: 'compile'|'expression'|'mount', message, code? }
     // 全局历史见 __vhtml_dev.errors（errors.js 登记表）
     this._error = null

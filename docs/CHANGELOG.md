@@ -1,5 +1,35 @@
 # 更新日志
 
+## Unreleased — 模块沙箱与运行时统一
+
+- 模板缓存合并为按 URL 登记的单记录，删除双 Map 和全局模板 epoch；修复局部清理误伤其他在途加载、依赖准备结束返回旧描述符及继续执行后续脚本的问题，保留 keepLive 语义。
+- env/routes/setup 静态与动态 import 共用原生加载、缓存穿透和超时入口；保留各入口的路径解析规则。
+- 删除无调用方的 mergeModulePatch、createScopeProxy 旧别名和仅测试使用的 loadEnv 分支；测试改走正常模块初始化路径。
+
+- 模块登记合并初始化 Promise、别名及执行器，以记录身份失效取代多张表和模块全局 epoch；旧 env 不能污染新记录，发现阶段复用 env 探测并释放响应体。
+- 每个组件只保留一个 VM 执行上下文，临时列表数据随调用传入，修复已移除行的执行上下文长期保留。
+- 原生/隔离绑定共用样式快照、diff 与 DOM 属性写入，修复嵌套 style 不响应和用户编辑后的 input 值不更新；保留静态样式。
+- unsafe 路由守卫使用纯数据快照及 VM 内 next，修复宿主 matcher/回调无法跨边界导致导航失败；内联路由也经模块执行器处理。
+- 模块统一持有并释放资源，VM 仅报告致命错误；移除双向 dispose 回调，补齐装配失败与清理异常的回收回归。
+
+- 资源地址与模板缓存键统一为规范绝对 URL，加载、scopeOf、失效共用解析规则；删除多套前缀推断。
+- 原生/隔离执行器共用 AST 和作用域查找语义；env 初始化绑定模块上下文，诊断随 runtime 传递，删除全局加载栈与编译上下文。
+- 模板解析与依赖准备分开，env/head/routes 通过模块执行器加载。挂载 Promise 统一传递成功与失败；parseRef 固定 options 参数，双向绑定仅支持静态路径。
+- 路由构建使用页面私有目标状态，提交前不修改当前页面状态；删除共享 current 的回滚流程。
+
+- 明确 JS 与受控能力为隔离边界，保留共享 DOM/CSS，不引入 Shadow DOM。模板与动态 DOM 共用元素规则，属性/样式共用组件归属和异步写入代次；拒绝静态 preload 等未提供的资源入口。
+- 模块正常/异常终止统一回收网络、监听器、观察器、GPU 与引擎；修复 DOM 句柄累积、空响应/丢弃响应占用连接名额及销毁后迟到资源写回。
+
+- 新增 SVG 与 WebGL1/2 受控适配，统一 SVG 引用、DOM 克隆、GPU 句柄和资源配额；补齐 URL、模块 location 与常用 DOM 能力。增加 D3、ECharts SVG、Three.js、jQuery、Axios 与工具库的真实兼容性回归。
+
+- unsafe 模块新增通用 HTML DOM 与 Canvas 2D 接口，虚拟 document、事件和观察器支持模块内第三方 UI 库；增加真实 ECharts / Chart.js 验证及库实例销毁检查。
+
+- unsafe 只来自后端首次响应头；删除组件 unsafe、restrictedFetch 和原生函数黑名单。
+- 新增原生/QuickJS 执行器与统一模块资源服务，共享响应式内核、EventBus、i18n；接入模块脚本、import、事件、绑定及受控 DOM。
+- fetch、XHR、WebSocket、EventSource、Beacon 使用模块前缀和统一地址限制；HTML/CSS/图片资源在进入浏览器前检查。
+- 构建产物改为入口与按需加载分片，部署完整 dist。能力边界及限制见 [模块沙箱](module-sandbox.md)。
+
+
 本项目的所有重要变更都将记录在此文件中。
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，

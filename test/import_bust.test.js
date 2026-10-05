@@ -17,7 +17,7 @@ import { setupDom } from './harness.js'
 
 setupDom()
 
-const { bumpImportEpoch, withImportBust } = await import('../src/module.js')
+const { bumpImportEpoch, withImportBust } = await import('../src/imports.js')
 const { templateLoader } = await import('../src/loader.js')
 
 test('令牌为 0：URL 原样返回', () => {

@@ -1,129 +1,58 @@
-import { getModulePath, withImportBust } from './module.js'
+import { moduleRecord } from './execution/context.js'
+import { resourcesFor } from './resource.js'
+import { prepareSource } from './execution/source.js'
 import { withTimeout } from './utils.js'
 
-function resolvePath(relativePath, currentPath) {
-  if (relativePath.startsWith('/')) {
-    return relativePath
-  }
-  const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'))
-  const currentSegments = currentDir.split('/').filter((segment) => segment !== '')
-  const relativeSegments = relativePath.split('/').filter((segment) => segment !== '')
-
-  for (const segment of relativeSegments) {
-    if (segment === '..') {
-      if (currentSegments.length > 0) {
-        currentSegments.pop()
-      }
-      continue
-    }
-    if (segment !== '.') {
-      currentSegments.push(segment)
-    }
-  }
-  return `/${currentSegments.join('/')}`
+// ESM 缓存穿透令牌：浏览器原生模块表按完整 URL 缓存、无任何 API 可驱逐，
+// clearScoped/clear 管不到它。令牌随清缓存递增，import 点（imports.js 静态/
+// 动态、env.js）在令牌非 0 时给 URL 追加 ?__ve={n}——新 URL 即新模块表条目，
+// 强制走网络重取（服务端对 query 无感，etag 协商仍生效）。跨令牌同模块并存
+// 两个实例（旧页面实例持旧引用），与 invalidation 语义一致，不是 HMR。
+let importEpoch = 0
+export function bumpImportEpoch() {
+  importEpoch++
+}
+export function withImportBust(url) {
+  if (!importEpoch) return url
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url
+  // 外部 http(s)（CDN 三方库）不穿透；同源绝对 URL（env.js、动态 import 的
+  // origin 绝对化产物）照常穿透
+  if (
+    /^https?:\/\//.test(url) &&
+    typeof window !== 'undefined' &&
+    window.location &&
+    !url.startsWith(window.location.origin)
+  )
+    return url
+  return url + (url.includes('?') ? '&' : '?') + '__ve=' + importEpoch
 }
 
-function normalizeSourcePath(src = '', scoped = '') {
-  if (!src) {
-    return scoped || '/'
-  }
-  if (src.startsWith('http') || !scoped || src.startsWith(scoped)) {
-    return src
-  }
-  return `${scoped}${src}`
+// All native import sites share transport, cache busting and error propagation.
+export function importNative(url) {
+  return withTimeout(import(withImportBust(url)), 10000, `import ${url}`)
 }
 
-function toAbsoluteModuleUrl(url, scoped, src) {
-  if (url.startsWith('@')) {
-    url = url.slice(1)
-  } else if (!url.startsWith('http')) {
-    if (url.startsWith('/')) {
-      url = scoped ? `${scoped}${url}` : url
-    } else {
-      url = resolvePath(url, src)
-    }
-  }
-  if (!url.endsWith('.js')) {
-    url += '.js'
-  }
-  if (!url.startsWith('http')) {
-    url = `${window.location.origin}${url}`
-  }
-  return url
+export function importModule(specifier, runtime = {}, source = '') {
+  const resources = resourcesFor(runtime)
+  const from = new URL(source || resources.meta.root, window.location.origin)
+    .href
+  const url = new URL(resources.resolve(specifier, { from }).href)
+  if (!/\.[^/]+$/.test(url.pathname)) url.pathname += '.js'
+  return importNative(url.href)
 }
 
-function parseImportBindings(bindingCode, rawStatement) {
-  const binding = bindingCode.trim()
-  if (/^\w+$/.test(binding)) {
-    return binding
+export async function parseImports(code, data = {}, runtime = {}, source = '') {
+  const compiled = prepareSource(
+    code,
+    source || moduleRecord(runtime)?.meta.root || window.location.href,
+    { setup: true }
+  )
+  for (const statement of compiled.imports) {
+    const namespace = await importModule(statement.source, runtime, source)
+    for (const binding of statement.bindings) {
+      data[binding.local] =
+        binding.imported === '*' ? namespace : namespace[binding.imported]
+    }
   }
-  if (/^{[\w\s,]+}$/.test(binding)) {
-    return binding.slice(1, -1).split(',').map((item) => item.trim()).filter(Boolean)
-  }
-  throw new Error(`unsupported import: ${rawStatement}`)
+  return compiled.source
 }
-
-async function injectImportedModule(binding, module, target) {
-  if (typeof binding === 'string') {
-    target[binding] = module.default ?? module
-    return
-  }
-  const defaultModule = module.default || {}
-  binding.forEach((name) => {
-    if (name in module) {
-      target[name] = module[name]
-    } else if (name in defaultModule) {
-      target[name] = defaultModule[name]
-    }
-  })
-}
-
-export async function parseImports(code, data = {}, runtime = {}, src = '', unsafe = false) {
-  if (unsafe) {
-    return code.replace(/^(?:\s*\/\/.*|\s*\/\*[\s\S]*?\*\/)*\s*import\s+.+$/gm, '').trim()
-  }
-
-  const scoped = getModulePath(runtime)
-  const normalizedSrc = normalizeSourcePath(src, scoped)
-  let codeCopy = code
-  let match
-
-  const awaitImportRegex = /await import\(['"]([^'"]+)['"]\)/gm
-  while ((match = awaitImportRegex.exec(code)) !== null) {
-    let url = match[1]
-    if (!url.startsWith('http')) {
-      url = resolvePath(url, normalizedSrc)
-      url = `${window.location.origin}${url}`
-      // 穿透令牌在重写时烘焙进代码：清缓存后描述符重取、代码重编译，
-      // 烘焙值恒为当前代次；旧编译产物属于旧实例（invalidation 语义）
-      url = withImportBust(url)
-    }
-    codeCopy = codeCopy.replace(match[0], `await import('${url}')`)
-  }
-
-  const importRegex = /^[\s/]*import\s+([\w{},\s]+)\s+from\s+['"]([^'"]+)['"][;\s]*$/gm
-  while ((match = importRegex.exec(code)) !== null) {
-    const modulePath = match[2]
-    if (match[0].trim().startsWith('//')) {
-      codeCopy = codeCopy.replace(match[0], '')
-      continue
-    }
-    if (/\.min\.js$/.test(modulePath) || modulePath.startsWith('http')) {
-      console.warn(`外部库请使用 <script> 标签加载，无法通过 import 导入: ${modulePath}`)
-      codeCopy = codeCopy.replace(match[0], '')
-      continue
-    }
-    codeCopy = codeCopy.replace(match[0], '')
-    try {
-      const moduleUrl = toAbsoluteModuleUrl(modulePath, scoped, normalizedSrc)
-      const binding = parseImportBindings(match[1], match[0])
-      const module = await withTimeout(import(withImportBust(moduleUrl)), 10000, `import ${moduleUrl}`)
-      await injectImportedModule(binding, module, data)
-    } catch (error) {
-      console.error(`模块加载失败 (${match[0]}):`, error.message)
-    }
-  }
-  return codeCopy.trim()
-}
-
-export default { parseImports }

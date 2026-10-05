@@ -80,7 +80,7 @@ Attributes on a component tag map to the child's `$data` keys (auto camelCase �
 | `v:score="score"` | two-way binding |
 | `disabled` (bare) | boolean `true` when the key exists in child `$data` |
 
-`v:` two-way bindings support nested paths (`v:value="user.nickname"`, `v:value="settings['app.name']"`).
+`v:` two-way bindings accept only static property paths, shared by normal and unsafe modules; dynamic indices and calls are rejected. Use explicit event handlers for computed assignment targets. Supported nested paths include (`v:value="user.nickname"`, `v:value="settings['app.name']"`).
 The binding resolves as a **lazy path chain**: every read/write walks the path from the root
 data, so after an intermediate object is replaced wholesale (e.g. `user = await fetch()`) the
 binding follows the new object. Complex expressions (variable keys, function calls, operators)
@@ -113,7 +113,6 @@ Module-scoped context shared by all components under the same `scoped` prefix. N
 | `$i18n` | I18n instance |
 | `$t(key, params)` | translation shorthand |
 | `fetch(url, options)` | scoped fetch — relative and `/`-prefixed URLs auto-prepend `scoped` |
-| `restrictedFetch` | replaces `fetch` in `unsafe` mode — throws on http(s) URLs and cross-scoped paths |
 | `define(key, value, opts?)` | define a module entry — see below |
 
 Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as custom keys on `$mod`.
@@ -123,8 +122,7 @@ Backend response headers prefixed `vhtml-` (e.g. `vhtml-debug`) are injected as 
 - Read: a local entry wins; if the key exists only in the shared layer, `$mod.key` returns the shared value (reactive — shared updates propagate to readers in any module).
 - Write by assignment `$mod.x = y`: local entry present → writes the local entry; only a shared entry exists → writes through to the shared entry (visible to every module); neither exists → creates a local private entry. Assignment is always legal and equals `define` without opts.
 - `$mod.define(key, value, opts?)` = explicit **local** write: never touches the shared layer, so it can shadow a shared same-name entry (that is its purpose vs assignment). `manager.define(key, value, opts?)` (the second `env.js` argument) = explicit **shared** write. Both accept `{ get, set, writable, configurable, enumerable }`; defaults are all `true` (repeated define = overwrite, last wins). Readonly = `{ writable: false, configurable: false }` — later assignment or re-define throws a TypeError. Accessor options are supported: getters re-evaluate reactively, setters notify watchers.
-- Built-in keys (`scoped`, `$bus`, `$i18n`, `$t`, `fetch`, `restrictedFetch`, `define`) are readonly — assigning or redefining them throws.
-- Define shared entries inside an `env.js`: components start compiling only after env.js finishes, so templates never read a shared entry before it exists. Defining a shared entry later still works, but already-rendered templates that read-missed the key will not re-evaluate — a dev warning is logged.
+- Define shared entries inside an `env.js`: components start compiling only after env.js finishes, so templates never read a shared entry before it exists. Defining a shared entry later still works, but already-rendered templates that read-missed the key will not re-evaluate.
 - `__vhtml_dev.defines` lists every define: `{ name, target: '<scope>|$globals', opts }`.
 
 ### `$sys`
@@ -160,7 +158,9 @@ Navigation is transactional: the target page is prepared first and switched in a
 
 ## URL Prefix Rules
 
-Relative URLs inside a component (template and scripts) are auto-prefixed with `$mod.scoped`:
+The table below describes normal modules. For unsafe modules, all provided network APIs and runtime-created image/resource attributes use the module resource service; never manually prepend scoped. `@` and external resources are rejected.
+
+Relative URLs inside a normal component (template and scripts) are auto-prefixed with `$mod.scoped`:
 
 | scenario | behavior |
 | -------- | -------- |
@@ -192,10 +192,16 @@ Static imports are supported; relative paths resolve against the component's own
 
 - Imported bindings register on `$data` (public, template-accessible).
 - `/xxx` paths get `scoped` prepended; `@/xxx` strips `@`; `.js` is auto-appended.
-- `.min.js` and `http://` imports are rejected with a warning — load external libraries via `<script>` tags instead.
+- Import syntax is parsed structurally. Unsafe modules require all imported files and dependencies to stay inside their module scope.
 - `await import('path')` dynamic imports are supported.
-- In `unsafe` mode, all import statements are stripped.
-- `unsafe` mode is a **fat-finger guard, not a security boundary**: it blocks common escape tricks, but a determined script can still break out. Never rely on it for real isolation — treat it as protection against accidental mistakes only.
+
+## Module isolation
+
+The backend marks a module using `vhtml-scoped` and the presence of `vhtml-unsafe`. The first registration fixes its executor; later headers and component attributes cannot change it. Never add `unsafe` to an individual component.
+
+Unsafe code runs in a separate QuickJS realm. Its window/self/globalThis and builtins belong to that realm. fetch, XMLHttpRequest, WebSocket, EventSource and navigator.sendBeacon are framework facades: `/api/x` becomes `{scoped}/api/x`; `@`, out-of-scope URLs and redirects are rejected. Imports work inside the module. `$node` and `$refs` provide module-local HTML/SVG DOM, Canvas 2D/WebGL, styles, events and size observers. ownerDocument/defaultView return the module virtual document/window. UMD libraries can load from module-local script URLs (once per module); ECharts 6 Canvas/SVG, Chart.js 4, D3 7, Three.js WebGL2, jQuery, Axios and utility libraries have browser fixtures. SVG fragment references use module-local IDs; GPU objects use private handles. Raw browser objects remain unavailable. DOM and CSS stay shared with the host; no Shadow DOM or iframe is used. CSS inheritance, native ID/form associations and passive loading through host styles are not strict isolation guarantees. Dispose library instances with `$scope.addCleanup`. Use static property paths for two-way bindings.
+
+Do not expect native document, storage, Worker, iframe, SVG foreignObject/SMIL, external SVG documents, synchronous XHR or arbitrary host services. Templates and dynamic resources pass through the rendering policy. See `docs/module-sandbox.md` for the supported capability set and explicit limits. Deploy the entire generated `dist/` directory, including lazy runtime chunks.
 
 ## Bindings
 
@@ -332,6 +338,8 @@ Host nodes expose `$data`, `$sys`, `$mod`. Prefer `props + $emit` for normal com
 
 Projected content runs in the caller's runtime (`$data`/`$sys`/`$mod`); fallback content runs in the child's own runtime. `<vslot>` supports `:name` for dynamic slot names. `<vslot vbind="a, b">` exposes the outlet component's `$data` keys `a`/`b` to the projected content (kept in sync on change).
 
+During navigation, the new page and a newly built layout read their target route through their own `$router.current`. The router view and the displayed page retain the committed route until navigation commits; cancelled builds do not publish temporary route state.
+
 ## `env.js`
 
 Loaded once per `scoped` prefix. Use for module-wide services, i18n, config:
@@ -348,8 +356,12 @@ export default async ($mod, manager) => {
 ```
 
 - `manager.loadModule(subPath)` — preload a sub-module's `env.js`; `/`-prefixed = absolute, otherwise relative to the current scoped.
-- `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. Non-global aliases only register while an `env.js` is loading; aliases resolve only in non-root modules (`scoped` ≠ `''`).
+- `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. The manager is bound to this module across async operations; local aliases always belong to that module. Aliases resolve only in non-root modules (`scoped` ≠ `''`).
 - `$mod.define(key, value, opts?)` / `manager.define(key, value, opts?)` — module-local vs shared entries (semantics see the `$mod` section).
+
+`env.js` is optional (404). Fetch, syntax and initialization failures reject module loading; failed initialization may be retried without changing the first backend metadata.
+
+`await app.parseRef(vsrc, dom, data, runtime, { target, single, keepOnDetach })` and `await app.parseRaw(dom, data, runtime, html)` finish after that component's setup and template compilation. Failures reject. Nested components retain their independent mounting order.
 
 ## Cache & refresh
 
@@ -364,7 +376,7 @@ templateLoader.clear()                              // drop everything (login / 
 
 - `clearScoped(prefix)` purges: template descriptors + in-flight fetches under the prefix, injected `<style vref>` nodes under the prefix, and module contexts/aliases registered for matching scopes (`prefix` exactly, or `prefix/…`; `/a` never collides with `/a2`). An absolute-URL prefix targets that origin; a file-level prefix (`…/x.html`) also matches descriptor-level keys (`…/x`); an empty prefix matches everything. `clearScoped(prefix, { keepLive: true })` narrows the purge to descriptors + in-flight fetches + the import epoch, preserving module contexts and `<style vref>` nodes — use it for scopes with live holders (e.g. the root module, where long-lived layout instances registered services like `$os` on the root context and live pages own the style nodes; a full purge breaks services and unstyles the whole app). Styles survive correctly because the dedup key is content-addressed (`vref::cssText`): changed CSS injects a fresh node that wins by order, unchanged CSS dedup-hits; the only residue is a rule deleted from the new CSS still lingering in the old node. Don't use `keepLive` for scopes whose page tree is fully disposed (skill reload) — those need the context drop so `env.js` re-runs and reloads langs/config.
 - Prefer the instance ref (`window.$vhtml.templateLoader`) when the host page runs the bundled build — a direct `/vhtml/src/loader.js` import creates a second, independent loader instance in production.
-- `scopeOf(url, runtime)` returns the module root (`descriptor.scoped`) of a cached descriptor, or null. Dual-key lookup: the fetch initiator's module path (vrouter host) and the bare path are both tried — the page's own runtime `scoped` (response-header module root) usually differs from the fetch key formula, and a single-key reverse lookup misses silently (file-level fallback then leaks sibling components/styles). Reload flows use it to widen a page refresh to its whole module scope: `clearScoped(scopeOf(pageHtml, viewRuntime) ?? pageHtml)`.
+- `scopeOf(url, runtime)` returns the cached descriptor's module root or null. It uses the same canonical absolute resource key as `fetchUI`; pass the fetch initiator's runtime or an already-resolved absolute URL. No bare-path fallback is performed. Reload flows can call `clearScoped(scopeOf(pageHtml, viewRuntime) ?? pageHtml)`.
 - Semantics = **invalidation, not HMR**: instances and router-cached pages that are already alive keep running the old code; everything loaded afterwards builds from fresh sources. `reload` = `clearScoped` + revisit the route (page cache rebuild).
 - Not purged, by design: `compile.js` / `source-cache.js` entries (content-addressed — a changed file naturally misses and recompiles) and head `<script>`/`<link>` nodes (URL-addressed; the browser already caches them by URL).
 - In-flight fetches started before the clear are guarded by a cache epoch: their results are discarded instead of being written back into the purged cache.

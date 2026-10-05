@@ -44,7 +44,7 @@ globalThis.prompt = () => ''
 globalThis.confirm = () => false
 
 // fetch 打桩：仅供给 /v/dialog.html，其余 404
-const fakeHeaders = { get: () => null, entries: () => [][Symbol.iterator]() }
+const fakeHeaders = new Headers()
 globalThis.fetch = async (url) => {
   const u = String(url)
   if (u.includes('/v/dialog.html')) {

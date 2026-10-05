@@ -1,0 +1,43 @@
+// Standard methods only. Browser objects and vendor extension prototypes are never forwarded.
+export const webglMethods =
+  `activeTexture attachShader bindAttribLocation bindBuffer bindFramebuffer bindRenderbuffer bindTexture blendColor blendEquation blendEquationSeparate blendFunc blendFuncSeparate bufferData bufferSubData checkFramebufferStatus clear clearColor clearDepth clearStencil colorMask compileShader compressedTexImage2D compressedTexSubImage2D copyTexImage2D copyTexSubImage2D createBuffer createFramebuffer createProgram createRenderbuffer createShader createTexture cullFace deleteBuffer deleteFramebuffer deleteProgram deleteRenderbuffer deleteShader deleteTexture depthFunc depthMask depthRange detachShader disable disableVertexAttribArray drawArrays drawElements enable enableVertexAttribArray finish flush framebufferRenderbuffer framebufferTexture2D frontFace generateMipmap getActiveAttrib getActiveUniform getAttachedShaders getAttribLocation getBufferParameter getContextAttributes getError getFramebufferAttachmentParameter getParameter getProgramInfoLog getProgramParameter getRenderbufferParameter getShaderInfoLog getShaderParameter getShaderPrecisionFormat getShaderSource getTexParameter getUniform getUniformLocation getVertexAttrib getVertexAttribOffset hint isBuffer isContextLost isEnabled isFramebuffer isProgram isRenderbuffer isShader isTexture lineWidth linkProgram pixelStorei polygonOffset readPixels renderbufferStorage sampleCoverage scissor shaderSource stencilFunc stencilFuncSeparate stencilMask stencilMaskSeparate stencilOp stencilOpSeparate texImage2D texParameterf texParameteri texSubImage2D uniform1f uniform1fv uniform1i uniform1iv uniform2f uniform2fv uniform2i uniform2iv uniform3f uniform3fv uniform3i uniform3iv uniform4f uniform4fv uniform4i uniform4iv uniformMatrix2fv uniformMatrix3fv uniformMatrix4fv useProgram validateProgram vertexAttrib1f vertexAttrib1fv vertexAttrib2f vertexAttrib2fv vertexAttrib3f vertexAttrib3fv vertexAttrib4f vertexAttrib4fv vertexAttribPointer viewport
+beginQuery beginTransformFeedback bindBufferBase bindBufferRange bindSampler bindTransformFeedback bindVertexArray blitFramebuffer clearBufferfi clearBufferfv clearBufferiv clearBufferuiv clientWaitSync compressedTexImage3D compressedTexSubImage3D copyBufferSubData copyTexSubImage3D createQuery createSampler createTransformFeedback createVertexArray deleteQuery deleteSampler deleteSync deleteTransformFeedback deleteVertexArray drawArraysInstanced drawBuffers drawElementsInstanced drawRangeElements endQuery endTransformFeedback fenceSync framebufferTextureLayer getActiveUniformBlockName getActiveUniformBlockParameter getActiveUniforms getBufferSubData getFragDataLocation getIndexedParameter getInternalformatParameter getQuery getQueryParameter getSamplerParameter getSyncParameter getTransformFeedbackVarying getUniformBlockIndex getUniformIndices invalidateFramebuffer invalidateSubFramebuffer isQuery isSampler isSync isTransformFeedback isVertexArray pauseTransformFeedback readBuffer renderbufferStorageMultisample resumeTransformFeedback samplerParameterf samplerParameteri texImage3D texStorage2D texStorage3D texSubImage3D transformFeedbackVaryings uniform1ui uniform1uiv uniform2ui uniform2uiv uniform3ui uniform3uiv uniform4ui uniform4uiv uniformBlockBinding uniformMatrix2x3fv uniformMatrix2x4fv uniformMatrix3x2fv uniformMatrix3x4fv uniformMatrix4x2fv uniformMatrix4x3fv vertexAttribDivisor vertexAttribI4i vertexAttribI4iv vertexAttribI4ui vertexAttribI4uiv vertexAttribIPointer waitSync`.split(
+    /\s+/
+  )
+export const webglExtensions = {
+  ANGLE_instanced_arrays: [
+    'drawArraysInstancedANGLE',
+    'drawElementsInstancedANGLE',
+    'vertexAttribDivisorANGLE',
+  ],
+  OES_vertex_array_object: [
+    'createVertexArrayOES',
+    'deleteVertexArrayOES',
+    'bindVertexArrayOES',
+    'isVertexArrayOES',
+  ],
+  WEBGL_draw_buffers: ['drawBuffersWEBGL'],
+  WEBGL_lose_context: ['loseContext', 'restoreContext'],
+  WEBGL_debug_shaders: ['getTranslatedShaderSource'],
+  EXT_disjoint_timer_query: [
+    'createQueryEXT',
+    'deleteQueryEXT',
+    'isQueryEXT',
+    'beginQueryEXT',
+    'endQueryEXT',
+    'queryCounterEXT',
+    'getQueryEXT',
+    'getQueryObjectEXT',
+  ],
+  EXT_disjoint_timer_query_webgl2: ['queryCounterEXT'],
+  KHR_parallel_shader_compile: [],
+  EXT_clip_control: ['clipControlEXT'],
+}
+for (const name of 'OES_element_index_uint OES_standard_derivatives OES_texture_float OES_texture_float_linear OES_texture_half_float OES_texture_half_float_linear OES_fbo_render_mipmap EXT_color_buffer_float EXT_color_buffer_half_float EXT_float_blend EXT_frag_depth EXT_shader_texture_lod EXT_sRGB EXT_texture_filter_anisotropic EXT_texture_norm16 WEBGL_depth_texture WEBGL_color_buffer_float WEBGL_compressed_texture_s3tc WEBGL_compressed_texture_s3tc_srgb WEBGL_compressed_texture_etc WEBGL_compressed_texture_etc1 WEBGL_compressed_texture_pvrtc WEBGL_compressed_texture_astc WEBGL_compressed_texture_bptc WEBGL_compressed_texture_rgtc WEBGL_debug_renderer_info'.split(
+  ' '
+))
+  webglExtensions[name] ||= []
+export const webglTypes =
+  'WebGLBuffer WebGLFramebuffer WebGLProgram WebGLRenderbuffer WebGLShader WebGLTexture WebGLUniformLocation WebGLVertexArrayObject WebGLQuery WebGLSampler WebGLSync WebGLTransformFeedback'.split(
+    ' '
+  )

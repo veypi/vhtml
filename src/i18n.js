@@ -5,6 +5,7 @@
 
 import { Wrap } from './reactive.js'
 
+export function createI18nClass(Wrap, onLocale = () => {}) {
 class I18n {
   constructor(sharedState) {
     // 共享状态模式：ModuleContextManager 传入 sharedLocale 对象
@@ -22,7 +23,7 @@ class I18n {
   setLocale(lang) {
     if (this._shared.locale === lang) return this
     this._shared.locale = lang
-    document.documentElement.lang = lang
+    onLocale(lang)
     this._formatters.clear()
     return this
   }
@@ -128,4 +129,8 @@ class I18n {
   }
 }
 
-export default I18n
+
+return I18n
+}
+
+export default createI18nClass(Wrap, lang => { document.documentElement.lang = lang })
