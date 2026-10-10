@@ -1,5 +1,11 @@
 # 更新日志
 
+## [0.12.1] - 2026-10-10
+
+- 非活动页（缓存页/已退场实例）通过 `setQuery`/`setParams` 同步 location 时，若它的 `routeState` 已落后于当前路由（旧快照），直接丢弃：后台页不得把主路由拽回自己那一跳（此前会真的导航过去，表现为“返回又被改回去”）。
+
+- `$router.back(fallback?, data?)`：没有上一级可回时落到 `fallback`（默认 `'/'`，走 `replace` 不新增历史条目；传 `null` 保持旧的「没得回就什么都不做」语义）；新增 `$router.canGoBack()` 作为判定依据。判定只看 vrouter 自己的栈：memory history = 栈位置 > 0；browser history = 当前历史条目自带的应用内层级（vhtml push 时写入 `state.__vhtmlDepth`，层级随条目走，后退/前进/刷新都准）> 0——不用 `history.length`（它含应用启动前的条目，会把用户带出应用）。
+
 ## [0.12.0] - 2026-10-07
 
 - 原生未定义标识符告警增加来源 URL、相关表达式/脚本片段、组件信息与检查提示，按来源和代码分别去重并限制去重记录数量；同步登记 `__vhtml_dev.errors`（`kind=identifier`、`severity=warning`）。异步 setup 回调保留原始脚本来源，脚本行号不冒充 HTML 行号。修复把合法 `undefined` 和已声明未赋值的全局属性误判成缺失变量。
