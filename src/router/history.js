@@ -114,12 +114,15 @@ export function createMemoryHistory(initial = '/', options = {}) {
     },
     go(n) {
       const nextIndex = index + Number(n)
+      // 越界 = 没有那一级：静默不退（back(fallback) 的判定走 canGoBack）
       if (!Number.isFinite(nextIndex) || nextIndex < 0 || nextIndex >= stack.length) return
       index = nextIndex
       emit('popstate')
     },
     back() { this.go(-1) },
     forward() { this.go(1) },
+    // 栈内还有上一级可回（栈底 = false）
+    canGoBack() { return index > 0 },
   }
   location.assign = (to) => api.push(to)
   location.replace = (to) => api.replace(to)
@@ -148,6 +151,13 @@ export function getBrowserHistory() {
   if (browserHistory) return browserHistory
   const listeners = new Set()
   const emit = (payload) => notifyHistoryListeners(listeners, payload)
+  // 系统历史栈是共享的（页面上可能有多个 vrouter，只有一个是真实的系统路由视图），
+  // vhtml 不假装拥有它的栈：只把自己 push 出去的条目写成 {__vhtmlDepth: n}，
+  // 读「当前条目」里的这个值就得到应用内层级——条目自带，后退/前进/刷新后都还准。
+  const depthOf = () => {
+    const d = window.history.state && window.history.state.__vhtmlDepth
+    return Number.isFinite(d) && d > 0 ? d : 0
+  }
   window.addEventListener('popstate', () => {
     emit({ type: 'popstate', url: window.location.href, committed: true })
   })
@@ -166,16 +176,20 @@ export function getBrowserHistory() {
       emit({ type, to, source, committed: false })
     },
     push(to, source = null) {
-      window.history.pushState({}, '', to)
+      window.history.pushState({ __vhtmlDepth: depthOf() + 1 }, '', to)
       emit({ type: 'push', to, url: window.location.href, source, committed: true })
     },
     replace(to, source = null) {
-      window.history.replaceState({}, '', to)
+      // 保留条目上其它 state 字段，只改写层级
+      window.history.replaceState({ ...(window.history.state || {}), __vhtmlDepth: depthOf() }, '', to)
       emit({ type: 'replace', to, url: window.location.href, source, committed: true })
     },
     go(n) { window.history.go(n) },
     back() { window.history.back() },
     forward() { window.history.forward() },
+    // 当前条目的应用内层级 > 0：back() 回的是应用内的上一跳；= 0 则再退一步
+    // 就出应用（初始/外站条目），back(fallback) 据此改用 fallback。
+    canGoBack() { return depthOf() > 0 },
   }
   return browserHistory
 }

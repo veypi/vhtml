@@ -143,7 +143,8 @@ Nearest ancestor `<vrouter>` view, local to the current router subtree.
 | API | description |
 | --- | --- |
 | `push(to, data?)` / `replace(to, data?)` | navigate; `data: { params, query, hash }` |
-| `back()` / `forward()` / `go(n)` | history navigation |
+| `back(fallback?, data?)` / `forward()` / `go(n)` | history navigation; when there is no previous entry (memory-history stack bottom, or the app itself has not navigated yet in browser history) `back()` lands on `fallback` (default `'/'`) via `replace` — pass `null` to fall back to the old no-op behavior |
+| `canGoBack()` | whether a previous entry exists inside this view's own history (the predicate `back()` uses to decide between going back and using the fallback) |
 | `current` | `{ path, fullPath, params, query, hash, meta, layout }` |
 | `params` / `query` | shortcuts to `current.params` / `current.query` |
 | `setQuery(patch, opts?)` / `setParams(patch, opts?)` | merge/replace then navigate; `opts: { mode: 'replace' \| 'push', merge }` |

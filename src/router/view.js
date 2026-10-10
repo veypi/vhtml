@@ -1473,10 +1473,19 @@ export class RouterView {
       matched: matchedRouteDebugInfo(matchedRoute),
     })
     const pageState = options.runtime?.routeState
-    if (
-      pageState &&
-      pageState !== this.activePage?.instance.runtime?.routeState
-    ) {
+    if (pageState && pageState !== this.activePage?.instance.runtime?.routeState) {
+      // 非活动页（缓存页/已退场实例）发起的 location 同步：它的 routeState 是它自己
+      // 那一跳的旧快照，照它导航会把主路由拽回后台页（“后台页不得改活动路由”）。
+      // 布局等非页面 runtime 的 routeState 在静止时就是当前路由，照旧正常合并。
+      if (pageState.fullPath !== this.current?.fullPath) {
+        this.#debug('sync location skipped: stale runtime (background page)', {
+          target,
+          mode,
+          stale: pageState.fullPath,
+          current: this.current?.fullPath,
+        })
+        return
+      }
       return this[mode](
         target.path,
         { query: target.query, hash: target.hash },
@@ -1490,9 +1499,29 @@ export class RouterView {
   go(n) {
     this.#nav.go(n)
   }
-  back() {
-    this.#nav.back()
+
+  /**
+   * 返回上一级。canGoBack() 为假时落到 fallback（默认 '/'）：
+   * “没有上一级”包含两种情况：memory 路由的栈底（窗口直达/恢复出来的页面），
+   * 以及浏览器历史里应用自身还没导航过（此时 back() 会直接跳出应用）。
+   * fallback 走 replace——不新增历史条目，避免“返回→再返回”来回横跳。
+   * fallback 传 null/false/'' = 旧语义（没得回就什么都不做）。
+   */
+  back(fallback = '/', data = null, options = {}) {
+    if (this.canGoBack()) return this.#nav.back()
+    if (fallback === null || fallback === false || fallback === '') return
+    return this.replace(fallback, data, options)
   }
+
+  /** 是否还有上一级可回：只看 vrouter 自己的栈（memory = 栈位置 > 0；browser = 当前条目自带的应用内层级 > 0）。 */
+  canGoBack() {
+    const nav = this.#nav
+    if (typeof nav?.canGoBack === 'function') return nav.canGoBack()
+    // 自定义 history 未实现 canGoBack：能读到 length 就用它，否则保守认为可回（保持旧行为）
+    const len = nav?.history?.length
+    return typeof len === 'number' ? len > 1 : true
+  }
+
   forward() {
     this.#nav.forward()
   }

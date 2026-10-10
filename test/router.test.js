@@ -200,6 +200,51 @@ test('memory history: back/forward walk cached pages', async () => {
   app.destroy()
 })
 
+test('back(fallback): 没有上一级时落到 fallback（默认 /），有上一级时正常回退', async () => {
+  const HOME = [{ path: '/', component: '/pg/a' }, ...ROUTES]
+  const { app, host, view } = await createRouter('/a', HOME)
+  // 栈底：没有上一级 → 落到默认 fallback /
+  assert.equal(view.canGoBack(), false, '栈底没有上一级')
+  await view.back()
+  await flush()
+  assert.equal(view.current.path, '/', '无上一级 → 默认 fallback /')
+  assert.equal(view.canGoBack(), false, 'fallback 走 replace，不产生新层级')
+  // 有上一级：正常回退，fallback 不参与
+  await view.push('/b')
+  await flush()
+  assert.equal(view.canGoBack(), true, 'push 后有上一级')
+  await view.back('/never')
+  await flush()
+  assert.equal(view.current.path, '/', '有上一级 → 正常回退到上一跳')
+  // 自定义 fallback
+  await view.back('/b')
+  await flush()
+  assert.equal(view.current.path, '/b', '自定义 fallback 为无上一级时的落点')
+  // fallback = null 保持旧语义（没得回就什么都不做）
+  await view.back(null)
+  await flush()
+  assert.equal(view.current.path, '/b', 'null fallback = 旧语义 no-op')
+  assert.ok(host.querySelector('.pg-b'), '页面未被误切换')
+  app.destroy()
+})
+
+test('browser history: canGoBack() 读条目自带的 vhtml 层级（__vhtmlDepth）', async () => {
+  const { getBrowserHistory } = await import('../src/router/history.js')
+  const h = getBrowserHistory()
+  // 外部/初始条目（浏览器自己产生的）= 非 vhtml 导航，没有应用内上一级
+  window.history.replaceState({}, '', '/x')
+  assert.equal(h.canGoBack(), false, '初始条目无处可回')
+  h.push('/x1')
+  assert.equal(h.canGoBack(), true, 'push 一层后有上一级')
+  h.push('/x2')
+  h.replace('/x2r')
+  assert.equal(h.canGoBack(), true, 'replace 不改层级')
+  assert.equal(window.history.state.__vhtmlDepth, 2, '层级写在条目 state 上')
+  // 层级跟条目走：落到没有该字段的条目（后退到外站/直达）就无处可回
+  window.history.replaceState({}, '', '/x3')
+  assert.equal(h.canGoBack(), false)
+})
+
 test('page cache LRU: capped at 8, oldest evicted', async () => {
   const routes = []
   for (let i = 1; i <= 10; i++) {
