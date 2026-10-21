@@ -8,7 +8,7 @@ import { Wrap } from './reactive.js'
 import { classValue, styleValue, sameStyle, patchStyle, setBoundAttribute } from './binding-values.js'
 import { perfStats } from './perf-stats.js'
 import { Run } from './sandbox.js'
-import moduleContextManager from './module.js'
+import moduleContextManager, { matchAlias } from './module.js'
 import utils from './utils.js'
 import { isRelativeHref } from './url.js'
 import { instanceOf } from './component-instance.js'
@@ -541,20 +541,15 @@ export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
   }
 }
 
+// 标签 → 组件地址：候选 = '/' + 段拼接（模块根相对，resource.js 补 '.html'）；
+// 命中 alias 规则（三档表，根模块同样查表）→ '@'+映射地址（origin 绝对）；
+// unsafe/isolated 模块不查表，原样返回候选。
 export function resolveComponentUrl(nodeName, runtime) {
-  const mod = runtime?.$mod
-  if (moduleRecord(runtime)?.meta.unsafe)
-    return '/' + nodeName.split('-').join('/')
-  const parts = nodeName.split('-')
-  const firstSegment = parts[0]
-  const aliases = mod?.scoped
-    ? moduleContextManager.getAliases(mod.scoped)
-    : null
-  if (aliases?.[firstSegment]) {
-    const aliasBase = aliases[firstSegment]
-    const rest = parts.slice(1).join('/')
-    const path = rest ? `${aliasBase}/${rest}` : aliasBase
-    return '@' + path
-  }
-  return '/' + parts.join('/')
+  const candidate = '/' + nodeName.split('-').join('/')
+  if (moduleRecord(runtime)?.meta.unsafe) return candidate
+  const hit = matchAlias(
+    candidate,
+    moduleContextManager.getAliases(runtime?.$mod?.scoped)
+  )
+  return hit ? '@' + hit : candidate
 }

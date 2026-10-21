@@ -139,24 +139,24 @@ test('isolated inline and linked styles use the same compact reference as their 
 
 test('scoped clearing rebuilds matching modules and aliases, preserving sibling modules', async () => {
   const [a, child, a2] = await Promise.all(['/skills/local/a', '/skills/local/a/sub', '/skills/local/a2'].map(path => manager.getModule(path)))
-  manager.addAlias('/skills/local/a', 'ui', '/shared/ui')
+  manager.addAlias('/skills/local/a', '/ui', '/shared/ui')
   loader.clearScoped('/skills/local/a')
   assert.notEqual(await manager.getModule('/skills/local/a'), a)
   assert.notEqual(await manager.getModule('/skills/local/a/sub'), child)
   assert.equal(await manager.getModule('/skills/local/a2'), a2)
-  assert.deepEqual(manager.getAliases('/skills/local/a'), {})
+  assert.deepEqual({ ...manager.getAliases('/skills/local/a').scoped }, {})
 })
 
 test('keepLive reloads descriptors while preserving module identity, aliases and styles', async () => {
   const first = await loader.fetchUI(T)
-  manager.addAlias('/skills/local/a', 'ui', '/shared/ui')
+  manager.addAlias('/skills/local/a', '/ui', '/shared/ui')
   loader.resourceLoader.loadStyle('.a{color:red}', T)
   loader.clearScoped('/skills/local/a', { keepLive: true })
   assert.equal(loader.scopeOf(T), null)
   const next = await loader.fetchUI(T)
   assert.notEqual(next, first)
   assert.equal(next.mod, first.mod)
-  assert.equal(manager.getAliases('/skills/local/a').ui, '/shared/ui')
+  assert.equal(manager.getAliases('/skills/local/a').scoped['/ui'], '/shared/ui')
   assert.equal(document.head.querySelectorAll('style[vref]').length, 1)
   assert.equal(calls(T), 2)
 })
@@ -279,9 +279,9 @@ test('clear removes templates, modules and styles together', async () => {
 
 test('empty module prefix invalidates all module records and local aliases', async () => {
   const [a, b] = await Promise.all([manager.getModule('/a'), manager.getModule('/b')])
-  manager.addAlias('/a', 'ui', '/shared/ui')
+  manager.addAlias('/a', '/ui', '/shared/ui')
   manager.clearScoped('')
   assert.notEqual(await manager.getModule('/a'), a)
   assert.notEqual(await manager.getModule('/b'), b)
-  assert.deepEqual(manager.getAliases('/a'), {})
+  assert.deepEqual({ ...manager.getAliases('/a').scoped }, {})
 })

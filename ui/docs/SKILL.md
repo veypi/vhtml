@@ -351,13 +351,14 @@ export default async ($mod, manager) => {
   $mod.$i18n.load(await $mod.fetch('/langs.json').then(r => r.json()))
 
   await manager.loadModule('/shared')          // preload a sub-module and wait for its env.js
-  manager.addAlias('uikit', '/lib/ui-kit')     // <uikit-button> → /lib/ui-kit/button.html
+  manager.addAlias('/uikit', '/lib/ui-kit')    // <uikit-button> → /lib/ui-kit/button.html
   manager.define('$auth', authService)         // global entry: every module reads it as $mod.$auth
 }
 ```
 
 - `manager.loadModule(subPath)` — preload a sub-module's `env.js`; `/`-prefixed = absolute, otherwise relative to the current scoped.
-- `manager.addAlias(prefix, baseUrl, isGlobal)` — register a component path alias. `prefix` must be letters only (it matches the tag's first `-`-segment); `baseUrl` must start with `/` or `https://`. The manager is bound to this module across async operations; local aliases always belong to that module. Aliases resolve only in non-root modules (`scoped` ≠ `''`).
+- `manager.addAlias(key, baseUrl, isGlobal)` — register a component path alias. `key` is a URL-shaped logical path derived from the tag (`<uikit-button>` → candidate `/uikit/button`): a key ending in `.html` is an exact file key (matched against candidate + `.html`); any other key is a directory prefix (longest-prefix match at segment boundaries — `/ai` never matches `/aix`). `baseUrl` must start with `/` or `https://`: prefix keys take directory values, exact keys take `.html` file values. An exact hit beats any prefix regardless of tier; at equal specificity the tiers resolve primary > scoped > global. The manager is bound to this module across async operations; local aliases always belong to that module. Aliases resolve in every non-unsafe module, the root module included.
+- `manager.addPrimaryAlias(key, baseUrl)` — root-module env only; registers into the top-priority (primary) table reserved for host profile rules. Other modules calling it throw.
 - `$mod.define(key, value, opts?)` / `manager.define(key, value, opts?)` — module-local vs shared entries (semantics see the `$mod` section).
 
 `env.js` is optional (404). Fetch, syntax and initialization failures reject module loading; failed initialization may be retried without changing the first backend metadata.

@@ -144,7 +144,8 @@ export class ModuleExecutor {
       `await initialize($mod, Object.freeze({
       define(){throw new Error('Isolated modules cannot define global capabilities')},
       loadModule(){throw new Error('Use module-local imports in isolated env.js')},
-      addAlias(){throw new Error('Aliases are configured by the host')}
+      addAlias(){throw new Error('Aliases are configured by the host')},
+      addPrimaryAlias(){throw new Error('Aliases are configured by the host')}
     }))`,
       this.#moduleScope,
       this.resources.resolve('./env.js').href,

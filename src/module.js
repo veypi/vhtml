@@ -121,6 +121,86 @@ export function createRuntimeContext(
   return runtime
 }
 
+// ---- alias 规则（URL 键）----
+//
+// 组件标签推导逻辑候选路径：<ai-box> → '/ai/box'（compiler-attrs.js
+// resolveComponentUrl）。alias 规则把候选映射成 origin 绝对地址（'@' 转义
+// 前缀由调用方补，resource.js resolve 处理）。键两形态：'.html' 结尾 =
+// 精确文件键（与候选+'.html' 全等匹配），否则 = 目录前缀键（段边界最长
+// 前缀匹配，'/ai' 不命中 '/aix'）。命中优先级：精确 > 最长前缀；同具体度
+// 按表档 primary > scoped > global。归一化仅此一处，注册与查表共用。
+
+export function isExactAliasKey(key) {
+  return key.endsWith('.html')
+}
+
+export function normalizeAliasKey(key) {
+  if (typeof key !== 'string' || !key)
+    throw new Error(`addAlias: key must be a non-empty string, got "${key}"`)
+  let k = key
+  while (k.length > 1 && k.endsWith('/')) k = k.slice(0, -1)
+  if (!k.startsWith('/') || k === '/')
+    throw new Error(
+      `addAlias: key must be an absolute logical path below /, got "${key}"`
+    )
+  if (
+    !/^\/[a-z0-9._\-/]+$/.test(k) ||
+    k.split('/').some((seg) => seg === '.' || seg === '..')
+  )
+    throw new Error(
+      `addAlias: key must be lowercase path segments (no . or ..), got "${key}"`
+    )
+  return k
+}
+
+export function normalizeAliasValue(key, value) {
+  if (typeof value !== 'string' || !value)
+    throw new Error(`addAlias: value must be a non-empty string, got "${value}"`)
+  if (!/^(\/|https?:\/\/)/.test(value))
+    throw new Error(
+      `addAlias: value must start with / or https://, got "${value}"`
+    )
+  let v = value
+  while (v.length > 1 && v.endsWith('/')) v = v.slice(0, -1)
+  if (isExactAliasKey(key)) {
+    if (!v.endsWith('.html'))
+      throw new Error(
+        `addAlias: exact key "${key}" requires a file value ending with .html, got "${value}"`
+      )
+  } else if (v.endsWith('.html')) {
+    throw new Error(
+      `addAlias: prefix key "${key}" requires a directory value (not .html), got "${value}"`
+    )
+  }
+  return v
+}
+
+// tables = getAliases() 返回的 { primary, scoped, global }。返回映射后的
+// 地址字符串（调用方补 '@'），未命中返回 null。
+export function matchAlias(candidate, tables) {
+  if (!tables) return null
+  const exactKey = candidate + '.html'
+  for (const table of [tables.primary, tables.scoped, tables.global]) {
+    if (table && Object.hasOwn(table, exactKey)) return table[exactKey]
+  }
+  let best = null
+  let bestLen = 0
+  for (const table of [tables.primary, tables.scoped, tables.global]) {
+    if (!table) continue
+    for (const key of Object.keys(table)) {
+      if (isExactAliasKey(key) || key.length <= bestLen) continue
+      if (
+        candidate === key ||
+        (candidate.startsWith(key) && candidate.charCodeAt(key.length) === 47)
+      ) {
+        best = table[key] + candidate.slice(key.length)
+        bestLen = key.length
+      }
+    }
+  }
+  return best
+}
+
 // ---- ModuleContextManager ----
 
 export class ModuleContextManager {
@@ -128,6 +208,9 @@ export class ModuleContextManager {
     this.modMap = new Map()
     this.moduleMetadata = new Map()
     this._globalAliases = {}
+    // host 特权档（profile 规则表）：优先级最高的 alias 表，仅根模块 env
+    // 可经 addPrimaryAlias 注册；clearScoped 不清（与全局层同生命周期）
+    this._primaryAliases = {}
     // $mod 二级树的全局层（v0.10.1）：模块 proxy 的 root 链终点。各模块
     // $mod 本地无 key 时读/写穿透到 globals——动态回落取代 addWrapper 复制
     this.globals = Wrap({})
@@ -160,6 +243,7 @@ export class ModuleContextManager {
     this.modMap.clear()
     for (const entry of entries) entry.execution?.retire?.()
     this._globalAliases = {}
+    this._primaryAliases = {}
     this.globals = Wrap({})
     defineRegistry.length = 0
   }
@@ -167,8 +251,9 @@ export class ModuleContextManager {
   /**
    * clearScoped(prefix) — 按 scoped 前缀失效模块上下文（v0.10.5）：
    * 删除模块记录中「精确等于 prefix 或位于其下」的条目，
-   * 使后续 getModule 重建模块上下文。globals/_globalAliases/defineRegistry
-   * 是全局层，不属于任何 scoped，不在此清理。匹配使用规范模块根地址。
+   * 使后续 getModule 重建模块上下文。globals/_globalAliases/_primaryAliases/
+   * defineRegistry 是全局/host 层，不属于任何 scoped，不在此清理。匹配使用
+   * 规范模块根地址。
    * 已存活实例持有的旧 $mod 引用不受
    * 影响（invalidation 语义，非 HMR——组件级 HMR 已定档不做）。
    */
@@ -300,9 +385,17 @@ export class ModuleContextManager {
         )
         return this.getModule(target, null, {}, ancestors)
       },
-      addAlias: (name, url, global = false) => {
+      addAlias: (key, url, global = false) => {
         this.assertCurrent(entry)
-        this.addAlias(scoped, name, url, global)
+        this.addAlias(scoped, key, url, global ? 'global' : 'scoped')
+      },
+      // host 特权档注册口：仅根模块 env（scoped === ''）可用，profile 规则
+      // 走此通道（P1b）；子模块 env 调用即抛错，防止 skill 劫持宿主的组件解析
+      addPrimaryAlias: (key, url) => {
+        this.assertCurrent(entry)
+        if (scoped !== '')
+          throw new Error('addPrimaryAlias is host-only (root module env)')
+        this.addAlias(scoped, key, url, 'primary')
       },
     })
   }
@@ -316,35 +409,32 @@ export class ModuleContextManager {
     }
   }
 
-  addAlias(scoped, prefixa, baseUrl, is_global = false) {
-    if (!/^[a-zA-Z]+$/.test(prefixa)) {
-      throw new Error(
-        `addAlias: prefixa must contain only English letters, got "${prefixa}"`
-      )
-    }
-    if (typeof baseUrl !== 'string' || !baseUrl) {
-      throw new Error(
-        `addAlias: baseUrl must be a non-empty string, got "${baseUrl}"`
-      )
-    }
-    if (!/^(\/|https?:\/\/)/.test(baseUrl)) {
-      throw new Error(
-        `addAlias: baseUrl must start with / or https://, got "${baseUrl}"`
-      )
-    }
-    if (is_global) {
-      this._globalAliases[prefixa] = baseUrl
+  // tier: 'scoped' | 'global' | 'primary'（优先级递增序见 matchAlias 表档）
+  addAlias(scoped, key, value, tier = 'scoped') {
+    key = normalizeAliasKey(key)
+    value = normalizeAliasValue(key, value)
+    if (tier === 'global') {
+      this._globalAliases[key] = value
       return
     }
+    if (tier === 'primary') {
+      this._primaryAliases[key] = value
+      return
+    }
+    if (tier !== 'scoped') throw new Error(`addAlias: unknown tier "${tier}"`)
     const entry = this.modMap.get(scoped)
     if (!entry) throw new Error(`Module is not registered: ${scoped}`)
-    entry.aliases[prefixa] = baseUrl
+    entry.aliases[key] = value
   }
 
+  // 三档表原样返回（不合并），优先级判定归 matchAlias。scoped 为 null/undefined
+  // 或未注册时 scoped 档为 null（根模块 scoped='' 照常查表）。
   getAliases(scoped) {
-    const scopedAliases = this.modMap.get(scoped)?.aliases
-    if (!scopedAliases) return this._globalAliases || null
-    return { ...this._globalAliases, ...scopedAliases }
+    return {
+      primary: this._primaryAliases,
+      scoped: scoped == null ? null : (this.modMap.get(scoped)?.aliases ?? null),
+      global: this._globalAliases,
+    }
   }
 }
 

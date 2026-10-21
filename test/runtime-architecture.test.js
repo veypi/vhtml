@@ -85,7 +85,7 @@ test('concurrent env contexts keep aliases and nested module loads bound to thei
           startedB.resolve()
           await releaseB.promise
         }
-        context.addAlias('ui', `${scoped}/ui`)
+        context.addAlias('/ui', `${scoped}/ui`)
         if (scoped === '/a' || scoped === '/b')
           await context.loadModule('child')
       },
@@ -100,8 +100,8 @@ test('concurrent env contexts keep aliases and nested module loads bound to thei
     await a
     releaseB.resolve()
     await b
-    assert.equal(manager.getAliases('/a').ui, '/a/ui')
-    assert.equal(manager.getAliases('/b').ui, '/b/ui')
+    assert.equal(manager.getAliases('/a').scoped['/ui'], '/a/ui')
+    assert.equal(manager.getAliases('/b').scoped['/ui'], '/b/ui')
     assert(seen.includes('/a/child'))
     assert(seen.includes('/b/child'))
   } finally {

@@ -173,7 +173,7 @@ test('cleared env contexts cannot change the replacement module or shared regist
       await resume.promise
       throw new Error('old env failed')
     }
-    context.addAlias('ui', '/review/new')
+    context.addAlias('/ui', '/review/new')
     context.define('current', 'new')
   } })
   try {
@@ -182,14 +182,14 @@ test('cleared env contexts cannot change the replacement module or shared regist
     await started.promise
     manager.clearScoped('/review')
     const current = await manager.getModule('/review')
-    assert.throws(() => oldContext.addAlias('ui', '/review/old'), /invalidated/)
-    assert.throws(() => oldContext.addAlias('global', '/old', true), /invalidated/)
+    assert.throws(() => oldContext.addAlias('/ui', '/review/old'), /invalidated/)
+    assert.throws(() => oldContext.addAlias('/global', '/old', true), /invalidated/)
     assert.throws(() => oldContext.define('current', 'old'), /invalidated/)
     assert.throws(() => oldContext.loadModule('child'), /invalidated/)
     resume.resolve()
     await failed
     assert.equal(await manager.getModule('/review'), current)
-    assert.equal(manager.getAliases('/review').ui, '/review/new')
+    assert.equal(manager.getAliases('/review').scoped['/ui'], '/review/new')
     assert.equal(manager.globals.current, 'new')
   } finally {
     resume.resolve()
