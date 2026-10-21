@@ -8,6 +8,9 @@ import { instanceOf, metaOf, peekMeta, setNodeScope } from './component-instance
 import { watch } from './runtime-watch.js'
 import { getSharedTemplateNodes } from './source-cache.js'
 import { whenConnected } from './connection.js'
+import moduleContextManager from './module.js'
+import { moduleRecord } from './execution/context.js'
+import { templateLoader } from './loader.js'
 
 function cloneNodes(nodes) {
   return (nodes || []).map(node => node.cloneNode(true))
@@ -150,13 +153,40 @@ export function parseSlots(dom, data, runtime, ctx) {
   }
   const state = createOutletState(dom)
   const scope = instanceOf(dom)?.scope
+  // V2 slot override（profile.md §2）：匹配键 = 宿主组件运行期实际 ref（vrefof）；
+  // 三源优先级 mode=override（默认）：profile 片段 > 父传 projected > 原生 fallback，
+  // mode=soft：projected > profile 片段 > fallback。isolated/unsafe 模块不解析
+  //（沙箱完整性）。片段惰性装载，就绪 bump 注册表版本号 → 本 watch 自动重渲。
+  const hostRef = dom.getAttribute('vrefof') || ''
+  const noOverride = !!moduleRecord(runtime)?.meta.unsafe
   watch(scope, () => {
     const slotName = evaluateSlotName(dom, data, runtime)
     const ownerInstance = instanceOf(owner)
     const slotContents = ownerInstance?.slotContents || {}
     const selected = slotContents[slotName] || null
-    return { slotName, selected }
-  }, ({ slotName, selected }) => {
+    const ver = moduleContextManager.slotOverrideVersion.v   // 响应式登记：规则/片段变化重估
+    const ov = noOverride ? null : moduleContextManager.slotOverrideFor(hostRef, slotName)
+    return { slotName, selected, ov, ver }
+  }, ({ slotName, selected, ov }) => {
+    // override 模式压 projected；soft 仅在无 projected 时压 fallback
+    const rule = ov && (ov.mode !== 'soft' || !selected) ? ov : null
+    if (rule) {
+      const renderKey = `slot-override:${slotName}:${rule.url}`
+      if (state.currentKey === renderKey && state.currentMode === 'slot-override') return
+      const frag = templateLoader.fragmentStateOf(rule.url)
+      if (!frag) {
+        // 片段未就绪：惰性装载（就绪后 bump 版本号自动重渲）；本次先按次优源渲染
+        templateLoader.fetchFragment(rule.url, runtime).then(() => {
+          moduleContextManager.slotOverrideVersion.v++
+        }).catch((e) => console.warn('[vhtml] slot override fragment failed:', rule.url, e))
+      } else {
+        resetOutletState(state)
+        renderSlotNodes(dom, frag.templates, data, runtime, ctx)
+        state.currentKey = renderKey
+        state.currentMode = 'slot-override'
+        return
+      }
+    }
     if (selected) {
       const renderKey = `projected:${slotName}:${selected.id}`
       if (state.currentKey === renderKey && state.currentMode === 'projected') return

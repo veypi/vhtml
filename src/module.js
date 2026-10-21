@@ -19,6 +19,7 @@ import {
 export { normalizeScoped, getModulePath } from './resource.js'
 import { registerModule } from './execution/context.js'
 import { NativeExecutor } from './execution/native.js'
+import { templateRef } from './url.js'
 
 // ---- define 登记表（__vhtml_dev.defines） ----
 
@@ -211,6 +212,16 @@ export class ModuleContextManager {
     // host 特权档（profile 规则表）：优先级最高的 alias 表，仅根模块 env
     // 可经 addPrimaryAlias 注册；clearScoped 不清（与全局层同生命周期）
     this._primaryAliases = {}
+    // slot override 规则表（V2，profile.md §2）：键 = 宿主组件运行期实际 ref
+    //（templateRef：去 .html 留 query）+ '\n' + 槽名；值 = {component, slot, url, mode}。
+    // alias 与 slot 对同一组件互斥（alias 整体替换后 ref 变了，旧键永不命中）。
+    // 片段装载/样式释放在 loader.js（fetchFragment/releaseFragment，经 fragmentRelease 钩子
+    // 免循环依赖）；slotOverrideVersion = 响应式版本号：注册/注销/片段就绪 bump，
+    // 出口 watch 重估（片段就绪自动重渲、规则删除自动回退 projected/fallback）。
+    this._slotOverrides = Object.create(null)
+    this.slotOverrideVersion = Wrap({v: 0})
+    // loader.js 装配（removeSlotOverride 时释放片段样式）；测试可替换
+    this.fragmentRelease = null
     // $mod 二级树的全局层（v0.10.1）：模块 proxy 的 root 链终点。各模块
     // $mod 本地无 key 时读/写穿透到 globals——动态回落取代 addWrapper 复制
     this.globals = Wrap({})
@@ -244,6 +255,8 @@ export class ModuleContextManager {
     for (const entry of entries) entry.execution?.retire?.()
     this._globalAliases = {}
     this._primaryAliases = {}
+    this._slotOverrides = Object.create(null)
+    this.slotOverrideVersion = Wrap({v: 0})
     this.globals = Wrap({})
     defineRegistry.length = 0
   }
@@ -397,6 +410,15 @@ export class ModuleContextManager {
           throw new Error('addPrimaryAlias is host-only (root module env)')
         this.addAlias(scoped, key, url, 'primary')
       },
+      // slot override（V2）：profile 槽模板替换，host-only（同 addPrimaryAlias 档）。
+      // component = 宿主组件路径（归一化为运行期 ref）；slot '' = 默认槽；
+      // mode: override（默认，压 projected）/ soft（只压原生 fallback）
+      addSlotOverride: (component, slot, url, opts) => {
+        this.assertCurrent(entry)
+        if (scoped !== '')
+          throw new Error('addSlotOverride is host-only (root module env)')
+        this.addSlotOverride(component, slot, url, opts)
+      },
     })
   }
 
@@ -425,6 +447,35 @@ export class ModuleContextManager {
     const entry = this.modMap.get(scoped)
     if (!entry) throw new Error(`Module is not registered: ${scoped}`)
     entry.aliases[key] = value
+  }
+
+  // V2：注册槽替换规则（host 层；env 上下文已门、此处不再验 scoped）
+  addSlotOverride(component, slotName, url, {mode = 'override'} = {}) {
+    if (typeof component !== 'string' || !component.startsWith('/'))
+      throw new Error(`addSlotOverride: component must be an absolute path, got "${component}"`)
+    if (mode !== 'override' && mode !== 'soft')
+      throw new Error(`addSlotOverride: mode must be override|soft, got "${mode}"`)
+    if (typeof url !== 'string' || !url.startsWith('/'))
+      throw new Error(`addSlotOverride: url must be an absolute path, got "${url}"`)
+    const ref = templateRef(component)
+    const slot = slotName == null ? '' : String(slotName)
+    this._slotOverrides[ref + '\n' + slot] = {component: ref, slot, url, mode}
+    this.slotOverrideVersion.v++
+  }
+
+  removeSlotOverride(component, slotName = '') {
+    const key = templateRef(component) + '\n' + (slotName == null ? '' : String(slotName))
+    const rule = this._slotOverrides[key]
+    if (!rule) return false
+    delete this._slotOverrides[key]
+    this.slotOverrideVersion.v++
+    this.fragmentRelease?.(rule.url)   // 片段样式释放（新增生命周期成本，规则删除即清）
+    return true
+  }
+
+  // 出口查询：宿主 ref + 槽名 → 规则（无 = null）
+  slotOverrideFor(componentRef, slotName) {
+    return this._slotOverrides[componentRef + '\n' + (slotName ?? '')] || null
   }
 
   // 三档表原样返回（不合并），优先级判定归 matchAlias。scoped 为 null/undefined

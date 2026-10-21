@@ -2,6 +2,7 @@
 
 ## [未发布]
 
+- **`addSlotOverride`：vslot 模板替换（V2，aic/docs/profile.md §2）**。host 特权注册口（仅根模块 env，isolated 桩抛错）：`addSlotOverride(component, slot, url, {mode})`——匹配键 = 宿主组件运行期实际 ref（`templateRef` 迁入 url.js 共用：去 `.html` 留 query）；`mode=override`（默认）= profile 片段 > 父传投影 > 组件原生 fallback，`soft` = 投影 > 片段 > fallback。片段 = 惰性模板（复用 parser，不走 prepare——setup/script/heads 永不执行）；`<style>` 走片段自身 ref 的 vcss 作用域注入（拍板：非宿主作用域）；纯结构闸门 `fragmentPurityProblem`（`{{}}`/`:`@`/`v-*` 绑定拒装）。`parseSlots` 状态机扩 override/soft 两档；注册表 `slotOverrideVersion` 响应式版本号（片段就绪自动重渲）；`removeSlotOverride` 经 `fragmentRelease` 钩子释放片段样式（ResourceLoader 新增引用计数，组件共享样式不受影响）。isolated/unsafe 模块不解析。alias 与 slot 对同一组件互斥（组件被 alias 整体替换后旧键永不命中）。新增 `test/slot-override.test.js` 六例（三源优先级/自动重渲/样式释放/纯结构闸门/注册表 CRUD）。
 - **破坏性：`addAlias` 键 URL 化**。键从「首段字母前缀」改为标签推导的逻辑路径（`<ai-box>` → 候选 `/ai/box`）：`.html` 结尾 = 精确文件键（与候选+`.html` 全等匹配），否则 = 目录前缀键（段边界最长前缀匹配，`/ai` 不命中 `/aix`）；值 origin 绝对（`/` 或 `https://` 开头），前缀键配目录值、精确键配 `.html` 文件值。命中优先级：精确 > 最长前缀，同具体度按表档 primary > scoped > global；**根模块（scoped=''）起同样查表**（此前跳过，profile 规则要对根页面生效的前提）。新增 host 特权档注册口 `addPrimaryAlias`（仅根模块 env 可用，profile 规则通道，见 aic/docs/profile.md §1）；unsafe/isolated 模块不查表、isolated env 注册口抛错。`getAliases` 改返三档表 `{ primary, scoped, global }`（不再合并），命中判定统一在 `matchAlias`（module.js），归一化函数注册与查表共用。迁移：键 `'ai'` → `'/ai'`；读合并表的调用方改按档取。新增 `test/alias.test.js`（归一化/边界/优先级/三档/根模块回归/unsafe 旁路）。
 
 ## [0.12.1] - 2026-10-10

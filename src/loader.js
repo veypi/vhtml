@@ -20,28 +20,44 @@ const FETCH_TIMEOUT = 10000
 
 // Keep DOM/CSS references compact; descriptor URLs remain canonical for
 // caching, module boundaries and relative imports. Foreign origins stay distinct.
-function templateRef(source) {
-  const url = new URL(source, window.location.origin)
-  url.pathname = url.pathname.replace(/\.html$/, '')
-  return url.origin === window.location.origin
-    ? url.pathname + url.search + url.hash
-    : url.href
-}
+import { templateRef } from './url.js'
+export { templateRef }
 
 class ResourceLoader {
   loadedLinks = new Set()
   loadedStyles = new Set()
+  #styleNodes = new Map()  // key → style 节点（片段样式释放用）
+  #styleRefs = new Map()   // key → 引用计数（组件与片段可共享同一文件样式）
 
   loadStyle(text, source) {
     if (!text) return
     const url = new URL(source, window.location.origin).href
     const key = `${url}::${text}`
+    this.#styleRefs.set(key, (this.#styleRefs.get(key) || 0) + 1)
     if (this.loadedStyles.has(key)) return
     this.loadedStyles.add(key)
     const style = document.createElement('style')
     style.textContent = text
     style.setAttribute('vref', templateRef(url))
     document.head.appendChild(style)
+    this.#styleNodes.set(key, style)
+  }
+
+  // 片段规则删除时释放（V2 新增生命周期成本；组件装载永不调）。
+  // 计数归零才摘节点——同一文件被组件挂载与片段规则共用时互不受影响
+  releaseStyle(text, source) {
+    if (!text) return
+    const url = new URL(source, window.location.origin).href
+    const key = `${url}::${text}`
+    const n = (this.#styleRefs.get(key) || 0) - 1
+    if (n > 0) {
+      this.#styleRefs.set(key, n)
+      return
+    }
+    this.#styleRefs.delete(key)
+    this.loadedStyles.delete(key)
+    this.#styleNodes.get(key)?.remove()
+    this.#styleNodes.delete(key)
   }
 
   clearScopedStyles(matches) {
@@ -49,8 +65,11 @@ class ResourceLoader {
       if (matches(node.getAttribute('vref'))) node.remove()
     }
     for (const key of this.loadedStyles) {
-      if (matches(key.slice(0, key.indexOf('::'))))
+      if (matches(key.slice(0, key.indexOf('::')))) {
         this.loadedStyles.delete(key)
+        this.#styleRefs.delete(key)
+        this.#styleNodes.delete(key)
+      }
     }
   }
 
@@ -278,6 +297,78 @@ export class TemplateLoader {
     return descriptor
   }
 
+  // ---- slot override 片段装载（V2）----
+  // 闸门 1：惰性模板管道——parser.parse 出描述符（body 为模板），不走 prepare()
+  //（setup/script/heads 永不执行）；style 走片段自身 ref 的 vcss 作用域注入
+  //（2026-10-21 拍板：片段自身作用域，非宿主）。缓存键 = 规则注册的原始 url
+  //（releaseFragment 同源对齐）；装载失败允许重试（删缓存条目）。
+  #fragments = new Map()   // 规则 url → { ready: Promise, record: null|fragment }
+
+  // 就绪探针（同步，parseSlots 渲染判定用）：已装载返回片段记录，否则 null
+  fragmentStateOf(url) {
+    return this.#fragments.get(url)?.record || null
+  }
+
+  fetchFragment(url, runtime = {}) {
+    let entry = this.#fragments.get(url)
+    if (!entry) {
+      entry = { ready: null, record: null }
+      entry.ready = Promise.resolve().then(async () => {
+        const record = await this.#doFetchFragment(url, runtime)
+        entry.record = record
+        return record
+      })
+      this.#fragments.set(url, entry)
+      entry.ready.catch(() => {
+        if (this.#fragments.get(url) === entry) this.#fragments.delete(url)
+      })
+    }
+    return entry.ready
+  }
+
+  async #doFetchFragment(url, runtime) {
+    const mod =
+      runtime?.$mod || (await this.moduleManager.getModule(getModulePath(runtime)))
+    const source = resourceKey(url, mod)
+    const lease = await resourcesFor(runtime).open(source, {
+      headers: { 'X-No-Fallback': '1' },
+      cache: 'no-cache',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    })
+    try {
+      const response = lease.response
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${source}`)
+      const descriptor = this.parser.parse(await response.text(), mod, source)
+      const problem = fragmentPurityProblem(descriptor.body)
+      if (problem)
+        throw new Error(`slot fragment "${source}": ${problem}（纯结构闸门：片段禁数据绑定）`)
+      if (descriptor.setup || descriptor.scripts.length || descriptor.heads.length)
+        console.warn('[vhtml] slot fragment scripts/heads are never executed:', source)
+      this.resourceLoader.loadStyle(descriptor.styles, source)
+      return {
+        ref: descriptor.ref,
+        url: source,
+        styleText: descriptor.styles,
+        templates: Array.from(descriptor.body.childNodes),
+      }
+    } finally {
+      lease.release()
+    }
+  }
+
+  // 规则删除/作用域清理时释放：清片段缓存 + 样式计数释放（同文件被组件挂载
+  // 共用时计数保护不受影响）
+  releaseFragment(url) {
+    const entry = this.#fragments.get(url)
+    if (!entry) return
+    this.#fragments.delete(url)
+    entry.ready
+      .then((frag) => {
+        if (frag?.styleText) this.resourceLoader.releaseStyle(frag.styleText, url)
+      })
+      .catch(() => {})
+  }
+
   async doFetchUI(fetchUrl, resources, owner, assertCurrent) {
     const lease = await resources.open(fetchUrl, {
       headers: { 'X-No-Fallback': '1' },
@@ -322,5 +413,32 @@ export class TemplateLoader {
   }
 }
 
+// ---- slot override 片段（V2 闸门，profile.md §2）----
+// 闸门 2：纯结构片段——禁一切数据绑定（{{ }}、:/@/v- 指令属性）。
+// 组件标签允许（自身带独立数据域）；嵌套 vslot 不允许（投影链不穿越片段）。
+const FRAGMENT_BIND_ATTR = /^[:@]|^v-(if|for|show|model|bind|slot|html|cloak)$/
+export function fragmentPurityProblem(root) {
+  const walk = (node) => {
+    if (node.nodeType === 3)
+      return /\{\{[\s\S]*?\}\}/.test(node.textContent || '') ? 'text binding {{ }}' : null
+    if (node.nodeType !== 1) return null
+    for (const attr of node.attributes || [])
+      if (FRAGMENT_BIND_ATTR.test(attr.name)) return `binding attribute "${attr.name}"`
+    for (const child of node.childNodes) {
+      const p = walk(child)
+      if (p) return p
+    }
+    return null
+  }
+  for (const child of root.childNodes) {
+    const p = walk(child)
+    if (p) return p
+  }
+  return null
+}
+
 export const templateLoader = new TemplateLoader()
+
+// slot 规则删除 → 片段样式释放（module.js 不反向依赖 loader，钩子在此装配）
+moduleContextManager.fragmentRelease = (url) => templateLoader.releaseFragment(url)
 export default templateLoader
