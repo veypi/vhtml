@@ -420,6 +420,20 @@ hits = 0
   app.destroy()
 })
 
+test('dangerous anchor href neutralized: javascript:/data:text/html → about:blank（B1）', async () => {
+  TEMPLATES['/pg/links.html'] = `<!DOCTYPE html><html><head><title>t</title></head><body>
+    <a class="evil-js" href="javascript:fetch('/api/user/keys')">js</a>
+    <a class="evil-data" href="data:text/html,<script>1</script>">data</a>
+    <a class="ok-link" href="/b">ok</a>
+  </body></html>`
+  const { app, host } = await createRouter('/links', [{ path: '/links', component: '/pg/links' }])
+  await flush()
+  assert.equal(host.querySelector('a.evil-js')?.getAttribute('href'), 'about:blank', 'javascript: href 被中和')
+  assert.equal(host.querySelector('a.evil-data')?.getAttribute('href'), 'about:blank', 'data:text/html href 被中和')
+  assert.equal(host.querySelector('a.ok-link')?.getAttribute('href'), '/b', '正常路由链接不受影响')
+  app.destroy()
+})
+
 test('routes reload disposes previous layout instances (no shell leak)', async () => {
   const { app, host, vr } = await createRouter('/x')
   await flush()

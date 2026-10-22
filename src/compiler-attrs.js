@@ -115,12 +115,15 @@ function readAnchorRouteTarget(dom) {
 }
 
 function resolveAnchorHref(rawUrl, runtime, dom, options = {}) {
-  rememberAnchorRouteTarget(dom, rawUrl, options.persistTarget)
+  // anchor href 此前不过 sanitizeUrl（img/script 等资源 URL 都过）——
+  // 片段/模板里的 javascript: / data:text/html 链接由此逃逸；先中和再走路由解析
+  const safeUrl = sanitizeUrl(rawUrl)
+  rememberAnchorRouteTarget(dom, safeUrl, options.persistTarget)
   const router = runtime?.$sys?.$router
   const resolved =
     !router || typeof router.resolveHref !== 'function'
-      ? stripRouteEscape(rawUrl)
-      : router.resolveHref(rawUrl)
+      ? stripRouteEscape(safeUrl)
+      : router.resolveHref(safeUrl)
   debugAnchor(runtime, router, 'anchor href resolved', {
     phase: options.phase || 'unknown',
     rawUrl,

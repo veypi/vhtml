@@ -2,6 +2,8 @@
 
 ## [未发布]
 
+- **anchor href 也过 `sanitizeUrl`（复审批次 8 立项 B1）**。`resolveStaticUrlAttr`/`resolveDynamicUrlAttr` 此前把 anchor href 分流到 `resolveAnchorHref` 而绕过 `sanitizeUrl`——平台组件与 skill 包（非片段路径，不过片段闸门）里的 `<a href="javascript:…">` / `data:text/html` 原样保留，一按即在页面 origin 执行。现在 href 先中和（`about:blank`）再走路由解析，与 img/src 等其它 URL 属性同待遇；路由逃生口 `@` 与正常路由链接不受影响。连带语义调整：片段里的危险 href 由「闸门拒装」改为「parse 期中和」（与批次 8 确立的 img/src 先例一致）；闸门 URL 检查保留为编译器不管的属性（`background`/`xlink:href`）的兑底。测试：router.test.js 新增 1 例（危险 href 中和 + 正常链接不受影响），slot-override.test.js 闸门口径用例改写（中和断言 + background 活口）。367 绿。
+
 ## [0.13.0] - 2026-10-22
 
 - **片段样式作用域收紧 + 危险 URL 闸门 + alias 首段索引修正（复审批次 8）**。① 片段（用户空间内容）的 `<style unscoped>` **不再原样注入**——一律按片段自身 ref 走 vcss 作用域化（此前 unscoped 片段样式是全局 CSS，可改平台整页外观）；片段样式禁 `@import`/`@charset` 与外链 `url(http…)`（片段不得出网拉全局样式），命中即装载失败（错误占位可见）。② 纯结构闸门 `fragmentPurityProblem` 补 URL scheme 检查：`href`/`src`/`action`/`formaction`/`xlink:href`/`poster`/`data`/`background`/`srcset` 里的 `javascript:`、`vbscript:`、`data:text/html` 一律拒（此前只查元素/属性名；anchor href 不走编译器 `sanitizeUrl` → `<a href="javascript:…">` 一按即在页面 origin 执行，闸门是用户空间这一层的唯一防线）。③ `matchAlias` 的 alias 首段索引此前恒不生效（`aliasIndexes.has(table)` 与 `aliasIndexOf()` 互为前提 → 永远走 `Object.keys` 全表扫描），改为直接用索引（WeakMap 挂表对象，copy-on-write 换表即重建）→ 标签解析不再每次全表扫描。④ host-only API 增 `templateRef` / `normalizeAliasKey` / `normalizeAliasValue` / `isValidSlotName`（供 aic profile 装载层同源校验，避免两边各写一份规则漂移）。新增 4 例（索引命中、片段 unscoped 作用域化、`@import`/外链拒绝、危险 URL scheme 拒绝）。

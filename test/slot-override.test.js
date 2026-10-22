@@ -243,12 +243,17 @@ test('片段样式：@import/@charset 与外链 url() 拒绝装载', () => {
   assert.doesNotThrow(() => parseFragment('<style>.a{color:red}</style>'))
 })
 
-test('片段：危险 URL scheme 拒绝（javascript: / data:text/html）', () => {
+test('片段：危险 URL scheme —— 编译器统一中和 + 闸门兜底（B1）', () => {
   const problem = (html) => fragmentPurityProblem(parseFragment(html).body)
-  assert.ok(problem(`<a href="javascript:fetch('/api/user/keys')">x</a>`), 'javascript: href 被拒')
-  assert.ok(problem(`<a href="data:text/html,<script>1</script>">x</a>`), 'data:text/html href 被拒')
+  // B1 起 anchor href 与 img/src 同待遇：parse 期过 sanitizeUrl 中和为 about:blank，
+  // 闸门看到的已是安全值（与 img 先例一致，无需重复拦）
+  const d1 = parseFragment(`<a href="javascript:fetch('/api/user/keys')">x</a>`)
+  assert.equal(d1.body.querySelector('a').getAttribute('href'), 'about:blank', 'javascript: href 已被中和')
+  const d2 = parseFragment('<a href="data:text/html,<script>1</script>">x</a>')
+  assert.equal(d2.body.querySelector('a').getAttribute('href'), 'about:blank', 'data:text/html href 已被中和')
   assert.equal(problem('<a href="/ai/box.html">ok</a>'), null, '正常同源链接放行')
-  // img/src 走编译器 sanitizeUrl（parse 期已中和）→ 闸门无需重复拦
-  const d = parseFragment('<img src="javascript:alert(1)">')
-  assert.equal(d.body.querySelector('img').getAttribute('src'), 'about:blank', 'src 已被中和')
+  const d3 = parseFragment('<img src="javascript:alert(1)">')
+  assert.equal(d3.body.querySelector('img').getAttribute('src'), 'about:blank', 'src 已被中和')
+  // 闸门 URL 检查的活口：编译器不管的属性（background / xlink:href）仍由闸门拦
+  assert.ok(problem('<div background="javascript:x">x</div>'), '编译器不管的 URL 属性仍由闸门拒绝')
 })
