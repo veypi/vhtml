@@ -41,6 +41,18 @@ export function resourcesFor(context = {}) {
   )
 }
 
+// 平台根资源（模块外）：绝对路径按**平台根**解析（模块内则是模块根相对）。
+// 槽片段落点用它统一（开放问题 9）：注册期解析一次，之后缓存键/释放键/解析源
+// 三者共用同一个绝对地址。
+let platformRootResources = null
+export function platformResources() {
+  platformRootResources ||= new ModuleResources({
+    ...moduleIdentity('', window.location.origin),
+    unsafe: false,
+  })
+  return platformRootResources
+}
+
 export function resourceKey(input, context) {
   return resourcesFor(context).resolve(input).href
 }

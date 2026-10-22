@@ -15,6 +15,7 @@ import {
   readModuleMeta,
   normalizeScoped,
   resourceMatcher,
+  platformResources,
 } from './resource.js'
 export { normalizeScoped, getModulePath } from './resource.js'
 import { registerModule } from './execution/context.js'
@@ -146,10 +147,11 @@ export function normalizeAliasKey(key) {
     )
   if (
     !/^\/[a-z0-9._\-/]+$/.test(k) ||
-    k.split('/').some((seg) => seg === '.' || seg === '..')
+    // 首段为空是前导 '/'（正常）；其余空段（'//'）与 . / .. 一律拒绝
+    k.split('/').slice(1).some((seg) => !seg || seg === '.' || seg === '..')
   )
     throw new Error(
-      `addAlias: key must be lowercase path segments (no . or ..), got "${key}"`
+      `addAlias: key must be lowercase path segments (no empty, . or ..), got "${key}"`
     )
   return k
 }
@@ -255,8 +257,13 @@ export class ModuleContextManager {
     for (const entry of entries) entry.execution?.retire?.()
     this._globalAliases = {}
     this._primaryAliases = {}
+    // 槽规则连带片段缓存与样式一并释放（否则 <style> 残留、片段常驻）
+    for (const rule of Object.values(this._slotOverrides))
+      this.fragmentRelease?.(rule.source)
     this._slotOverrides = Object.create(null)
-    this.slotOverrideVersion = Wrap({v: 0})
+    // 保留同一个 Wrap 只 bump 版本：已挂载出口的 watch 登记在旧对象上，
+    // 整体替换 Wrap → 旧 watch 永不触发（槽替换此后失效）
+    this.slotOverrideVersion.v++
     this.globals = Wrap({})
     defineRegistry.length = 0
   }
@@ -450,6 +457,10 @@ export class ModuleContextManager {
   }
 
   // V2：注册槽替换规则（host 层；env 上下文已门、此处不再验 scoped）
+  //
+  // 片段落点 = 平台根绝对（开放问题 9）：url 在**注册期**解析成绝对 source，
+  // 之后缓存键 / 样式释放键 / 解析源三者统一用它。原先按消费方模块解析 →
+  // 同一规则在不同模块下落点不同（键漂移），且释放按原始 url 建键 → 永不命中。
   addSlotOverride(component, slotName, url, {mode = 'override'} = {}) {
     if (typeof component !== 'string' || !component.startsWith('/'))
       throw new Error(`addSlotOverride: component must be an absolute path, got "${component}"`)
@@ -459,7 +470,11 @@ export class ModuleContextManager {
       throw new Error(`addSlotOverride: url must be an absolute path, got "${url}"`)
     const ref = templateRef(component)
     const slot = slotName == null ? '' : String(slotName)
-    this._slotOverrides[ref + '\n' + slot] = {component: ref, slot, url, mode}
+    // 槽名白名单：'\n' 是规则键分隔符，含换行的槽名可与另一条 (组件, 槽) 撞键
+    if (!/^[a-zA-Z0-9_-]*$/.test(slot))
+      throw new Error(`addSlotOverride: slot name must match /^[a-zA-Z0-9_-]*$/, got "${slot}"`)
+    const source = platformResources().resolve(url).href
+    this._slotOverrides[ref + '\n' + slot] = {component: ref, slot, url, source, mode}
     this.slotOverrideVersion.v++
   }
 
@@ -469,7 +484,7 @@ export class ModuleContextManager {
     if (!rule) return false
     delete this._slotOverrides[key]
     this.slotOverrideVersion.v++
-    this.fragmentRelease?.(rule.url)   // 片段样式释放（新增生命周期成本，规则删除即清）
+    this.fragmentRelease?.(rule.source)   // 片段样式释放（新增生命周期成本，规则删除即清）
     return true
   }
 

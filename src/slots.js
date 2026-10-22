@@ -171,14 +171,31 @@ export function parseSlots(dom, data, runtime, ctx) {
     // override 模式压 projected；soft 仅在无 projected 时压 fallback
     const rule = ov && (ov.mode !== 'soft' || !selected) ? ov : null
     if (rule) {
-      const renderKey = `slot-override:${slotName}:${rule.url}`
+      const renderKey = `slot-override:${slotName}:${rule.source}`
       if (state.currentKey === renderKey && state.currentMode === 'slot-override') return
-      const frag = templateLoader.fragmentStateOf(rule.url)
+      const frag = templateLoader.fragmentStateOf(rule.source)
+      const fragError = templateLoader.fragmentErrorOf(rule.source)
+      if (fragError) {
+        // 片段装载失败：错误占位，不自动回落（docs/profile.md 第 14 条）。
+        // 失败态由 loader 记住（不反复重试），此处只呈现。
+        resetOutletState(state)
+        dom.innerHTML = ''
+        const node = document.createElement('div')
+        node.className = 'vhtml-slot-error'
+        node.setAttribute('role', 'alert')
+        node.textContent = `Slot fragment failed: ${fragError.message || fragError}`
+        dom.appendChild(node)
+        state.currentKey = renderKey
+        state.currentMode = 'slot-override-error'
+        return
+      }
       if (!frag) {
-        // 片段未就绪：惰性装载（就绪后 bump 版本号自动重渲）；本次先按次优源渲染
-        templateLoader.fetchFragment(rule.url, runtime).then(() => {
+        // 片段未就绪：惰性装载（就绪/失败都 bump 版本号 → 自动重渲）
+        templateLoader.fetchFragment(rule.source).then(() => {
           moduleContextManager.slotOverrideVersion.v++
-        }).catch((e) => console.warn('[vhtml] slot override fragment failed:', rule.url, e))
+        }).catch(() => {
+          moduleContextManager.slotOverrideVersion.v++
+        })
       } else {
         resetOutletState(state)
         renderSlotNodes(dom, frag.templates, data, runtime, ctx)

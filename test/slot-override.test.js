@@ -18,8 +18,10 @@ const FRAG_HTML = `<!DOCTYPE html><html><head><style>.frag { color: red }</style
 const DIRTY_FRAG_HTML = `<!DOCTYPE html><html><body><div>{{ hacked }}</div></body></html>`
 
 const HEADERS = new Headers()
+const fetchCount = new Map()
 globalThis.fetch = window.fetch = async (url) => {
   const u = String(url)
+  fetchCount.set(u, (fetchCount.get(u) || 0) + 1)
   const text = u.endsWith('/x/host.html') ? HOST_HTML
     : u.endsWith('/x/frag.html') ? FRAG_HTML
     : u.endsWith('/x/dirty.html') ? DIRTY_FRAG_HTML
@@ -99,12 +101,14 @@ test('规则删除：回退 fallback + 片段样式释放', async () => {
   assert.equal(moduleContextManager.removeSlotOverride('/x/host.html', ''), false, '幂等')
 })
 
-test('纯结构闸门：带数据绑定的片段拒绝装载（fallback 保持）', async () => {
+test('纯结构闸门：带数据绑定的片段拒绝装载（错误占位，不静默回落）', async () => {
   const { host } = await mountHost()
   moduleContextManager.addSlotOverride('/x/host.html', '', '/x/dirty.html')
   await flush(); await flush()
-  assert.equal(fbText(), 'fallback-content', '脏片段不生效')
-  assert.equal(host.querySelector('.frag'), null)
+  assert.equal(host.querySelector('.frag'), null, '脏片段不生效')
+  const err = host.querySelector('.vhtml-slot-error')
+  assert.ok(err, '闸门拒绝给错误占位（可见）')
+  assert.match(err.textContent, /data binding|text binding/)
 })
 
 test('fragmentPurityProblem 单元面', () => {
@@ -122,14 +126,86 @@ test('fragmentPurityProblem 单元面', () => {
   assert.match(fragmentPurityProblem(doc4.body), /v-if/)
 })
 
+test('fragmentPurityProblem：闸门覆盖 vhtml 真实指令面（复核 2026-10-22）', () => {
+  const bad = (html, re) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    assert.match(fragmentPurityProblem(doc.body), re, html)
+  }
+  const good = (html) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    assert.equal(fragmentPurityProblem(doc.body), null, html)
+  }
+  // 双向绑定（v: 前缀）：component.js 的 v:${key} props 双向 + compiler-attrs 的 v: 前缀
+  bad('<input v:value="x">', /v:value/)
+  bad('<div v:foo="bar"></div>', /v:foo/)
+  // 事件绑定与内联处理器
+  bad('<button @click="go()"></button>', /@click/)
+  bad('<img src=x onerror="alert(1)">', /onerror/)
+  bad('<iframe srcdoc="<script>1</script>"></iframe>', /iframe/)
+  bad('<div srcdoc="<b>x</b>"></div>', /srcdoc/)
+  // 其余 v- 指令（vhtml 实际存在的）
+  bad('<div v-else-if="ok"></div>', /v-else-if/)
+  bad('<div v-else></div>', /v-else/)
+  bad('<div v-for="x in list"></div>', /v-for/)
+  bad('<div v-show="ok"></div>', /v-show/)
+  bad('<div v-html="html"></div>', /v-html/)
+  bad('<div v-whitespace="trim"></div>', /v-whitespace/)
+  // 槽相关：vbind 把宿主数据绑进槽、vslot 是嵌套投影（投影链不穿越片段）
+  bad('<div vbind="x"></div>', /vbind/)
+  bad('<div vslot="s"></div>', /vslot/)
+  // 主动内容元素
+  for (const tag of ['object', 'embed', 'form', 'base', 'meta', 'link'])
+    bad(`<${tag}></${tag}>`, new RegExp(tag))
+  // 纯结构仍放行：静态属性 + 组件标签 + 普通元素
+  good('<div class="a" id="b" data-x="1" aria-label="l"><span>文本</span></div>')
+  good('<x-thing foo="1"><span class="c">组件内容</span></x-thing>')
+  good('<ul><li>一</li><li>二</li></ul>')
+})
+
 test('注册表 CRUD 与归一化（键 = 运行期 ref，去 .html 留 query）', () => {
   moduleContextManager.addSlotOverride('/x/host.html', 'side', '/x/frag.html')
   assert.deepEqual(
     moduleContextManager.slotOverrideFor('/x/host', 'side'),
-    { component: '/x/host', slot: 'side', url: '/x/frag.html', mode: 'override' }
+    {
+      component: '/x/host',
+      slot: 'side',
+      url: '/x/frag.html',
+      // 片段落点 = 平台根绝对（注册期解析）：缓存键/释放键/解析源统一
+      source: 'http://localhost/x/frag.html',
+      mode: 'override',
+    }
   )
   assert.equal(moduleContextManager.slotOverrideFor('/x/host', ''), null)
   assert.throws(() => moduleContextManager.addSlotOverride('x/host.html', '', '/x'), /absolute path/)
   assert.throws(() => moduleContextManager.addSlotOverride('/x/h.html', '', '/x', { mode: 'hard' }), /override\|soft/)
   assert.throws(() => moduleContextManager.addSlotOverride('/x/h.html', '', 'x/frag.html'), /absolute path/)
+  // 槽名白名单（P2-22）：含分隔符/非法字符的槽名直接拒（否则可撞键）
+  assert.throws(() => moduleContextManager.addSlotOverride('/x/h.html', 'a\nb', '/x/frag.html'), /slot name/)
+  assert.throws(() => moduleContextManager.addSlotOverride('/x/h.html', '槽 名', '/x/frag.html'), /slot name/)
+})
+
+test('片段装载失败：错误占位 + 记住失败态（不反复重试）', async () => {
+  const { host } = await mountHost()
+  moduleContextManager.addSlotOverride('/x/host.html', '', '/x/missing.html')
+  await flush(); await flush(); await flush()
+  const err = host.querySelector('.vhtml-slot-error')
+  assert.ok(err, '失败给错误占位（不静默回落）')
+  assert.match(err.textContent, /Slot fragment failed/)
+  assert.equal(fetchCount.get('http://localhost/x/missing.html'), 1, '坏片段只请求一次')
+  await flush(); await flush()
+  assert.equal(fetchCount.get('http://localhost/x/missing.html'), 1, '后续重渲不再重试')
+})
+
+test('clear()：释放片段样式 + 保留同一响应式版本号（出口 watch 仍能触发）', async () => {
+  const { host } = await mountHost()
+  moduleContextManager.addSlotOverride('/x/host.html', '', '/x/frag.html')
+  await flush(); await flush()
+  assert.ok(fragStyle(), '片段样式已注入')
+  const version = moduleContextManager.slotOverrideVersion
+  moduleContextManager.clear()
+  assert.equal(moduleContextManager.slotOverrideVersion, version, '版本号对象不换（watch 依赖登记）')
+  assert.ok(moduleContextManager.slotOverrideVersion.v > 0, '版本号已 bump')
+  await flush(); await flush()
+  assert.equal(fragStyle(), null, 'clear() 连带释放片段样式')
+  assert.equal(fbText(), 'fallback-content', 'clear() 后回退 fallback')
 })

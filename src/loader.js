@@ -8,6 +8,7 @@ import {
   resourcesFor,
   resourceKey,
   resourceMatcher,
+  platformResources,
 } from './resource.js'
 import { bumpImportEpoch } from './imports.js'
 import moduleContextManager from './module.js'
@@ -300,37 +301,44 @@ export class TemplateLoader {
   // ---- slot override 片段装载（V2）----
   // 闸门 1：惰性模板管道——parser.parse 出描述符（body 为模板），不走 prepare()
   //（setup/script/heads 永不执行）；style 走片段自身 ref 的 vcss 作用域注入
-  //（2026-10-21 拍板：片段自身作用域，非宿主）。缓存键 = 规则注册的原始 url
-  //（releaseFragment 同源对齐）；装载失败允许重试（删缓存条目）。
-  #fragments = new Map()   // 规则 url → { ready: Promise, record: null|fragment }
+  //（2026-10-21 拍板：片段自身作用域，非宿主）。
+  //
+  // 片段落点 = 平台根绝对（注册期解析，开放问题 9）：缓存键 / 样式释放键 /
+  // 解析源三者统一为同一个 source。片段按**根模块**上下文解析（与消费模块
+  // 无关）→ 缓存内容不随消费方变化。
+  #fragments = new Map()   // source → { ready: Promise, record: null|fragment, error: null }
 
   // 就绪探针（同步，parseSlots 渲染判定用）：已装载返回片段记录，否则 null
-  fragmentStateOf(url) {
-    return this.#fragments.get(url)?.record || null
+  fragmentStateOf(source) {
+    return this.#fragments.get(source)?.record || null
   }
 
-  fetchFragment(url, runtime = {}) {
-    let entry = this.#fragments.get(url)
-    if (!entry) {
-      entry = { ready: null, record: null }
-      entry.ready = Promise.resolve().then(async () => {
-        const record = await this.#doFetchFragment(url, runtime)
-        entry.record = record
-        return record
-      })
-      this.#fragments.set(url, entry)
-      entry.ready.catch(() => {
-        if (this.#fragments.get(url) === entry) this.#fragments.delete(url)
-      })
-    }
+  // 失败态探针：片段装载失败记住失败态（不反复重试），宿主侧给错误占位
+  fragmentErrorOf(source) {
+    return this.#fragments.get(source)?.error || null
+  }
+
+  fetchFragment(source) {
+    let entry = this.#fragments.get(source)
+    if (entry) return entry.ready
+    entry = { ready: null, record: null, error: null }
+    entry.ready = Promise.resolve().then(async () => {
+      const record = await this.#doFetchFragment(source)
+      entry.record = record
+      return record
+    })
+    // 失败态记住：条目留在表里 → 后续渲染不再重试（坏片段每次重渲都打网络）
+    entry.ready.catch((error) => {
+      entry.error = error
+      console.warn('[vhtml] slot override fragment failed:', source, error)
+    })
+    this.#fragments.set(source, entry)
     return entry.ready
   }
 
-  async #doFetchFragment(url, runtime) {
-    const mod =
-      runtime?.$mod || (await this.moduleManager.getModule(getModulePath(runtime)))
-    const source = resourceKey(url, mod)
-    const lease = await resourcesFor(runtime).open(source, {
+  async #doFetchFragment(source) {
+    const mod = await this.moduleManager.getModule('')   // 根模块上下文
+    const lease = await platformResources().open(source, {
       headers: { 'X-No-Fallback': '1' },
       cache: 'no-cache',
       signal: AbortSignal.timeout(FETCH_TIMEOUT),
@@ -357,14 +365,14 @@ export class TemplateLoader {
   }
 
   // 规则删除/作用域清理时释放：清片段缓存 + 样式计数释放（同文件被组件挂载
-  // 共用时计数保护不受影响）
-  releaseFragment(url) {
-    const entry = this.#fragments.get(url)
+  // 共用时计数保护不受影响）。键 = 片段 source（与装载同一把钥匙）
+  releaseFragment(source) {
+    const entry = this.#fragments.get(source)
     if (!entry) return
-    this.#fragments.delete(url)
+    this.#fragments.delete(source)
     entry.ready
       .then((frag) => {
-        if (frag?.styleText) this.resourceLoader.releaseStyle(frag.styleText, url)
+        if (frag?.styleText) this.resourceLoader.releaseStyle(frag.styleText, frag.url)
       })
       .catch(() => {})
   }
@@ -414,16 +422,38 @@ export class TemplateLoader {
 }
 
 // ---- slot override 片段（V2 闸门，profile.md §2）----
-// 闸门 2：纯结构片段——禁一切数据绑定（{{ }}、:/@/v- 指令属性）。
+// 闸门 2：纯结构片段——禁一切数据绑定（{{ }}、:/@/v: 指令属性）。
 // 组件标签允许（自身带独立数据域）；嵌套 vslot 不允许（投影链不穿越片段）。
-const FRAGMENT_BIND_ATTR = /^[:@]|^v-(if|for|show|model|bind|slot|html|cloak)$/
+//
+// 指令面清单按 vhtml 源码实读维护（2026-10-22 复核）：
+//   ':x'  单向属性绑定        '@x'  事件绑定
+//   'v:x' 双向绑定（component.js 的 v:${key} props 双向；compiler-attrs 的 v: 前缀）
+//   'v-if' / 'v-else-if' / 'v-else' / 'v-for' / 'v-show' / 'v-html' / 'v-whitespace'
+//   'vbind'（slots.js：把宿主数据绑进槽）、'vslot'（嵌套投影）
+// 注意：'v-model' / 'v-bind' / 'v-slot' / 'v-cloak' 在 vhtml 中**不存在**
+//（写进黑名单只会给人「已覆盖」的错觉），故不列。
+const FRAGMENT_BIND_ATTR =
+  /^[:@]|^v:|^v-(if|else-if|else|for|show|html|whitespace)$|^vbind$|^vslot$/
+// 主动内容：内联事件处理器 + 可嵌入文档/可导航元素（同源不防脚本执行）
+const FRAGMENT_ACTIVE_ATTR = /^on/i
+const FRAGMENT_ACTIVE_TAG = new Set([
+  'iframe', 'object', 'embed', 'form', 'base', 'meta', 'link', 'srcdoc',
+])
 export function fragmentPurityProblem(root) {
   const walk = (node) => {
     if (node.nodeType === 3)
       return /\{\{[\s\S]*?\}\}/.test(node.textContent || '') ? 'text binding {{ }}' : null
     if (node.nodeType !== 1) return null
-    for (const attr of node.attributes || [])
-      if (FRAGMENT_BIND_ATTR.test(attr.name)) return `binding attribute "${attr.name}"`
+    const tag = (node.tagName || '').toLowerCase()
+    if (FRAGMENT_ACTIVE_TAG.has(tag))
+      return `active element <${tag}>`
+    for (const attr of node.attributes || []) {
+      if (FRAGMENT_BIND_ATTR.test(attr.name))
+        return `binding attribute "${attr.name}"`
+      if (FRAGMENT_ACTIVE_ATTR.test(attr.name))
+        return `inline handler attribute "${attr.name}"`
+      if (attr.name === 'srcdoc') return 'inline document attribute "srcdoc"'
+    }
     for (const child of node.childNodes) {
       const p = walk(child)
       if (p) return p
