@@ -196,6 +196,16 @@ test('片段装载失败：错误占位 + 记住失败态（不反复重试）',
   assert.equal(fetchCount.get('http://localhost/x/missing.html'), 1, '后续重渲不再重试')
 })
 
+test('槽规则命中回报：宿主侧可见“配了但没命中”的规则（P2-22）', async () => {
+  const { host } = await mountHost()
+  moduleContextManager.addSlotOverride('/x/host.html', '', '/x/frag.html')
+  await flush(); await flush()
+  const hits = moduleContextManager.slotOverrideHits()
+  assert.ok(hits.has('/x/host\n'), '命中的规则已登记')
+  assert.equal(hits.has('/x/nope\n'), false, '未命中的规则不在集合里')
+  assert.ok(host.querySelector('.frag'))
+})
+
 test('clear()：释放片段样式 + 保留同一响应式版本号（出口 watch 仍能触发）', async () => {
   const { host } = await mountHost()
   moduleContextManager.addSlotOverride('/x/host.html', '', '/x/frag.html')

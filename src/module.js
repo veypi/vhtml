@@ -180,17 +180,39 @@ export function normalizeAliasValue(key, value) {
 
 // tables = getAliases() 返回的 { primary, scoped, global }。返回映射后的
 // 地址字符串（调用方补 '@'），未命中返回 null。
+//
+// 前缀键按**首段索引**取候选（不再每次标签解析都全表扫描）：索引挂在表对象上
+//（WeakMap），addAlias 走 copy-on-write（表对象换新 → 索引重建）。
+const aliasIndexes = new WeakMap()   // table → Map<首段, 键数组>
+function aliasIndexOf(table) {
+  let idx = aliasIndexes.get(table)
+  if (idx) return idx
+  idx = new Map()
+  for (const key of Object.keys(table)) {
+    const seg = key.slice(1).split('/')[0]
+    const list = idx.get(seg)
+    if (list) list.push(key)
+    else idx.set(seg, [key])
+  }
+  aliasIndexes.set(table, idx)
+  return idx
+}
 export function matchAlias(candidate, tables) {
   if (!tables) return null
   const exactKey = candidate + '.html'
   for (const table of [tables.primary, tables.scoped, tables.global]) {
     if (table && Object.hasOwn(table, exactKey)) return table[exactKey]
   }
+  const seg = candidate.slice(1).split('/')[0]
   let best = null
   let bestLen = 0
   for (const table of [tables.primary, tables.scoped, tables.global]) {
     if (!table) continue
-    for (const key of Object.keys(table)) {
+    // 候选键 = 与候选首段同段的键（无索引的表退化为全表键）
+    const keys = aliasIndexes.has(table)
+      ? aliasIndexOf(table).get(seg) || []
+      : Object.keys(table)
+    for (const key of keys) {
       if (isExactAliasKey(key) || key.length <= bestLen) continue
       if (
         candidate === key ||
@@ -210,10 +232,12 @@ export class ModuleContextManager {
   constructor() {
     this.modMap = new Map()
     this.moduleMetadata = new Map()
-    this._globalAliases = {}
+    this._globalAliases = Object.freeze({})
     // host 特权档（profile 规则表）：优先级最高的 alias 表，仅根模块 env
     // 可经 addPrimaryAlias 注册；clearScoped 不清（与全局层同生命周期）
-    this._primaryAliases = {}
+    this._primaryAliases = Object.freeze({})
+    // 槽规则命中记录（宿主侧可观测）：配了但没命中的规则能被看见（P2-22）
+    this._slotOverrideHits = new Set()
     // slot override 规则表（V2，profile.md §2）：键 = 宿主组件运行期实际 ref
     //（templateRef：去 .html 留 query）+ '\n' + 槽名；值 = {component, slot, url, mode}。
     // alias 与 slot 对同一组件互斥（alias 整体替换后 ref 变了，旧键永不命中）。
@@ -255,12 +279,13 @@ export class ModuleContextManager {
     const entries = [...this.modMap.values()]
     this.modMap.clear()
     for (const entry of entries) entry.execution?.retire?.()
-    this._globalAliases = {}
-    this._primaryAliases = {}
+    this._globalAliases = Object.freeze({})
+    this._primaryAliases = Object.freeze({})
     // 槽规则连带片段缓存与样式一并释放（否则 <style> 残留、片段常驻）
     for (const rule of Object.values(this._slotOverrides))
       this.fragmentRelease?.(rule.source)
     this._slotOverrides = Object.create(null)
+    this._slotOverrideHits = new Set()
     // 保留同一个 Wrap 只 bump 版本：已挂载出口的 watch 登记在旧对象上，
     // 整体替换 Wrap → 旧 watch 永不触发（槽替换此后失效）
     this.slotOverrideVersion.v++
@@ -426,6 +451,8 @@ export class ModuleContextManager {
           throw new Error('addSlotOverride is host-only (root module env)')
         this.addSlotOverride(component, slot, url, opts)
       },
+      // 槽规则命中回报（只读）：宿主侧 inspect 可见“配了但没命中”的规则
+      slotOverrideHits: () => this.slotOverrideHits(),
     })
   }
 
@@ -439,21 +466,23 @@ export class ModuleContextManager {
   }
 
   // tier: 'scoped' | 'global' | 'primary'（优先级递增序见 matchAlias 表档）
+  // 写入走 copy-on-write：新表对象 + 冻结（调用方拿到 getAliases() 的表也无法改写
+  // 全局档；copy-on-write 同时使 alias 首段索引失效重建）。
   addAlias(scoped, key, value, tier = 'scoped') {
     key = normalizeAliasKey(key)
     value = normalizeAliasValue(key, value)
     if (tier === 'global') {
-      this._globalAliases[key] = value
+      this._globalAliases = Object.freeze({...this._globalAliases, [key]: value})
       return
     }
     if (tier === 'primary') {
-      this._primaryAliases[key] = value
+      this._primaryAliases = Object.freeze({...this._primaryAliases, [key]: value})
       return
     }
     if (tier !== 'scoped') throw new Error(`addAlias: unknown tier "${tier}"`)
     const entry = this.modMap.get(scoped)
     if (!entry) throw new Error(`Module is not registered: ${scoped}`)
-    entry.aliases[key] = value
+    entry.aliases = Object.freeze({...entry.aliases, [key]: value})
   }
 
   // V2：注册槽替换规则（host 层；env 上下文已门、此处不再验 scoped）
@@ -476,6 +505,16 @@ export class ModuleContextManager {
     const source = platformResources().resolve(url).href
     this._slotOverrides[ref + '\n' + slot] = {component: ref, slot, url, source, mode}
     this.slotOverrideVersion.v++
+  }
+
+  // 槽规则命中回报：出口解析到规则时登记（键 = ref + '\n' + 槽名）
+  markSlotOverrideHit(componentRef, slotName = '') {
+    this._slotOverrideHits.add(componentRef + '\n' + (slotName == null ? '' : String(slotName)))
+  }
+
+  // 已命中的槽规则键集合（宿主侧 inspect 用）
+  slotOverrideHits() {
+    return new Set(this._slotOverrideHits)
   }
 
   removeSlotOverride(component, slotName = '') {

@@ -173,6 +173,8 @@ export function parseSlots(dom, data, runtime, ctx) {
     if (rule) {
       const renderKey = `slot-override:${slotName}:${rule.source}`
       if (state.currentKey === renderKey && state.currentMode === 'slot-override') return
+      // 命中回报（宿主侧可观测：配了但没命中的规则能被看见）
+      moduleContextManager.markSlotOverrideHit(hostRef, slotName)
       const frag = templateLoader.fragmentStateOf(rule.source)
       const fragError = templateLoader.fragmentErrorOf(rule.source)
       if (fragError) {

@@ -116,6 +116,27 @@ test('manager: tier registration and getAliases shape', () => {
   assert.throws(() => m.addAlias('/x', '/ui', '/y', 'weird'), /unknown tier/)
 })
 
+test('manager: alias 表冻结（调用方拿到引用也改不了全局档）+ copy-on-write', () => {
+  const m = new ModuleContextManager()
+  m.modMap.set('/x', { scoped: '/x', aliases: {} })
+  m.addAlias('/x', '/ui', '/x/ui')
+  m.addAlias('/x', '/shared', '/shared', 'global')
+  const t = m.getAliases('/x')
+  assert.ok(Object.isFrozen(t.global), 'global 表冻结')
+  assert.ok(Object.isFrozen(t.scoped), 'scoped 表冻结')
+  // 拿到引用的调用方改不动（严格模式抛错，非严格静默）
+  assert.throws(() => { 'use strict'; t.global['/evil'] = '/evil' })
+  assert.equal(t.global['/evil'], undefined)
+  // copy-on-write：再注册一条 → 换新表对象（旧引用不受影响）
+  const before = t.global
+  m.addAlias('/x', '/more', '/more', 'global')
+  const after = m.getAliases('/x').global
+  assert.notEqual(after, before, '写入走 copy-on-write（新表对象）')
+  assert.equal(after['/shared'], '/shared')
+  assert.equal(after['/more'], '/more')
+  assert.equal(before['/more'], undefined, '旧引用不被就地改写')
+})
+
 test('manager: clearScoped preserves global and primary tiers', () => {
   const m = new ModuleContextManager()
   m.modMap.set('/x', { scoped: '/x', aliases: {} })

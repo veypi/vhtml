@@ -21,8 +21,8 @@ const FETCH_TIMEOUT = 10000
 
 // Keep DOM/CSS references compact; descriptor URLs remain canonical for
 // caching, module boundaries and relative imports. Foreign origins stay distinct.
+// templateRef 的单一出口在 url.js（loader 不再转手出口）。
 import { templateRef } from './url.js'
-export { templateRef }
 
 class ResourceLoader {
   loadedLinks = new Set()
