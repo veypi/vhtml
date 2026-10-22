@@ -85,6 +85,23 @@ test('matchAlias: exact beats prefix regardless of tier', () => {
   assert.equal(matchAlias('/ai/other', t), '/p/ai/other')
 })
 
+test('matchAlias: 首段索引生效（连续查找不再全表扫描）', () => {
+  const raw = { '/ai': '/g/ai', '/ai/box': '/g/aibox', '/os': '/g/os' }
+  let ownKeysCalls = 0
+  const counted = new Proxy(raw, {
+    ownKeys(target) {
+      ownKeysCalls++
+      return Reflect.ownKeys(target)
+    },
+  })
+  const t = tables(counted, null, null)
+  assert.equal(matchAlias('/ai/box', t), '/g/aibox')
+  const afterFirst = ownKeysCalls
+  matchAlias('/ai/other', t)
+  matchAlias('/os/x', t)
+  assert.equal(ownKeysCalls, afterFirst, '后续查找不再遍历表键（首段索引缓存命中）')
+})
+
 test('matchAlias: same specificity resolves primary > scoped > global', () => {
   const t = tables(
     { '/ai': '/p' },

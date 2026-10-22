@@ -136,6 +136,12 @@ export function isExactAliasKey(key) {
   return key.endsWith('.html')
 }
 
+// 槽名白名单：'\n' 是规则键分隔符，含换行的槽名可与另一条 (组件, 槽) 撞键
+const SLOT_NAME_RE = /^[a-zA-Z0-9_-]*$/
+export function isValidSlotName(slot) {
+  return SLOT_NAME_RE.test(slot == null ? '' : String(slot))
+}
+
 export function normalizeAliasKey(key) {
   if (typeof key !== 'string' || !key)
     throw new Error(`addAlias: key must be a non-empty string, got "${key}"`)
@@ -208,10 +214,9 @@ export function matchAlias(candidate, tables) {
   let bestLen = 0
   for (const table of [tables.primary, tables.scoped, tables.global]) {
     if (!table) continue
-    // 候选键 = 与候选首段同段的键（无索引的表退化为全表键）
-    const keys = aliasIndexes.has(table)
-      ? aliasIndexOf(table).get(seg) || []
-      : Object.keys(table)
+    // 候选键 = 与候选首段同段的键（首段索引：WeakMap 挂在表对象上，
+    // addAlias 走 copy-on-write → 换表对象即索引重建）
+    const keys = aliasIndexOf(table).get(seg) || []
     for (const key of keys) {
       if (isExactAliasKey(key) || key.length <= bestLen) continue
       if (
@@ -453,6 +458,13 @@ export class ModuleContextManager {
       },
       // 槽规则命中回报（只读）：宿主侧 inspect 可见“配了但没命中”的规则
       slotOverrideHits: () => this.slotOverrideHits(),
+      // 组件 ref 单一出口（aic profile 装载层同源用：命中键、落点判定）
+      templateRef: (source) => templateRef(source),
+      // alias 键/值 + 槽名校验（aic profile 装载层注册契约同源用；
+      // 校验不过即抛错——装载层据此把规则判为不生效，不静默吞）
+      normalizeAliasKey: (key) => normalizeAliasKey(key),
+      normalizeAliasValue: (key, value) => normalizeAliasValue(key, value),
+      isValidSlotName: (slot) => isValidSlotName(slot),
     })
   }
 
@@ -500,7 +512,7 @@ export class ModuleContextManager {
     const ref = templateRef(component)
     const slot = slotName == null ? '' : String(slotName)
     // 槽名白名单：'\n' 是规则键分隔符，含换行的槽名可与另一条 (组件, 槽) 撞键
-    if (!/^[a-zA-Z0-9_-]*$/.test(slot))
+    if (!isValidSlotName(slot))
       throw new Error(`addSlotOverride: slot name must match /^[a-zA-Z0-9_-]*$/, got "${slot}"`)
     const source = platformResources().resolve(url).href
     this._slotOverrides[ref + '\n' + slot] = {component: ref, slot, url, source, mode}

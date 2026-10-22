@@ -134,7 +134,7 @@ class ResourceLoader {
 
 // This parser never fetches dependencies, evaluates code or modifies the live document.
 class TemplateParser {
-  parse(text, mod, url) {
+  parse(text, mod, url, opts = {}) {
     const ref = templateRef(url)
     const doc = new DOMParser().parseFromString(text, 'text/html')
     const descriptor = {
@@ -151,9 +151,16 @@ class TemplateParser {
       heads: [],
     }
     doc.querySelectorAll('style').forEach((node) => {
-      descriptor.styles += node.hasAttribute('unscoped')
-        ? node.textContent
-        : vcss.parse(node.textContent, ref)
+      const css = node.textContent || ''
+      if (opts.fragment) {
+        // 片段样式（用户空间）：unscoped **不生效**——一律按片段自身 ref 作用域化；
+        // 且禁 @import/@charset/外链（片段不得出网改全局样式）
+        const bad = fragmentStyleProblem(css)
+        if (bad) throw new Error(`slot fragment style: ${bad}`)
+        descriptor.styles += vcss.parse(css, ref)
+      } else {
+        descriptor.styles += node.hasAttribute('unscoped') ? css : vcss.parse(css, ref)
+      }
       node.remove()
     })
     for (const node of doc.querySelectorAll('script')) {
@@ -346,7 +353,7 @@ export class TemplateLoader {
     try {
       const response = lease.response
       if (!response.ok) throw new Error(`HTTP ${response.status}: ${source}`)
-      const descriptor = this.parser.parse(await response.text(), mod, source)
+      const descriptor = this.parser.parse(await response.text(), mod, source, { fragment: true })
       const problem = fragmentPurityProblem(descriptor.body)
       if (problem)
         throw new Error(`slot fragment "${source}": ${problem}（纯结构闸门：片段禁数据绑定）`)
@@ -439,6 +446,41 @@ const FRAGMENT_ACTIVE_ATTR = /^on/i
 const FRAGMENT_ACTIVE_TAG = new Set([
   'iframe', 'object', 'embed', 'form', 'base', 'meta', 'link', 'srcdoc',
 ])
+// URL 属性：scheme 危险则片段里一按即在页面 origin 执行
+const FRAGMENT_URL_ATTRS = new Set([
+  'href', 'src', 'action', 'formaction', 'xlink:href', 'poster', 'data', 'background',
+])
+const FRAGMENT_DANGEROUS_SCHEME_RE = /^\s*(javascript|vbscript)\s*:/i
+const FRAGMENT_DANGEROUS_DATA_RE = /^\s*data\s*:\s*text\/html/i
+
+// 片段 URL 值检查（返回问题描述或 null）
+function fragmentUrlProblem(attrName, value) {
+  const raw = String(value == null ? '' : value)
+  const candidates = attrName === 'srcset'
+    ? raw.split(',').map((s) => s.trim().split(/\s+/)[0]).filter(Boolean)
+    : [raw]
+  for (const c of candidates) {
+    if (FRAGMENT_DANGEROUS_SCHEME_RE.test(c))
+      return `dangerous URL scheme in attribute "${attrName}"`
+    if (FRAGMENT_DANGEROUS_DATA_RE.test(c))
+      return `dangerous data: URL in attribute "${attrName}"`
+  }
+  return null
+}
+
+// 片段样式检查：禁 @import/@charset（拉外链）与外链 url()（出网改全局样式）
+// 注：style 节点在 parse 阶段已被摘除 → 纯结构闸门看不到它，样式约束在此做。
+const FRAGMENT_STYLE_AT_RULE_RE = /@(import|charset)\b/i
+const FRAGMENT_STYLE_EXTERNAL_URL_RE = /url\(\s*['"]?\s*(https?:|\/\/)/i
+export function fragmentStyleProblem(css) {
+  const text = String(css || '')
+  if (FRAGMENT_STYLE_AT_RULE_RE.test(text))
+    return 'style must not use @import/@charset'
+  if (FRAGMENT_STYLE_EXTERNAL_URL_RE.test(text))
+    return 'style must not reference external URLs'
+  return null
+}
+
 export function fragmentPurityProblem(root) {
   const walk = (node) => {
     if (node.nodeType === 3)
@@ -453,6 +495,10 @@ export function fragmentPurityProblem(root) {
       if (FRAGMENT_ACTIVE_ATTR.test(attr.name))
         return `inline handler attribute "${attr.name}"`
       if (attr.name === 'srcdoc') return 'inline document attribute "srcdoc"'
+      if (FRAGMENT_URL_ATTRS.has(attr.name) || attr.name === 'srcset') {
+        const bad = fragmentUrlProblem(attr.name, attr.value)
+        if (bad) return bad
+      }
     }
     for (const child of node.childNodes) {
       const p = walk(child)

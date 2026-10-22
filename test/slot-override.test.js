@@ -219,3 +219,36 @@ test('clear()：释放片段样式 + 保留同一响应式版本号（出口 wat
   assert.equal(fragStyle(), null, 'clear() 连带释放片段样式')
   assert.equal(fbText(), 'fallback-content', 'clear() 后回退 fallback')
 })
+
+// ---- 片段样式作用域 + 危险 URL（F5 / N2）----
+
+const parseFragment = (html) =>
+  templateLoader.parser.parse(html, { scoped: '' }, 'http://localhost/x/frag.html', { fragment: true })
+
+test('片段样式：unscoped 不生效（按片段自身 ref 作用域化）', () => {
+  const d = parseFragment('<style unscoped>body{background:red}</style><div>x</div>')
+  assert.ok(!d.styles.includes('body{background:red}'), '全局 CSS 未原样保留')
+  assert.ok(d.styles.includes('[vref="/x/frag"]'), `样式被作用域化（片段自身 ref），实际=${d.styles}`)
+})
+
+test('片段样式：@import/@charset 与外链 url() 拒绝装载', () => {
+  assert.throws(
+    () => parseFragment('<style>@import url(https://evil.example/x.css);</style>'),
+    /@import/,
+  )
+  assert.throws(
+    () => parseFragment('<style>.a{background:url(https://evil.example/x.png)}</style>'),
+    /external/,
+  )
+  assert.doesNotThrow(() => parseFragment('<style>.a{color:red}</style>'))
+})
+
+test('片段：危险 URL scheme 拒绝（javascript: / data:text/html）', () => {
+  const problem = (html) => fragmentPurityProblem(parseFragment(html).body)
+  assert.ok(problem(`<a href="javascript:fetch('/api/user/keys')">x</a>`), 'javascript: href 被拒')
+  assert.ok(problem(`<a href="data:text/html,<script>1</script>">x</a>`), 'data:text/html href 被拒')
+  assert.equal(problem('<a href="/ai/box.html">ok</a>'), null, '正常同源链接放行')
+  // img/src 走编译器 sanitizeUrl（parse 期已中和）→ 闸门无需重复拦
+  const d = parseFragment('<img src="javascript:alert(1)">')
+  assert.equal(d.body.querySelector('img').getAttribute('src'), 'about:blank', 'src 已被中和')
+})
