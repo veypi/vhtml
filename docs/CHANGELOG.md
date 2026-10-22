@@ -1,6 +1,6 @@
 # 更新日志
 
-## [未发布]
+## [0.13.1] - 2026-10-23
 
 - **anchor href 也过 `sanitizeUrl`（复审批次 8 立项 B1）**。`resolveStaticUrlAttr`/`resolveDynamicUrlAttr` 此前把 anchor href 分流到 `resolveAnchorHref` 而绕过 `sanitizeUrl`——平台组件与 skill 包（非片段路径，不过片段闸门）里的 `<a href="javascript:…">` / `data:text/html` 原样保留，一按即在页面 origin 执行。现在 href 先中和（`about:blank`）再走路由解析，与 img/src 等其它 URL 属性同待遇；路由逃生口 `@` 与正常路由链接不受影响。连带语义调整：片段里的危险 href 由「闸门拒装」改为「parse 期中和」（与批次 8 确立的 img/src 先例一致）；闸门 URL 检查保留为编译器不管的属性（`background`/`xlink:href`）的兑底。测试：router.test.js 新增 1 例（危险 href 中和 + 正常链接不受影响），slot-override.test.js 闸门口径用例改写（中和断言 + background 活口）。367 绿。
 
