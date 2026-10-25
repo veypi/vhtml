@@ -21,7 +21,7 @@ import {
   disposeRuntimeSubtree,
 } from './component-instance.js'
 import { createSlotContents } from './slots.js'
-import { watch } from './runtime-watch.js'
+import { watch, publicWatch } from './runtime-watch.js'
 
 export { ComponentScope } from './component-scope.js'
 export {
@@ -262,10 +262,8 @@ export async function setupRef(
       {
         $node: dom,
         $watch: (targetFn, callback, options) => {
-          const scope = inst?.scope
-          const register = () => watch(scope, targetFn, callback, options)
-          if (scope) return scope.queueWatch(register)
-          return register()
+          // 公开契约：返回幂等取消订阅函数（内部 watch 句柄不对外暴露）。
+          return publicWatch(inst?.scope, targetFn, callback, options)
         },
         // $scope 与生命周期脚本同源（此前 setup 遗漏：setup 里调用读成 undefined 直接 TypeError）
         $scope: setupScope,

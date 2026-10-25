@@ -1215,7 +1215,18 @@ export class RouterView {
       const { path: redirectPath, data: redirectData } = splitRouteTarget(
         buildResult.redirect
       )
-      this.#swallowNav(this.replace(redirectPath, redirectData, options))
+      // 落点写在路由表里（路由表自身的空间）→ 与 #navigateRedirect 同口径：
+      // 必须带 navigationPrefix（按注册路由解析）+ commit（重写地址栏）。
+      // 沿用发起方 options 时：URL 停在被重定向前的路径（刷新又回到 404
+      // 路径再回落一次，用户观感「整页刷新」），落点还会按发起方模块的
+      // 挂载点解析（匹配不上 → 落 catch-all → layout 重建）。
+      this.#swallowNav(
+        this.replace(
+          redirectPath,
+          redirectData,
+          this.#redirectOptions(options)
+        )
+      )
       return null
     }
     return { page, fromCache: false, to, cacheKey }

@@ -1,5 +1,12 @@
 # 更新日志
 
+## [0.13.2] - 2026-10-26
+
+- **落单 `v-else` / `v-else-if` 收口：清属性 + 一次告警**。`compileVif` 此前只在「作为链成员被消费」时清除指令属性——节点没有可依附的 `v-if` 链（链被普通元素打断，或同节点带 `v-for` 被 v-for 优先接管）时，属性会原样落进 DOM（`v-else=""` 恒挂在元素上），渲染上表现为“指令看着生效但永不切换”，且零诊断。新增 `dropOrphanElse()`，在 v-for 分支 / 同节点已带 v-if / 链已结束三处调用：只删属性 + `console.warn`（按标记内容去重、上限 200 条，避免分支拆建时刷屏），**渲染语义不变**（设计口径：`v-if`+`v-for` 可组合，但不接受 `v-else*`）。新增 `test/vif_chain_element.test.js` 11 例（元素分支与 template 分支行为对齐、根级直挂、v-for 行内、相邻两链、空态互斥、修复后的两种嵌套 template 形状、rAF 批量语义（微任务阶段陈旧/一帧后更新）、落单属性清理与去重、v-for 优先级），全套 380 绿。
+- **`$watch` 对外契约改为幂等取消函数**（`runtime-watch.js: publicWatch`）。setup / 生命周期脚本的 `$watch` 此前把内部 watcher handle 直接暴露给页面，而编译器 teardown 依赖 handle 走 `Cancel`——页面拿到的是一个不可控内部对象，也没有“已取消 / scope 已释放”的保护。新增 `publicWatch()`：注册仍走 `scope.queueWatch`（setup 期入队；已取消或 scope 已 disposed 则注册阶段直接跳过，不留孤儿 watcher），对外返回 `unsubscribe()`，可重复调用；内部 `watch()` 继续返回 handle（编译器契约不变）。新增 `test/runtime-watch.test.js` 3 例（内部 handle / 幂等取消 / 入队前取消不注册）。
+- **页面 title 插值补 `$t` 作用域**（`router/page.js: titleScope`）。`title` 的求值作用域只有模块服务（runtime），而全站页面标题写的是 `{{$t('...')}}` → `Unknown identifier "$t"`；且 `activate()` 第一步就是 `updateTitle()`，此时页面实例 runtime 还没就绪。`titleScope()` 在拿不到 `$t` 时回退到 `ownerView.runtime`，再不行就补一个 `$t → $mod.$t` 薄封装，其余作用域语义不变。
+- **redirect 落点按路由表口径重解析**（`router/view.js`）。`replace()` 的 redirect 分支此前沿用发起方 `options`：地址栏停在被重定向前的路径（刷新又落回该路径再回落一次，观感像整页刷新），落点还会按发起方模块的挂载点解析（匹配不上 → catch-all → layout 重建）。改走 `#redirectOptions(options)`（带 navigationPrefix + commit），与 `#navigateRedirect` 同口径。
+
 ## [0.13.1] - 2026-10-23
 
 - **anchor href 也过 `sanitizeUrl`（复审批次 8 立项 B1）**。`resolveStaticUrlAttr`/`resolveDynamicUrlAttr` 此前把 anchor href 分流到 `resolveAnchorHref` 而绕过 `sanitizeUrl`——平台组件与 skill 包（非片段路径，不过片段闸门）里的 `<a href="javascript:…">` / `data:text/html` 原样保留，一按即在页面 origin 执行。现在 href 先中和（`about:blank`）再走路由解析，与 img/src 等其它 URL 属性同待遇；路由逃生口 `@` 与正常路由链接不受影响。连带语义调整：片段里的危险 href 由「闸门拒装」改为「parse 期中和」（与批次 8 确立的 img/src 先例一致）；闸门 URL 检查保留为编译器不管的属性（`background`/`xlink:href`）的兑底。测试：router.test.js 新增 1 例（危险 href 中和 + 正常链接不受影响），slot-override.test.js 闸门口径用例改写（中和断言 + background 活口）。367 绿。

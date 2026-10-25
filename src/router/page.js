@@ -161,6 +161,19 @@ export class Page {
     )
   }
 
+  // title 插值的求值作用域：组件模板里能用 $t，但 title 作用域只有模块服务（runtime），
+  // 于是 {{$t('...')}} 报 Unknown identifier "$t"（全站页面 title 都这么写）。
+  // 注意时机：activate() 第一步就是 updateTitle()，此时页面实例的 runtime 还没就绪
+  // （this.runtime() → null）→ 只能回退到视图级 runtime（ownerView.runtime）拿 $mod。
+  // 这里补一个 $t → $mod.$t 的薄封装，其余作用域语义不变。
+  titleScope() {
+    const rt = this.runtime() || this.ownerView?.runtime || {}
+    if (rt.$t) return rt
+    const mod = rt.$mod
+    if (!mod || typeof mod.$t !== 'function') return rt
+    return {...rt, $t: (key, params) => mod.$t(key, params)}
+  }
+
   outlet() {
     if (!this.layoutDom) return this.node
     this._meta.layoutOutlet =
@@ -282,7 +295,7 @@ export class Page {
     }
     const target = this.dom || this.layoutDom
     if (!target) return
-    const titleRuntime = this.runtime() || {}
+    const titleRuntime = this.titleScope() || {}
     const varRegex = /{{|}}/g
     let match,
       nextStart = 0,
@@ -328,7 +341,7 @@ export class Page {
     const title = (this._meta.title || '').trim()
     if (!title) return ''
     if (!title.includes('{{')) return title
-    const titleRuntime = this.runtime() || {}
+    const titleRuntime = this.titleScope() || {}
     const varRegex = /{{|}}/g
     let match,
       nextStart = 0,

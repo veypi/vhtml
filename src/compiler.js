@@ -63,6 +63,28 @@ function getSharedSourceNodes(dom) {
   )
 }
 
+/*
+ * 落单的 v-else / v-else-if：所在节点前面没有可依附的 v-if 链（或同节点带 v-for，
+ * 被 v-for 接管）。两个指令按设计只作链成员（v-if+v-for 可组合，但不再有 v-else*），
+ * 独立出现没有语义。这里只清属性 + 告警，不改渲染：此前属性会原样落进 DOM
+ * （v-else="" 恒挂在元素上），看起来像“指令生效但永不切换”。
+ * 同一段标记只告警一次——分支切换会重复编译克隆，不去重会刷屏。
+ */
+const orphanElseWarned = new Set()
+
+function dropOrphanElse(dom, reason) {
+  const names = ['v-else-if', 'v-else'].filter((n) => dom.hasAttribute(n))
+  if (names.length === 0) return
+  names.forEach((n) => dom.removeAttribute(n))
+  const tag = dom.nodeName.toLowerCase()
+  const key = names.join('+') + '|' + tag + '|' + dom.outerHTML.slice(0, 120)
+  if (orphanElseWarned.has(key) || orphanElseWarned.size >= 200) return
+  orphanElseWarned.add(key)
+  console.warn(
+    `[vhtml] orphan ${names.join('/')} on <${tag}> ignored: no v-if chain to attach${reason ? ` (${reason})` : ''}`
+  )
+}
+
 /** 将一组节点按顺序插入到 refNode 之前（用 fragment 保持顺序） */
 export function insertBefore(nodes, refNode) {
   const frag = document.createDocumentFragment()
@@ -482,9 +504,10 @@ export function compileVif(nodes, data, runtime, ctx) {
       continue
     }
 
-    // v-for 节点不参与 v-if 链
+    // v-for 节点不参与 v-if 链（v-for 优先：可组合 v-if，但不再接受 v-else*）
     if (node.getAttribute('v-for')) {
       flushChain()
+      dropOrphanElse(node, 'v-for takes precedence')
       result.push(node)
       continue
     }
@@ -492,6 +515,7 @@ export function compileVif(nodes, data, runtime, ctx) {
     const vif = node.getAttribute('v-if')
     if (vif !== null) {
       flushChain()
+      dropOrphanElse(node, 'same node already has v-if')
 
       const startMark = document.createComment('~vif')
       const endMark = document.createComment('~/vif')
@@ -530,6 +554,8 @@ export function compileVif(nodes, data, runtime, ctx) {
     }
 
     flushChain()
+    // 走到这里说明链已结束（或从未开始）：残留的 v-else* 没有链可依附
+    dropOrphanElse(node)
     result.push(node)
   }
 
