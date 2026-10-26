@@ -9,7 +9,7 @@
 
 ## v0.10.0 — 已发布（2026-08-28，git tag v0.10.0）
 
-四个子版本一轮交付（用户面向的发布说明见 docs/CHANGELOG.md）：
+四个子版本一轮交付（用户面向的发布说明见根目录 `CHANGELOG.md`）：
 
 - **响应式系统全新重写（reactive.js）**：Effect handle 取代全局数字索引（Set 依赖表、O(1) 幂等 Cancel、伪回调洞结构性消除）；两阶段 flush + 变更门控（Object.is 缺省 / `equality: null` 恒跑 / 自定义比较器；v-for reconcile 恒跑豁免）；`batch` 原语（数组七变异方法 get 陷阱自动包装、sort 比较器窗口内写他物延迟通知）；set 陷阱纯替换——copyBind 迁出为显式 `mergeIntoProxy` 由 reconcile 位置键复用分支调用，写路径恢复字段级精确通知；级联防护（单帧 10 轮上限、调度层 throw 带 effect 链诊断、flushScheduled 先复位可恢复）；删除 `deepAccess`/`deep` 选项（`:x` 引用语义）；root 链穿透读补注册本地 key 通道（修旧追踪洞）；sandbox 编译缓存 LRU 512；runtime 鸭子判定改 RUNTIME symbol；`__vhtml_dev` 观测层（stats/cascadeErrors/errors）。
 - **生命周期确定性**：`disposeNode` 公开契约（谁移除 DOM 谁 dispose、幂等）；observer 降级为兜底 + dev 警告门控（只警告 vhtml 模板衍生 DOM）；`keepOnDetach` 实例字段（data-keep 属性通道整体废除）；generation token 统一异步挂载竞态（嵌套异步段复用父票据契约，子段另行 issue 会作废父段）。

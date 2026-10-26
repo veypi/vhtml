@@ -10,7 +10,7 @@ import { createRenderContext } from './renderer.js'
 import { templateLoader } from './loader.js'
 import { disposeRuntimeSubtree, instanceOf } from './component-instance.js'
 import { createRuntimeContext, RUNTIME } from './module.js'
-import { EnsureWrap } from './reactive.js'
+import { EnsureWrap, flushSync as flushReactive } from './reactive.js'
 import { createMemoryHistory, registerRouterHistory } from './router.js'
 import { warnObserverFallback } from './component-scope.js'
 import { perfStats } from './perf-stats.js'
@@ -73,7 +73,7 @@ class VHTML {
     })
 
     const mod = await templateLoader.getModule(this._scoped)
-    this._runtime = createRuntimeContext(null, mod)
+    this._runtime = createRuntimeContext(null, mod, { $vhtml: this })
     const boundary = this._ctx.ensureBoundary(
       this._el,
       this._data,
@@ -113,6 +113,16 @@ class VHTML {
     this._moSuspended = false
     this._mounted = false
     this._ctx = null
+  }
+
+  /**
+   * 同步冲刷本实例的响应式待更新：模板 v-for / 绑定在同一任务内落地，
+   * 调用方可以紧接着读 DOM（虚拟列表：改行集 → 立刻测量）。
+   * 组件内经 $sys.$vhtml 取用（根 runtime 的 initialSys 沿原型链下发）；
+   * 默认 rAF 批量调度不变，watcher 内重入安全。
+   */
+  flushSync() {
+    flushReactive()
   }
 
   /**

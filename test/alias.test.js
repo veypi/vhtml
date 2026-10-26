@@ -1,5 +1,5 @@
 /* Alias 规则（URL 键）单元测试：归一化、匹配优先级、三档表、组件地址解析。
- * 契约文档：aic/docs/profile.md §1（addAlias URL 化）。 */
+ * 契约文档：aic/docs/reference/profile.md §1（addAlias URL 化）。 */
 import { test, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
 import { setupDom } from './harness.js'

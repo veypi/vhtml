@@ -78,21 +78,21 @@ JS 仍引用的节点、响应及读取器保持有效。已挂载 DOM 代理保
 
 ### 1. 模板缓存与失效判断（已完成）
 
-[TemplateLoader](../src/loader.js) 使用单个 Map，每个规范 URL 对应一条 `{ ready, descriptor }` 记录。记录先登记再启动异步工作；并发调用共用 ready，`scopeOf` 只读就绪描述符。删除原来的 `cache.templates`、`cache.pending` 和全局模板 `_epoch`。
+[TemplateLoader](../../src/loader.js) 使用单个 Map，每个规范 URL 对应一条 `{ ready, descriptor }` 记录。记录先登记再启动异步工作；并发调用共用 ready，`scopeOf` 只读就绪描述符。删除原来的 `cache.templates`、`cache.pending` 和全局模板 `_epoch`。
 
 `clearScoped` 仅删除命中记录，`clear` 删除全部记录。加载过程在异步恢复后、进入后续依赖准备及返回前检查记录身份；失效加载 reject，失败只删除自身记录，旧任务不能覆盖或删除新任务。修复清 A 误伤在途 B，以及准备依赖期间清理仍返回旧描述符、继续运行后续 head 脚本的问题。`keepLive` 继续保留存活模块、别名和样式。
 
-[缓存回归](../test/clear_scoped.test.js) 通过实际加载和请求次数验证前缀/域名边界、同 URL 并发去重、清 A 不影响 B、旧请求成功或失败均不污染替代记录、三种清理方式下的依赖竞态、失败重试及 `scopeOf`。不再手工填充双 Map 或断言 `_epoch`。原生 ESM 的 `importEpoch` 负责浏览器模块缓存穿透，继续保留；没有新增通用缓存管理器。
+[缓存回归](../../test/clear_scoped.test.js) 通过实际加载和请求次数验证前缀/域名边界、同 URL 并发去重、清 A 不影响 B、旧请求成功或失败均不污染替代记录、三种清理方式下的依赖竞态、失败重试及 `scopeOf`。不再手工填充双 Map 或断言 `_epoch`。原生 ESM 的 `importEpoch` 负责浏览器模块缓存穿透，继续保留；没有新增通用缓存管理器。
 
 ### 2. 原生 import 执行路径（已完成）
 
-[imports.js](../src/imports.js) 中的 `importNative(url)` 统一执行已解析 URL 的原生 import、缓存穿透和 10 秒超时。[NativeExecutor](../src/execution/native.js) 的 env/routes 和 setup 静态/动态 import 共用这一入口，AST 处理仍由 `source.js` 承担。
+[imports.js](../../src/imports.js) 中的 `importNative(url)` 统一执行已解析 URL 的原生 import、缓存穿透和 10 秒超时。[NativeExecutor](../../src/execution/native.js) 的 env/routes 和 setup 静态/动态 import 共用这一入口，AST 处理仍由 `source.js` 承担。
 
-地址约定保持原样：setup 相对路径基于源文件，env/routes 基于模块；普通 setup import 补全 `.js`，unsafe 仍要求完整文件名。[原生 import 回归](../test/native-imports.test.js) 使用真实 ESM 夹具验证相对路径、模块根路径、查询参数、并发命名空间身份、缓存穿透及各入口的错误传播。未引入加载器基类或策略选项。
+地址约定保持原样：setup 相对路径基于源文件，env/routes 基于模块；普通 setup import 补全 `.js`，unsafe 仍要求完整文件名。[原生 import 回归](../../test/native-imports.test.js) 使用真实 ESM 夹具验证相对路径、模块根路径、查询参数、并发命名空间身份、缓存穿透及各入口的错误传播。未引入加载器基类或策略选项。
 
 ### 3. 隐式原生兜底（本次不调整）
 
-[resourcesFor](../src/resource.js) 的临时普通模块资源服务、[Run / AsyncRun](../src/sandbox.js) 的原生回落，以及 [RouterView.loadRoutes](../src/router/view.js) 的执行器兜底保持现状。如后续收口，应先核对模块发现前的宿主请求、根挂载和 `parseRaw` / `parseDom` 调用约定，再要求内部调用使用已登记模块；不新增注册中心或空的执行器接口。
+[resourcesFor](../../src/resource.js) 的临时普通模块资源服务、[Run / AsyncRun](../../src/sandbox.js) 的原生回落，以及 [RouterView.loadRoutes](../../src/router/view.js) 的执行器兜底保持现状。如后续收口，应先核对模块发现前的宿主请求、根挂载和 `parseRaw` / `parseDom` 调用约定，再要求内部调用使用已登记模块；不新增注册中心或空的执行器接口。
 
 ### 4. 无用接口与测试开关（已完成）
 

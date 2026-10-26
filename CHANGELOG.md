@@ -1,5 +1,10 @@
 # 更新日志
 
+## [0.13.3] - 2026-10-27
+
+- **统一文档架构**：`docs/CHANGELOG.md` 上移至根目录 `CHANGELOG.md`；`docs/desgin.md`（拼写修正）→ `docs/architecture/overview.md`，模块运行时与模块沙箱归入 `docs/architecture/`，性能方案/结果与路线图归入 `docs/development/`；新增 [docs/index.md](docs/index.md) 文档地图，README 增加文档入口。
+- **新增 `$sys.$vhtml` 与实例方法 `flushSync()`**。浏览器端响应式默认 rAF 批量（`reactive.js: schedule`），调用方修改数据后无法在同一任务读到新 DOM；虚拟列表这类「改行集 → 立即测量」的场景只能等下一帧，几何与 DOM 因此脱节。现开放内核已有的同步冲刷：① `reactive-core.js` 的 `flushUpdates()` 补重入保护（watcher 内调用直接返回，外层循环收尾）；② `reactive.js` 导出 `flushSync`；③ `index.js` 增加实例方法，并在根 runtime 的 `initialSys` 注入 `$vhtml: this`，组件树经 `$sys` 原型链拿到所属实例（不新增 window 全局，root.html 的 `window.$vhtml` 仍仅外部使用）。默认调度语义不变。新增 `test/flush-sync.test.js` 5 例（同步落地 / 幂等 / 重入 / 隐藏文档 / 实例继承）。
+
 ## [0.13.2] - 2026-10-26
 
 - **落单 `v-else` / `v-else-if` 收口：清属性 + 一次告警**。`compileVif` 此前只在「作为链成员被消费」时清除指令属性——节点没有可依附的 `v-if` 链（链被普通元素打断，或同节点带 `v-for` 被 v-for 优先接管）时，属性会原样落进 DOM（`v-else=""` 恒挂在元素上），渲染上表现为“指令看着生效但永不切换”，且零诊断。新增 `dropOrphanElse()`，在 v-for 分支 / 同节点已带 v-if / 链已结束三处调用：只删属性 + `console.warn`（按标记内容去重、上限 200 条，避免分支拆建时刷屏），**渲染语义不变**（设计口径：`v-if`+`v-for` 可组合，但不接受 `v-else*`）。新增 `test/vif_chain_element.test.js` 11 例（元素分支与 template 分支行为对齐、根级直挂、v-for 行内、相邻两链、空态互斥、修复后的两种嵌套 template 形状、rAF 批量语义（微任务阶段陈旧/一帧后更新）、落单属性清理与去重、v-for 优先级），全套 380 绿。
@@ -53,7 +58,7 @@
 - unsafe 只来自后端首次响应头；删除组件 unsafe、restrictedFetch 和原生函数黑名单。
 - 新增原生/QuickJS 执行器与统一模块资源服务，共享响应式内核、EventBus、i18n；接入模块脚本、import、事件、绑定及受控 DOM。
 - fetch、XHR、WebSocket、EventSource、Beacon 使用模块前缀和统一地址限制；HTML/CSS/图片资源在进入浏览器前检查。
-- 构建产物改为入口与按需加载分片，部署完整 dist。能力边界及限制见 [模块沙箱](module-sandbox.md)。
+- 构建产物改为入口与按需加载分片，部署完整 dist。能力边界及限制见 [模块沙箱](docs/architecture/module-sandbox.md)。
 
 
 本项目的所有重要变更都将记录在此文件中。
@@ -82,14 +87,14 @@
 - 作用域 root 移入独立包装元数据，迭代、slot 与模块不共享父级；显式 root 重绑使继承依赖重新收集。描述符、本地 define 与继承赋值语义保持。
 - 修复低精度浏览器时钟下短随机 DataID 碰撞；增加运行时递增序号，避免万行列表少量误重建。
 - `v-for` 等价顺序/值快路径跳过逐行调和；保留函数源 raw 的位置合并和重复条目语义。前插同一 raw 时保留旧节点、组件、焦点与选区。
-- `$scope.requestAnimationFrame/cancelAnimationFrame` 托管帧任务；timer/rAF 自然完成即退出 pending，取消或销毁清空业务回调。新增数值诊断与回归页，结果见 [实施报告](performance-refactor-results.md)。
+- `$scope.requestAnimationFrame/cancelAnimationFrame` 托管帧任务；timer/rAF 自然完成即退出 pending，取消或销毁清空业务回调。新增数值诊断与回归页，结果见 [实施报告](docs/development/performance-refactor-results.md)。
 
 ### 性能（V1–V4）
 - 响应式依赖双向登记，每次求值解绑过期依赖；`Cancel` 立即退出 dirty/依赖集合并释放目标、回调和返回值。分支销毁同步移除父 scope 的清理入口，scope 终态清空队列、生命周期和宿主引用。
 - DOM 移除兜底改为每个 VHTML 根一个 Set 队列，共用 rAF/定时器并合并祖先候选；保留同帧移动和路由缓存，destroy 撤销排队任务。
 - 模板缓存/编译前清除普通注释（递归 template.content），保留结构锚点与 `vhtml:keep` 注释；空 v-if 不再生成隐藏 div。新增显式 `v-whitespace="compact"` / `"preserve"` 规则，默认保留空白。
 - 每个插值文本节点共用一个 watcher，保留原始文本空白；class 比较 token 集合，style 按规范化属性 diff，相同结果不写 DOM。修复动态 class 删除同名静态 class、style 原地删除字段和带引号分号/`!important` 解析。
-- 增加数值型 `__vhtml_dev.stats.dependencyEdges` 和 `__vhtml_dev.perfStats` 诊断，无全局 effect/节点强引用登记表。验证方法与浏览器对照数据见 [性能说明](performance.md)。
+- 增加数值型 `__vhtml_dev.stats.dependencyEdges` 和 `__vhtml_dev.perfStats` 诊断，无全局 effect/节点强引用登记表。验证方法与浏览器对照数据见 [性能说明](docs/development/performance.md)。
 
 ## [0.11.0] - 2026-09-08
 

@@ -8,6 +8,7 @@ export function createReactiveCore({
 const listenStack = []   // 求值期栈：栈顶 = 当前正在注册依赖的 handle
 const dirty = new Set()  // 待 flush 的 handle（Set 去重，迭代中删除安全）
 let flushScheduled = false
+let flushing = false        // 同步冲刷重入保护：watcher 内调 flushSync 直接返回，由外层循环收尾
 
 // batch 窗口挂起的 (listeners, lkey) 对：归零时按 listeners×key 去重通知
 let batchDepth = 0
@@ -30,33 +31,41 @@ function cascadeError(round) {
 }
 
 function flushUpdates() {
+  // flushSync 公开后，watcher 内可能再次调用本函数：重入直接返回，
+  // 外层 while 会继续处理剩余 dirty（不允许嵌套冲刷，也不需要）。
+  if (flushing) return
+  flushing = true
   flushScheduled = false
-  let round = 0
-  while (dirty.size > 0) {
-    round++
-    if (round > MAX_CASCADE_ROUNDS) {
-      // 调度层抛出：必须在单 watcher try/catch 之外，fail-fast 不被吞。
-      // flushScheduled 已复位，后续写入可重新调度（错误登记表供 __vhtml_dev 排障）。
-      const err = cascadeError(round)
-      cascadeErrors.push({ round, message: err.message, at: Date.now() })
-      if (cascadeErrors.length > MAX_CASCADE_ERRORS) {
-        cascadeErrors.splice(0, cascadeErrors.length - MAX_CASCADE_ERRORS)
+  try {
+    let round = 0
+    while (dirty.size > 0) {
+      round++
+      if (round > MAX_CASCADE_ROUNDS) {
+        // 调度层抛出：必须在单 watcher try/catch 之外，fail-fast 不被吞。
+        // flushScheduled 已复位，后续写入可重新调度（错误登记表供 __vhtml_dev 排障）。
+        const err = cascadeError(round)
+        cascadeErrors.push({ round, message: err.message, at: Date.now() })
+        if (cascadeErrors.length > MAX_CASCADE_ERRORS) {
+          cascadeErrors.splice(0, cascadeErrors.length - MAX_CASCADE_ERRORS)
+        }
+        throw err
       }
-      throw err
-    }
-    const batch = [...dirty]
-    dirty.clear()
-    for (const handle of batch) {
-      if (handle.dead) continue
-      try {
-        handle.fn()
-      } catch (e) {
-        // 单个 watcher 异常不中断整轮 flush，避免一处模板错误冻结全页响应式
-        console.error('watcher error', e)
+      const batch = [...dirty]
+      dirty.clear()
+      for (const handle of batch) {
+        if (handle.dead) continue
+        try {
+          handle.fn()
+        } catch (e) {
+          // 单个 watcher 异常不中断整轮 flush，避免一处模板错误冻结全页响应式
+          console.error('watcher error', e)
+        }
       }
     }
+    devStats.flushes++
+  } finally {
+    flushing = false
   }
-  devStats.flushes++
 }
 
 function scheduleUpdate() {

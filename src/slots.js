@@ -178,7 +178,7 @@ export function parseSlots(dom, data, runtime, ctx) {
       const frag = templateLoader.fragmentStateOf(rule.source)
       const fragError = templateLoader.fragmentErrorOf(rule.source)
       if (fragError) {
-        // 片段装载失败：错误占位，不自动回落（docs/profile.md 第 14 条）。
+        // 片段装载失败：错误占位，不自动回落（aic docs/reference/profile.md 第 14 条）。
         // 失败态由 loader 记住（不反复重试），此处只呈现。
         resetOutletState(state)
         dom.innerHTML = ''

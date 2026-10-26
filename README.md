@@ -83,7 +83,10 @@ $data → $mod → $sys → expose → execArgs → window
 
 - **`$data`**：组件实例私有状态，来自 `<script setup>` 的裸赋值和 props
 - **`$mod`**：模块级上下文，同 scoped 下所有组件共享。包含 `scoped`、`$bus`、`$i18n`、`$t`、`fetch`
-- **`$sys`**：系统变量池。包含 `$router`、`$emit`
+- **`$sys`**：系统变量池。包含 `$router`、`$emit`、`$vhtml`（所属 VHTML 实例，沿 runtime 原型链下发）
+
+`$sys.$vhtml.flushSync()` 同步冲刷本实例的响应式待更新：模板绑定与 `v-for` 在同一任务内落地，
+供「修改数据后需要立刻读 DOM」的场景（如虚拟列表测量）；默认 rAF 批量调度不变，watcher 内重入安全。
 
 ### 数据绑定
 
@@ -288,6 +291,9 @@ ui/
 
 ## 链接
 
+- [文档地图](docs/index.md)（架构设计 / 模块沙箱 / 性能与路线图）
+- [更新日志](CHANGELOG.md)
+- [前端开发指南](ui/docs/SKILL.md)
 - [GitHub 仓库](https://github.com/veypi/vhtml)
 - [NPM 包](https://www.npmjs.com/package/@veypi/vhtml)
 - [问题反馈](https://github.com/veypi/vhtml/issues)
