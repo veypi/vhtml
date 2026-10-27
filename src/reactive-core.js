@@ -8,7 +8,11 @@ export function createReactiveCore({
 const listenStack = []   // 求值期栈：栈顶 = 当前正在注册依赖的 handle
 const dirty = new Set()  // 待 flush 的 handle（Set 去重，迭代中删除安全）
 let flushScheduled = false
-let flushing = false        // 同步冲刷重入保护：watcher 内调 flushSync 直接返回，由外层循环收尾
+let flushing = false
+// 外层与 watcher 内的重入 flush 共用同一份推进状态：内层返回前会把当前
+// batch 的剩余项和新增 dirty work 一并排空，外层随后从同一位置继续。
+let flushBatch = null
+let flushRound = 0
 
 // batch 窗口挂起的 (listeners, lkey) 对：归零时按 listeners×key 去重通知
 let batchDepth = 0
@@ -25,53 +29,77 @@ const cascadeErrors = []
 
 function cascadeError(round) {
   const chain = [...dirty].map((h) => h.debug).filter(Boolean).join('\n  -> ')
-  return new Error(
+  const err = new Error(
     `[vhtml] reactive cascade limit exceeded after ${round} rounds in one flush.\n` +
     `  effects still dirty:\n  -> ${chain || '(pass options.debug to Watch for diagnostics)'}`)
+  // 重入 flush 的错误会穿过当前 watcher 的 catch；标记后可继续向最外层
+  // 调用方传播，保持级联超限 fail-fast，而不是降级成普通 watcher error。
+  err.vhtmlCascade = true
+  return err
 }
 
-function flushUpdates() {
-  // flushSync 公开后，watcher 内可能再次调用本函数：重入直接返回，
-  // 外层 while 会继续处理剩余 dirty（不允许嵌套冲刷，也不需要）。
-  if (flushing) return
-  flushing = true
-  flushScheduled = false
-  try {
-    let round = 0
-    while (dirty.size > 0) {
-      round++
-      if (round > MAX_CASCADE_ROUNDS) {
+function drainFlush() {
+  while (flushBatch || dirty.size > 0) {
+    if (!flushBatch) {
+      flushRound++
+      if (flushRound > MAX_CASCADE_ROUNDS) {
         // 调度层抛出：必须在单 watcher try/catch 之外，fail-fast 不被吞。
         // flushScheduled 已复位，后续写入可重新调度（错误登记表供 __vhtml_dev 排障）。
-        const err = cascadeError(round)
-        cascadeErrors.push({ round, message: err.message, at: Date.now() })
+        const err = cascadeError(flushRound)
+        cascadeErrors.push({ round: flushRound, message: err.message, at: Date.now() })
         if (cascadeErrors.length > MAX_CASCADE_ERRORS) {
           cascadeErrors.splice(0, cascadeErrors.length - MAX_CASCADE_ERRORS)
         }
         throw err
       }
-      const batch = [...dirty]
+      flushBatch = { handles: [...dirty], index: 0 }
       dirty.clear()
-      for (const handle of batch) {
-        if (handle.dead) continue
-        try {
-          handle.fn()
-        } catch (e) {
-          // 单个 watcher 异常不中断整轮 flush，避免一处模板错误冻结全页响应式
-          console.error('watcher error', e)
-        }
-      }
     }
+    if (flushBatch.index >= flushBatch.handles.length) {
+      flushBatch = null
+      continue
+    }
+    // 先推进共享游标再执行：当前 watcher 的重入 flush 不会重新执行自己；
+    // 内层若消费了后续 handle，外层也不会因本地 batch 快照再跑一遍。
+    const handle = flushBatch.handles[flushBatch.index++]
+    if (handle.dead) continue
+    try {
+      handle.fn()
+    } catch (e) {
+      if (e?.vhtmlCascade) throw e
+      // 单个 watcher 异常不中断整轮 flush，避免一处模板错误冻结全页响应式
+      console.error('watcher error', e)
+    }
+  }
+}
+
+function flushUpdates() {
+  flushScheduled = false
+  if (flushing) {
+    drainFlush()
+    return
+  }
+  flushing = true
+  flushBatch = null
+  flushRound = 0
+  try {
+    drainFlush()
     devStats.flushes++
   } finally {
     flushing = false
+    flushBatch = null
+    flushRound = 0
   }
 }
 
 function scheduleUpdate() {
-  if (flushScheduled) return
+  // 当前同步 drain 会接手 flushing 期间新增的 dirty work，无需再排队。
+  if (flushing || flushScheduled) return
   flushScheduled = true
-  schedule(flushUpdates)
+  schedule(() => {
+    // 手动 / 重入 flush 可能已排空此次调度；旧回调不应再记一次空 flush。
+    if (flushScheduled) flushUpdates()
+  })
 }
 
 // ====================================================================

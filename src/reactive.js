@@ -29,7 +29,7 @@ export const trackExternal = core.external
 
 // 同步冲刷本实例的待更新（含模板 v-for / 绑定的 DOM patch）：给「同一任务内就要读到
 // 新 DOM」的调用方（如虚拟列表：改行集 → 立刻测量）。默认 rAF 批量调度不变。
-// 重入安全：watcher 内调用直接返回（见 reactive-core.js 的 flushing 保护）。
+// 重入安全：watcher 内调用与外层共享推进状态，返回前同步排空当前待更新。
 export const flushSync = core.flush
 
 if (typeof window !== 'undefined' && !window.__vhtml_dev) {
