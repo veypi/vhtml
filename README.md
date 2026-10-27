@@ -86,7 +86,9 @@ $data → $mod → $sys → expose → execArgs → window
 - **`$sys`**：系统变量池。包含 `$router`、`$emit`、`$vhtml`（所属 VHTML 实例，沿 runtime 原型链下发）
 
 `$sys.$vhtml.flushSync()` 同步冲刷本实例的响应式待更新：模板绑定与 `v-for` 在同一任务内落地，
-供「修改数据后需要立刻读 DOM」的场景（如虚拟列表测量）；默认 rAF 批量调度不变，watcher 内重入安全。
+供「修改数据后需要立刻读 DOM」的场景（如虚拟列表测量）；默认 rAF 批量调度不变，watcher 内重入安全——
+重入的 `flushSync()` 与外层冲刷**共享同一份推进位置**（内层返回前把当前 batch 的剩余项与新增待更新一并排空），
+不重复执行也不漏执行。
 
 ### 数据绑定
 

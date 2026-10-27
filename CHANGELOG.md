@@ -1,5 +1,9 @@
 # 更新日志
 
+## [0.13.4] - 2026-10-28
+
+- **嵌套 `flushSync()` 与外层冲刷共享推进位置（修复）**：`flushUpdates()` 原先有重入保护——watcher 内再调 `flushSync()` 直接返回，由外层循环收尾；但外层用的是**本地 batch 快照**（`const batch = [...dirty]`），内层重入期间新增的 dirty work 会被排到下一轮，而内层已经消费掉的 handle 又可能在外层按旧快照再跑一次（重复执行），且内层返回时外层的「已处理到哪里」与内层不一致。现改为**外层与 watcher 内的重入 flush 共用同一份推进状态**（`flushBatch` 游标 + `flushRound` 计数）：内层返回前把当前 batch 的剩余项和新增 dirty work 一并排空，外层随后从同一位置继续——不重复执行、不漏执行。配套：① 游标**先推进再执行**（当前 watcher 的重入 flush 不会重新执行自己；内层若消费了后续 handle，外层也不会因本地快照再跑一遍）；② 冲刷期间新增的 dirty work 由当前同步 drain 直接接手，不再排队（`scheduleUpdate` 在 `flushing` 期间直接返回）；③ 级联超限错误标记 `err.vhtmlCascade` 后向外层传播——重入 flush 的错误会穿过当前 watcher 的 catch，标记后可继续向最外层调用方传播，保持级联超限 fail-fast，而不是降级成普通 watcher error；④ 手动/重入 flush 可能已排空此次调度时，旧回调不记一次空 flush。新增 `test/flush-sync.test.js` 4 例（watcher 内返回点能读到新 DOM、与外层共享推进位置不重复执行后续 watcher、不遗留空调度或虚增 flush 统计、仍共享 cascade 预算并向外抛错）。**生效需重新构建 `dist/`。**
+
 ## [0.13.3] - 2026-10-27
 
 - **统一文档架构**：`docs/CHANGELOG.md` 上移至根目录 `CHANGELOG.md`；`docs/desgin.md`（拼写修正）→ `docs/architecture/overview.md`，模块运行时与模块沙箱归入 `docs/architecture/`，性能方案/结果与路线图归入 `docs/development/`；新增 [docs/index.md](docs/index.md) 文档地图，README 增加文档入口。
