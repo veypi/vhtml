@@ -75,7 +75,7 @@ function tryCompile(code, isAsync) {
 const firstLine = (s) => String(s).split('\n')[0].slice(0, 160)
 const blankKeepNewlines = (m) => m.replace(/[^\n]/g, ' ')
 
-function checkAttr(file, line, col, name, value) {
+function checkAttr(file, line, col, name, value, tag = '') {
   if (name.startsWith('v:')) {
     if (!parseAccessChain(value)) add(file, line, col, 'E', 'syntax', `${name} requires a static property path`)
     return
@@ -91,6 +91,11 @@ function checkAttr(file, line, col, name, value) {
     return
   }
   if (name === 'v-if' || name === 'v-else-if' || name === 'v-show' || name === 'v-html') {
+    // v-html 只在 <div> 上生效：写到别的元素上内容不渲染，运行时直接报错。
+    if (name === 'v-html' && tag && tag !== 'div') {
+      add(file, line, col, 'E', 'directive', `v-html only works on <div> (here <${tag}>): the content will not render — use <div v-html="...">`)
+      return
+    }
     if (!value) { add(file, line, col, 'W', 'directive', `${name} missing expression`); return }
     const err = tryCompile(value, false)
     if (err) add(file, line, col, 'E', 'syntax', `${name} expression: ${err}`)
@@ -172,7 +177,7 @@ function checkFile(file) {
       let a
       while ((a = attrRe.exec(attrText))) {
         const value = a[2] ?? a[3] ?? a[4] ?? ''
-        checkAttr(file, line, col + 1 + a.index, a[1], value)
+        checkAttr(file, line, col + 1 + a.index, a[1], value, lower)
       }
       if (selfClose || VOID_TAGS.has(lower)) {
         if (selfClose && lower === 'vslot') vslotOpen--

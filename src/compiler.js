@@ -696,6 +696,15 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
     return
   }
 
+  // v-html 只在 <div> 上生效：写到别的元素上时属性会原样留在 DOM 上，内容永远不渲染，
+  // 而且没有任何提示（提示条只剩文字、图标消失这类问题就是这么来的）。
+  // 直接报错，别让作者对着空白找原因。
+  if (nodeName !== 'div' && dom.hasAttribute('v-html')) {
+    throw new Error(
+      `[vhtml] v-html 只能用在 <div> 上（当前是 <${nodeName}>）：写在其它元素上内容不会渲染，请改成 <div v-html="...">。`
+    )
+  }
+
   if (nodeName === 'div' && dom.getAttribute('v-html')) {
     let vhtmlCode = dom.getAttribute('v-html')
     dom.removeAttribute('v-html')
