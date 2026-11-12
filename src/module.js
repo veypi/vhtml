@@ -481,20 +481,26 @@ export class ModuleContextManager {
   // 写入走 copy-on-write：新表对象 + 冻结（调用方拿到 getAliases() 的表也无法改写
   // 全局档；copy-on-write 同时使 alias 首段索引失效重建）。
   addAlias(scoped, key, value, tier = 'scoped') {
-    key = normalizeAliasKey(key)
-    value = normalizeAliasValue(key, value)
+    try {
+      key = normalizeAliasKey(key)
+      value = normalizeAliasValue(key, value)
+    } catch (error) {
+      console.warn(`[vhtml] ${error?.message || error}`)
+      return false
+    }
     if (tier === 'global') {
       this._globalAliases = Object.freeze({...this._globalAliases, [key]: value})
-      return
+      return true
     }
     if (tier === 'primary') {
       this._primaryAliases = Object.freeze({...this._primaryAliases, [key]: value})
-      return
+      return true
     }
     if (tier !== 'scoped') throw new Error(`addAlias: unknown tier "${tier}"`)
     const entry = this.modMap.get(scoped)
     if (!entry) throw new Error(`Module is not registered: ${scoped}`)
     entry.aliases = Object.freeze({...entry.aliases, [key]: value})
+    return true
   }
 
   // V2：注册槽替换规则（host 层；env 上下文已门、此处不再验 scoped）

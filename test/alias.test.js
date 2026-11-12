@@ -133,6 +133,18 @@ test('manager: tier registration and getAliases shape', () => {
   assert.throws(() => m.addAlias('/x', '/ui', '/y', 'weird'), /unknown tier/)
 })
 
+test('manager: invalid alias rule warns and does not abort initialization', (t) => {
+  const m = new ModuleContextManager()
+  m.modMap.set('/x', { scoped: '/x', aliases: {} })
+  const warn = t.mock.method(console, 'warn', () => {})
+  assert.equal(m.addAlias('/x', '/host-connector', '/hosts/connector.html'), false)
+  assert.equal(m.getAliases('/x').scoped['/host-connector'], undefined)
+  assert.equal(warn.mock.callCount(), 1)
+  assert.match(warn.mock.calls[0].arguments[0], /prefix key/)
+  assert.equal(m.addAlias('/x', '/host', '/hosts'), true)
+  assert.equal(m.getAliases('/x').scoped['/host'], '/hosts')
+})
+
 test('manager: alias 表冻结（调用方拿到引用也改不了全局档）+ copy-on-write', () => {
   const m = new ModuleContextManager()
   m.modMap.set('/x', { scoped: '/x', aliases: {} })
