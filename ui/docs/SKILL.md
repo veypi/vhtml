@@ -230,6 +230,7 @@ Do not expect native document, storage, Worker, iframe, SVG foreignObject/SMIL, 
 <div no-vhtml>{{ raw }}</div>                        <!-- skip compilation -->
 ```
 
+- `v-html` 只在 `<div>` 上编译：写在其它元素（`<span>` / `<li>` …）上时属性会原样留在 DOM 上、内容永远不渲染；框架现在对这种写法直接报错，`vhtml check` 也会报出来。用 `<div v-html="...">`，列表项等需要包一层 `<div>`。
 - Text interpolation: function values are auto-invoked, object values are auto-`JSON.stringify`-ed.
 - Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
 - Special events: `@outerclick` (click outside the element).
