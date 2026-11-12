@@ -29,6 +29,8 @@ Custom tags map to HTML files by kebab path:
 <agent-list></agent-list>     → /agent/list.html
 ```
 
+**Custom components do not support self-closing syntax.** This applies to every vhtml custom component, not only vhtml-ui: write `<user-card></user-card>` and `<v-input></v-input>`, never `<user-card />` or `<v-input />`. Self-closing custom tags may consume or suppress following siblings; `vhtml check` can miss this, so inspect the rendered component structure as well.
+
 Component file shape:
 
 ```html
@@ -521,7 +523,9 @@ vhtml i18n add -json '{"zh-CN":{"k":"v"},"en-US":{"k":"v"}}'
 
 ### Reserved keys (`_` prefix)
 
-Keys starting with `_` (`_err.40100`, `_theme.dark`) are maintained manually in langs.json: scan skips them for missing/unused checks, `--autoremove` never deletes them. Use for dynamic keys referenced via concatenation, variables, or function args (not exact string literals).
+Keys starting with `_` (`_err.40100`, `_nav.scan`, `_theme.dark`) are maintained through `vhtml i18n add`: scan skips them for missing/unused checks, and `--autoremove` never deletes them. Use them for dynamic keys referenced via concatenation, variables, or function args (not exact string literals), and explicitly add every required locale.
+
+Dynamic indirection such as `$t(item.labelKey)` is invisible to static scanning. A reported 100% scan coverage proves only that all discovered literal keys exist; it does not prove dynamic keys are translated.
 
 Caution: `scan` detects references by static `$t('key')` literal matching — keys used via concatenation or variables look unused. Treat the unreferenced report as a lead only: before any `--autoremove` deletion, text-search the sources for dynamic references (or keep such keys under the `_` prefix, which autoremove never touches).
 
