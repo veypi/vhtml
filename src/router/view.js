@@ -17,6 +17,7 @@ import { debug as logDebug, warn as logWarn } from '../debug.js'
 import { reportError } from '../errors.js'
 import { createGenToken } from '../lifecycle.js'
 import { templateLoader } from '../loader.js'
+import { postBackground } from '../scheduling.js'
 import {
   instanceOf,
   setInstance,
@@ -46,7 +47,12 @@ import {
   parseUrlString,
 } from './matcher.js'
 import { AnchorClickRuntime } from './anchor.js'
-import { Page, prepareLayoutDom, normalizeLayoutUrl } from './page.js'
+import {
+  Page,
+  prepareLayoutDom,
+  normalizeLayoutUrl,
+  resolveRouteHtmlPath,
+} from './page.js'
 
 const routerRoutesSources = new WeakMap()
 const routerPrefixSources = new WeakMap()
@@ -156,12 +162,14 @@ export class RouterView {
   #nav = null
   #history = []
   #pageCache = new Map()
+  #prefetchedRoutes = new Set()
   #layoutCache = new Map()
   #routesSource = '/routes.js'
   #beforeEnter = null
   #afterEnter = null
   #listeners = new Set()
   #hostNode = null
+  #viewTransition = false
   #renderer = null
   #disposeNavListener = null
   #disposeRoutesSourceListener = null
@@ -814,6 +822,35 @@ export class RouterView {
     }
   }
 
+  /** hover/focus 只预热模板缓存，不创建页面、不执行 setup 或路由守卫。 */
+  prefetch(matchedRoute) {
+    if (!matchedRoute || matchedRoute.route?.redirect) return
+    const key = matchedRoute.fullPath || matchedRoute.path
+    if (!key || this.#prefetchedRoutes.has(key)) return
+    this.#prefetchedRoutes.add(key)
+    postBackground(() => {
+      const cacheKey = this.resolveCacheKey(
+        matchedRoute.route,
+        matchedRoute
+      )
+      if (
+        this.current?.fullPath === matchedRoute.fullPath ||
+        (cacheKey && this.#pageCache.has(cacheKey))
+      ) {
+        return
+      }
+      const paths = [resolveRouteHtmlPath(this, matchedRoute)]
+      const layout = normalizeLayoutUrl(matchedRoute.route?.layout)
+      if (layout) paths.push(layout)
+      Promise.all(
+        paths.map((path) => templateLoader.fetchUI(path, this.runtime))
+      ).catch(() => {
+        // 预取失败不干扰导航；下次 hover 可重试，真正导航仍走原错误路径。
+        this.#prefetchedRoutes.delete(key)
+      })
+    })
+  }
+
   resolveHref(to, data = null, options = {}) {
     if (typeof to === 'string' && isHttpUrl(stripRouterEscape(to)))
       return stripRouterEscape(to)
@@ -1234,8 +1271,33 @@ export class RouterView {
     return { page, fromCache: false, to, cacheKey }
   }
 
-  /** commit 阶段：同步原子切换。 */
-  #commitNavigation(
+  /** commit 阶段：可选原生视图过渡，内部仍是同一份同步原子切换。 */
+  #commitNavigation(staged, matchedRoute, mode, options) {
+    let committed = false
+    const commit = () => {
+      if (committed) return
+      committed = true
+      this.#commitNavigationSync(staged, matchedRoute, mode, options)
+    }
+    const reduced = window.matchMedia?.(
+      '(prefers-reduced-motion: reduce)'
+    ).matches
+    if (
+      this.#viewTransition &&
+      !reduced &&
+      typeof document.startViewTransition === 'function'
+    ) {
+      try {
+        document.startViewTransition(commit)
+        return
+      } catch {
+        // 原生过渡不可用时不能阻断导航。
+      }
+    }
+    commit()
+  }
+
+  #commitNavigationSync(
     { page, fromCache, to, cacheKey },
     matchedRoute,
     mode,
@@ -1697,6 +1759,7 @@ export class RouterView {
 
   async mount(renderer, node, runtime) {
     this.#hostNode = node
+    this.#viewTransition = node.getAttribute('transition') === 'fade'
     this.#renderer = renderer
     const routerRuntime = createRuntimeContext(
       runtime || null,

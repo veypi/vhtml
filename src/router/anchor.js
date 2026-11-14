@@ -83,6 +83,28 @@ export class AnchorClickRuntime {
     const bind = () => {
       if (this.#loaded) return
       this.#loaded = true
+      const prefetch = (event) => {
+        const linkElement = event.target?.closest?.('a')
+        if (!linkElement || linkElement.hasAttribute('download')) return
+        if (
+          event.type === 'pointerover' &&
+          linkElement.contains(event.relatedTarget)
+        )
+          return
+        const binding = anchorRouters.get(linkElement)
+        const router = binding?.router
+        if (!router || linkElement.getAttribute('target') === '_blank') return
+        if (linkElement.hasAttribute('reload')) return
+        const target =
+          typeof binding.getTarget === 'function'
+            ? binding.getTarget()
+            : linkElement.getAttribute('href')
+        if (!router.isNavigableHref?.(target)) return
+        const matchedRoute = router.matchTo?.(target)
+        if (matchedRoute) router.prefetch?.(matchedRoute)
+      }
+      document.body.addEventListener('pointerover', prefetch, true)
+      document.body.addEventListener('focusin', prefetch, true)
       document.body.addEventListener('click', (event) => {
         if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
         const linkElement = event.target?.closest?.('a')

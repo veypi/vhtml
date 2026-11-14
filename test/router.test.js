@@ -37,6 +37,7 @@ window.__c.lay1 = (window.__c.lay1 || 0) + 1
 const realFetch = globalThis.fetch
 const stubFetch = async (url) => {
   const u = new URL(String(url), 'http://localhost').pathname
+  if (window.__fetchLog) window.__fetchLog.push(u)
   if (u === '/pg/slow.html') {
     await new Promise((r) => setTimeout(r, 80))   // 慢页面：导航竞态窗口
     return { ok: true, status: 200, headers: fakeHeaders, text: async () => page('pg-slow') }
@@ -77,6 +78,54 @@ async function createRouter(initial = '/a', routes = ROUTES, beforeEnter = null,
   assert.ok(view && typeof view.push === 'function', 'router view mounted')
   return { app, host, vr, view }
 }
+
+test('route prefetch warms page and layout templates without running setup', async () => {
+  const { app, view } = await createRouter('/a')
+  window.__fetchLog = []
+  const matched = view.matchTo('/y')
+  view.prefetch(matched)
+  view.prefetch(matched)
+  await flush(20)
+  assert.equal(window.__fetchLog.filter((p) => p === '/pg/y.html').length, 1)
+  assert.equal(
+    window.__fetchLog.filter((p) => p === '/layout/default.html').length,
+    1
+  )
+  assert.equal(window.__c.y, undefined, 'page setup must not run')
+  assert.equal(window.__c.lay1, undefined, 'layout setup must not run')
+  await view.push('/y')
+  await flush()
+  assert.equal(window.__c.y, 1)
+  assert.equal(window.__c.lay1, 1)
+  window.__fetchLog = null
+  app.destroy()
+})
+
+test('vrouter transition=fade wraps commit and reduced motion bypasses it', async () => {
+  const originalTransition = document.startViewTransition
+  const originalMatchMedia = window.matchMedia
+  let calls = 0
+  document.startViewTransition = (commit) => {
+    calls++
+    commit()
+    return { finished: Promise.resolve() }
+  }
+  window.matchMedia = () => ({ matches: false })
+  const { app, host, view } = await createRouter('/a', ROUTES, null, {
+    attrs: { transition: 'fade' },
+  })
+  await view.push('/b')
+  await flush()
+  assert.equal(calls, 2, 'initial mount and push both use native transition')
+  assert.ok(host.querySelector('.pg-b'))
+  window.matchMedia = () => ({ matches: true })
+  await view.push('/a')
+  await flush()
+  assert.equal(calls, 2, 'reduced motion must use direct commit')
+  document.startViewTransition = originalTransition
+  window.matchMedia = originalMatchMedia
+  app.destroy()
+})
 
 test('basic mount and push: page content swaps, current updates', async () => {
   const { app, host, view } = await createRouter('/a')

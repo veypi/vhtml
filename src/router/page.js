@@ -105,6 +105,20 @@ function tryMountTree(root) {
   })
 }
 
+export function resolveRouteHtmlPath(ownerView, matchedRoute) {
+  const params =
+    ownerView?.mergeParams?.(matchedRoute.params) || matchedRoute.params || {}
+  let path = matchedRoute.route.component || matchedRoute.route.path
+  if (typeof path === 'function') path = path(matchedRoute.path, params)
+  Object.entries(params).forEach(([key, value]) => {
+    path = path.replace(`:${key}`, value)
+  })
+  if (!path.startsWith('/')) path = `/${path}`
+  if (path.endsWith('/')) path = path.slice(0, -1)
+  if (!path.endsWith('.html')) path = `${path}.html`
+  return path
+}
+
 // ---- Page ----
 
 export class Page {
@@ -157,19 +171,7 @@ export class Page {
   }
 
   resolveHtmlPath(matchedRoute) {
-    const params =
-      this.ownerView?.mergeParams?.(matchedRoute.params) ||
-      matchedRoute.params ||
-      {}
-    let path = matchedRoute.route.component || matchedRoute.route.path
-    if (typeof path === 'function') path = path(matchedRoute.path, params)
-    Object.entries(params).forEach(([key, value]) => {
-      path = path.replace(`:${key}`, value)
-    })
-    if (!path.startsWith('/')) path = `/${path}`
-    if (path.endsWith('/')) path = path.slice(0, -1)
-    if (!path.endsWith('.html')) path = `${path}.html`
-    return path
+    return resolveRouteHtmlPath(this.ownerView, matchedRoute)
   }
 
   resolveErrorRedirect(error) {

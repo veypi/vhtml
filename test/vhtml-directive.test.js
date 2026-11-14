@@ -8,6 +8,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { setupDom, loadSrc, flush } from './harness.js'
+import { setSanitizedHTML } from '../src/html-sanitize.js'
 
 setupDom()
 const VHTML = await loadSrc()
@@ -49,6 +50,19 @@ test('v-html on a non-div element inside v-for also fails', async () => {
     app.destroy()
     host.remove()
   }
+})
+
+test('native Sanitizer API writes through setHTML', async () => {
+  let received = null
+  const dom = {
+    setHTML(value) {
+      received = value
+    },
+  }
+  await setSanitizedHTML(dom, '<b>safe</b><script>bad</script>')
+  assert.equal(received, '<b>safe</b><script>bad</script>')
+  await setSanitizedHTML(dom, null)
+  assert.equal(received, '')
 })
 
 test('v-html on a div still renders', async () => {

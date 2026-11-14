@@ -233,6 +233,7 @@ Do not expect native document, storage, Worker, iframe, SVG foreignObject/SMIL, 
 ```
 
 - `v-html` 只在 `<div>` 上编译：写在其它元素（`<span>` / `<li>` …）上时属性会原样留在 DOM 上、内容永远不渲染；框架现在对这种写法直接报错，`vhtml check` 也会报出来。用 `<div v-html="...">`，列表项等需要包一层 `<div>`。
+- `v-html` 普通模块内容总是先消毒：支持 Sanitizer API 时通过原生 `Element.setHTML()` 写入；否则动态加载 DOMPurify 回退（独立 chunk，不进入首屏主包），并返回 TrustedHTML 以兼容 Trusted Types CSP。脚本、内联事件及 Sanitizer 默认禁止的内容会被移除；保留下来的 vhtml 指令仍会编译。unsafe 模块继续使用自己的 `renderPolicy.html()`，不叠加第二套策略。
 - Text interpolation: function values are auto-invoked, object values are auto-`JSON.stringify`-ed.
 - Event modifiers: `.stop`, `.prevent`, `.self`, `.delay[500ms|1s]`; key aliases: `space`, `esc`, `up`, `down`, `left`, `right`, `del`, `ins` (e.g. `@keyup.esc="close()"`).
 - Special events: `@outerclick` (click outside the element).
@@ -457,6 +458,7 @@ Route record fields:
 <vrouter history="memory" prefix="/panel" initial="/list"></vrouter>
 <vrouter history="panelA"></vrouter>
 <vrouter routes="/admin_routes.js"></vrouter>
+<vrouter transition="fade"></vrouter>  <!-- 可选原生 View Transition；reduced-motion 自动直连 -->
 <vrouter :routes="routes"></vrouter>
 <vrouter :routes="{ routes, path_prefix: '/panel', component_prefix: '/panel-ui', beforeEnter }"></vrouter>
 <vrouter :routes="routes" :params="{ app_id: appId }"></vrouter>
@@ -472,6 +474,8 @@ Route record fields:
 - `<a>` is intercepted only when compiled under a RouterView runtime, with automatic `active` attribute on path match.
 - Virtual routers inject bare `location` / `history` into `$sys`; outside a virtual router those names fall through to `window`. Virtual histories do not update `document.title` (their resolved `title` only lands on the host element's `__title`).
 - Debug logging: `localStorage.debug`.
+- Router links (`<a>` compiled in a RouterView) prefetch the target page and layout templates on `pointerover` / keyboard `focusin`, using background scheduling (`scheduler.postTask` → idle callback → timeout). This only warms `templateLoader`: setup, route guards and business data fetching do not run. Current/cached pages, redirects, downloads, `reload`, `_blank` and non-router links are skipped; repeated hovers deduplicate through the route prefetch set and the loader's in-flight cache.
+- `transition="fade"` opts into `document.startViewTransition()` around the existing synchronous navigation commit. Unsupported browsers and `prefers-reduced-motion: reduce` use the direct commit path. No default animation is enabled without the attribute.
 
 ## `$bus`
 

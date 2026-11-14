@@ -25,6 +25,28 @@ export async function yieldIfNeeded(now = performance.now()) {
   return true
 }
 
+/** 后台预取：不抢占输入；返回取消函数。 */
+export function postBackground(fn) {
+  if (
+    typeof scheduler !== 'undefined' &&
+    typeof scheduler.postTask === 'function'
+  ) {
+    const controller = new AbortController()
+    scheduler
+      .postTask(fn, { priority: 'background', signal: controller.signal })
+      .catch((error) => {
+        if (error?.name !== 'AbortError') throw error
+      })
+    return () => controller.abort()
+  }
+  if (typeof requestIdleCallback === 'function') {
+    const id = requestIdleCallback(fn)
+    return () => cancelIdleCallback(id)
+  }
+  const id = setTimeout(fn, 0)
+  return () => clearTimeout(id)
+}
+
 /** 测试用：重置共享 deadline。 */
 export function resetScheduleDeadline() {
   deadline = 0

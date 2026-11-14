@@ -21,6 +21,7 @@ import { watch } from './runtime-watch.js'
 import { compileStats, now } from './compile-stats.js'
 import { perfStats } from './perf-stats.js'
 import { preserveComment } from './template-normalize.js'
+import { setSanitizedHTML } from './html-sanitize.js'
 import {
   instanceOf,
   setInstance,
@@ -727,10 +728,14 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
       oldHTML = innerHTML
       Array.from(dom.children).forEach((child) => disposeRuntimeSubtree(child))
       const version = ++htmlVersion
-      const applyHTML = (safeHTML) => {
+      const applyHTML = async (html, sanitized = false) => {
         if (version !== htmlVersion || runtimeScope?.phase === 'disposed')
           return
-        dom.innerHTML = safeHTML
+        if (sanitized) dom.innerHTML = html
+        else await setSanitizedHTML(dom, html)
+        // 原生 setHTML 同步，DOMPurify 动态加载则异步；等待期间允许更新版本。
+        if (version !== htmlVersion || runtimeScope?.phase === 'disposed')
+          return
         let childs = compileVif(
           Array.from(dom.childNodes),
           scopedData,
@@ -744,11 +749,14 @@ function compileNodeInner(dom, scopedData = {}, runtime, ctx, scope) {
       if (renderPolicy)
         renderPolicy
           .html(innerHTML, { fragment: true, scripts: false })
-          .then(applyHTML)
+          .then((safeHTML) => applyHTML(safeHTML, true))
           .catch((error) =>
             console.error('[vhtml] HTML binding rejected', error)
           )
-      else applyHTML(innerHTML)
+      else
+        applyHTML(innerHTML).catch((error) =>
+          console.error('[vhtml] HTML binding rejected', error)
+        )
     })
     return
   }
