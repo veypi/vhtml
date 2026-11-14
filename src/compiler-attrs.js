@@ -512,6 +512,19 @@ export function handleEvent(dom, name, value, data, runtime, ctx) {
 }
 
 export function compileAttrs(dom, data, runtime, ctx, customAttrs) {
+  // v-defer：屏外重内容延迟渲染（长列表行/首屏以下的复杂区块）。
+  // 只跳过屏外 layout/paint，不卸载 DOM、不影响响应式与组件状态；
+  // 必须搭配占位尺寸，否则屏外塌成 0 高导致滚动跳动。
+  // 值 = 估计高度（如 v-defer="200px"），空值默认 150px；
+  // 也接受完整 contain-intrinsic-size 写法。不支持该属性的浏览器自然忽略。
+  if (dom.hasAttribute('v-defer')) {
+    const size = (dom.getAttribute('v-defer') || '').trim() || '150px'
+    dom.removeAttribute('v-defer')
+    dom.style.contentVisibility = 'auto'
+    dom.style.containIntrinsicSize = size.includes(' ')
+      ? size
+      : `auto none auto ${size}`
+  }
   Array.from(dom.attributes).forEach((attr) => {
     if (compileAttr(dom, attr.name, attr.value, data, runtime, ctx)) {
       dom.removeAttribute(attr.name)

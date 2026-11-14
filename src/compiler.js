@@ -206,6 +206,13 @@ function moveItemBefore(itemStart, itemEnd, refNode) {
     n = n.nextSibling
   }
   nodes.push(itemEnd)
+  const parent = refNode.parentNode
+  // moveBefore：逐节点原生移动，触发 connectedMoveCallback 而非断开/重连，
+  // 焦点、iframe、媒体播放、自定义元素内部状态在重排中保留。
+  if (typeof parent.moveBefore === 'function') {
+    for (const node of nodes) parent.moveBefore(node, refNode)
+    return
+  }
   insertBefore(nodes, refNode)
 }
 

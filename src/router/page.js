@@ -15,6 +15,46 @@ import {
 } from '../component-instance.js'
 import { routeHash } from './util.js'
 
+// ---- 缓存页「停车场」：DOM 不拆下，content-visibility:hidden 保留渲染缓存 ----
+// 不支持 content-visibility 的浏览器回退 display:none（原行为）。
+const cvHiddenSupported =
+  typeof CSS !== 'undefined' &&
+  typeof CSS.supports === 'function' &&
+  CSS.supports('content-visibility', 'hidden')
+
+function parkStyle(el) {
+  if (!el) return
+  el.setAttribute('inert', '')
+  el.setAttribute('aria-hidden', 'true')
+  if (cvHiddenSupported) {
+    el.style.contentVisibility = 'hidden'
+    el.style.position = 'absolute'
+    el.style.pointerEvents = 'none'
+  } else {
+    el.style.display = 'none'
+  }
+}
+
+function unparkStyle(el) {
+  if (!el) return
+  el.removeAttribute('inert')
+  el.removeAttribute('aria-hidden')
+  el.style.contentVisibility = ''
+  el.style.position = ''
+  el.style.pointerEvents = ''
+  el.style.display = ''
+}
+
+// 已连接的移动优先 moveBefore：保留焦点/iframe/media 状态；未连接走 append。
+function moveAppend(parent, child) {
+  if (!child) return
+  if (child.isConnected && typeof parent.moveBefore === 'function') {
+    parent.moveBefore(child, null)
+  } else {
+    parent.append(child)
+  }
+}
+
 export function prepareLayoutDom(layoutRoot) {
   if (!layoutRoot) return null
   const outlet =
@@ -191,15 +231,15 @@ export class Page {
    */
   attach() {
     if (this.layoutDom) {
-      if (!this.layoutDom.isConnected) {
-        this.node.innerHTML = ''
-        this.node.append(this.layoutDom)
+      if (this.layoutDom.parentNode !== this.node) {
+        moveAppend(this.node, this.layoutDom)
       }
+      unparkStyle(this.layoutDom)
       const outlet = this.outlet()
       if (this.dom && this.dom.parentNode !== outlet) {
-        outlet.innerHTML = ''
-        outlet.append(this.dom)
+        moveAppend(outlet, this.dom)
       }
+      unparkStyle(this.dom)
       this.instance.host = this.dom
       const layoutInst = this.layoutInstance
       if (layoutInst) attachChildInstance(instanceOf(this.node), layoutInst)
@@ -207,10 +247,10 @@ export class Page {
       if (layoutInst && contentInst)
         attachChildInstance(layoutInst, contentInst)
     } else {
-      if (this.dom && !this.dom.isConnected) {
-        this.node.innerHTML = ''
-        this.node.append(this.dom)
+      if (this.dom && this.dom.parentNode !== this.node) {
+        moveAppend(this.node, this.dom)
       }
+      unparkStyle(this.dom)
       this.instance.host = this.dom
       const contentInst = instanceOf(this.dom, false)
       if (contentInst) attachChildInstance(instanceOf(this.node), contentInst)
@@ -406,6 +446,7 @@ export class Page {
         inst.parent.children.delete(inst)
         inst.parent = null
       }
+      this.parkDom(false)
       return
     }
     this.roots().forEach((root) => {
@@ -417,6 +458,21 @@ export class Page {
         inst.parent = null
       }
     })
+    this.parkDom(true)
+  }
+
+  /**
+   * 缓存页停车：内容移回视图宿主并隐藏（layout 按引用情况一并隐藏）。
+   * 不再从 DOM 拆下——保留渲染缓存，重入 = 两次移动 + 样式翻转。
+   */
+  parkDom(includeLayout) {
+    if (this.dom) {
+      if (this.dom.parentNode && this.dom.parentNode !== this.node) {
+        moveAppend(this.node, this.dom)
+      }
+      parkStyle(this.dom)
+    }
+    if (includeLayout && this.layoutDom) parkStyle(this.layoutDom)
   }
 
   /** 销毁：释放内容实例与 meta，幂等。layout 外壳为视图所有，不在此处置。 */
@@ -425,6 +481,9 @@ export class Page {
     this._destroyed = true
     this.clearTitleWatchers()
     if (this.dom) disposeRuntimeSubtree(this.dom)
+    // 未进入 build 的 staged 页 this.dom 仍是视图宿主本身，不能 remove，
+    // 否则一次被作废的导航会把整个 vrouter 从文档里删掉。
+    if (this.dom && this.dom !== this.node) this.dom.remove()
     detachInstance(this.instance)
     this.layoutEntry = null
   }

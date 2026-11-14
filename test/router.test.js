@@ -86,9 +86,32 @@ test('basic mount and push: page content swaps, current updates', async () => {
   await view.push('/b')
   await flush()
   assert.ok(host.querySelector('.pg-b'), 'page b mounted')
-  assert.ok(!host.querySelector('.pg-a'), 'page a detached (cached)')
+  const aRoot = host.querySelector('.pg-a')?.closest('[vsrc]')
+  assert.ok(aRoot, 'page a kept in DOM (parked cache)')
+  assert.ok(aRoot.hasAttribute('inert'), 'page a parked: inert')
+  assert.ok(
+    aRoot.style.contentVisibility === 'hidden' || aRoot.style.display === 'none',
+    'page a parked: content-visibility:hidden (or display:none fallback)'
+  )
   assert.equal(view.current.fullPath, '/b')
   assert.equal(view.activePage.htmlPath, '/pg/b.html')
+  app.destroy()
+})
+
+test('uncached old page is destroyed deterministically (no parked leak)', async () => {
+  const routes = [
+    { path: '/a', component: '/pg/a' },
+    { path: '/b', component: '/pg/b' },
+    { path: '/once', component: '/pg/x', cacheKey: false },
+  ]
+  const { app, host, view } = await createRouter('/a', routes)
+  await view.push('/once')
+  await flush()
+  assert.ok(host.querySelector('.pg-x'), 'uncached page active')
+  await view.push('/b')
+  await flush()
+  assert.ok(host.querySelector('.pg-b'), 'next page active')
+  assert.ok(!host.querySelector('.pg-x'), 'uncached old page removed, not parked')
   app.destroy()
 })
 
@@ -117,8 +140,12 @@ test('shared layout: same-layout navigation keeps layout DOM identity', async ()
   assert.strictEqual(host.querySelector('.lay'), layoutDom, 'layout DOM identity preserved')
   assert.equal(window.__c.lay1, 1, 'layout not remounted')
   assert.ok(host.querySelector('.pg-y'), 'content y inside layout outlet')
-  assert.ok(!host.querySelector('.pg-x'), 'old content removed from outlet')
   const outlet = layoutDom.querySelector('[data-vrouter-outlet]')
+  assert.ok(!outlet.querySelector('.pg-x'), 'old content removed from outlet')
+  assert.ok(
+    host.querySelector('.pg-x')?.closest('[inert]'),
+    'old content parked outside outlet'
+  )
   assert.ok(outlet.contains(host.querySelector('.pg-y')), 'y lives in the outlet')
   app.destroy()
 })
@@ -132,7 +159,10 @@ test('layout switch and back: both layout and page identities preserved', async 
   await view.push('/z')
   await flush()
   assert.ok(host.querySelector('.lay-alt'), 'alt layout mounted')
-  assert.ok(!host.querySelector('.lay'), 'default layout detached but cached')
+  assert.ok(
+    layoutDom.closest('[inert]'),
+    'default layout parked in DOM (cached, hidden)'
+  )
 
   await view.push('/x')
   await flush()

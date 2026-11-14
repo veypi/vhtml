@@ -279,14 +279,17 @@ test('a real isolated router mounts, redirects through an async guard, and stays
   try {
     await flush(150)
     const view = instanceOf(f.host.querySelector('vrouter')).runtime.$sys.$router
-    assert.equal(f.host.querySelector('p')?.textContent, 'item')
+    // 缓存页停车场仍在 DOM（inert 隐藏），读在显页要跳过 parked 子树
+    const activeText = () =>
+      [...f.host.querySelectorAll('p')].find((p) => !p.closest('[inert]'))?.textContent
+    assert.equal(activeText(), 'item')
     await view.push('/item/2')
     await flush(150)
-    assert.equal(f.host.querySelector('p')?.textContent, 'login')
+    assert.equal(activeText(), 'login')
     assert.equal(view.current.path, '/review/login')
     await view.push('/item/3')
     await flush()
     assert.equal(view.current.params.id, '3')
-    assert.equal(f.host.querySelector('p')?.textContent, 'item')
+    assert.equal(activeText(), 'item')
   } finally { f.close() }
 })

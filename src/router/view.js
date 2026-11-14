@@ -705,6 +705,7 @@ export class RouterView {
     // 否则实例/watchers 随 Map 丢弃泄漏（reloadRoutes 每次热更新丢一份）
     for (const [, entry] of this.#layoutCache) {
       if (this.#isLayoutCacheAlive(entry)) disposeRuntimeSubtree(entry.dom)
+      entry.dom?.remove()
     }
     this.#stringRoutes = []
     this.#regexRoutes = []
@@ -897,6 +898,7 @@ export class RouterView {
       if (other !== page && other.layoutDom === entry.dom) return
     }
     disposeRuntimeSubtree(entry.dom)
+    entry.dom.remove()
     for (const [url, cached] of this.#layoutCache) {
       if (cached.dom === entry.dom) this.#layoutCache.delete(url)
     }
@@ -1255,6 +1257,12 @@ export class RouterView {
     this.#setRouteTitle(matchedRoute) // 路由注册名优先于页面 <title>（page.activate 已回写页面源）
     this.#trimPageCache()
     this.activePage = page
+    // 非缓存旧页：原来靠下一次 attach 的 innerHTML 清空 + 观察器兜底销毁；
+    // 停车场模式下旧页 DOM 留在宿主里，必须确定性销毁，否则隐藏页泄漏。
+    if (oldPage && oldPage !== page && !oldPage.cacheKey) {
+      this.#releaseLayoutIfUnreferenced(oldPage)
+      oldPage.destroy()
+    }
     if (typeof this.#afterEnter === 'function')
       this.#afterEnter(to, this.current)
   }

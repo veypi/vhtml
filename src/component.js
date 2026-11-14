@@ -22,6 +22,7 @@ import {
 } from './component-instance.js'
 import { createSlotContents } from './slots.js'
 import { watch, publicWatch } from './runtime-watch.js'
+import { yieldIfNeeded } from './scheduling.js'
 
 export { ComponentScope } from './component-scope.js'
 export {
@@ -150,6 +151,12 @@ export async function parseRef(
       ctx,
       ticket
     )
+    if (!token.alive(ticket)) {
+      return
+    }
+    // 长任务分片：连续编译超过 50ms 时让出主线程（INP），
+    // 竞态契约不变——await 后重新校验代际票据。
+    await yieldIfNeeded()
     if (!token.alive(ticket)) {
       return
     }

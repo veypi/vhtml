@@ -217,6 +217,7 @@ Do not expect native document, storage, Worker, iframe, SVG foreignObject/SMIL, 
 <button @click.stop.prevent="remove(id)">Delete</button>
 <input v:value="value" />                            <!-- two-way binding -->
 <div v-show="loading">Loading...</div>
+<div v-defer="180px">Offscreen heavy block (content-visibility:auto)</div>
 <div v-if="a">A</div>
 <div v-else-if="b">B</div>
 <div v-else>C</div>
@@ -301,7 +302,8 @@ Only tasks registered through `$scope` are owned automatically; bare/native time
 | --- | --- | --- |
 | `v-if="open"` | when false, the branch DOM, component instances and owned resources are disposed | use for an expensive view that can be recreated; its local state resets on the next mount |
 | `v-show="open"` / CSS hiding | DOM, component state, watchers and tasks remain | use when retaining the mounted view is intentional; hiding alone does not save this work |
-| cached route becomes inactive | component state and subscriptions remain; `deactive` runs | stop visible-only animation/polling in `deactive`, restart in `active`; dispose is the final release |
+| `v-defer` / `v-defer="180px"` | DOM and state remain; offscreen layout/paint is skipped by the browser (`content-visibility:auto` + `contain-intrinsic-size`, default estimate 150px) | use on large self-contained blocks below the initial fold, especially long-list rows. Do not apply above the fold; always keep the size estimate realistic to avoid scrollbar jumps. Offscreen rows may leave the accessibility tree until scrolled near; verify keyboard navigation |
+| cached route becomes inactive | page DOM stays connected but parked (`content-visibility:hidden` + `inert`, `display:none` fallback); component state and subscriptions remain; `deactive` runs | stop visible-only animation/polling in `deactive`, restart in `active`; dispose is the final release. Parking preserves the browser rendering cache, so re-entry avoids a full layout/paint |
 
 For a disposable child, a parent condition such as `<heavy-panel v-if="panelOpen"></heavy-panel>` is enough; the child does not need its own visibility observer. Framework activation covers route state and document visibility, not arbitrary CSS hiding or a custom host's minimized state. A host that preserves hidden views should pass visibility explicitly and let those views stop their display work. Neither deactivation nor CSS hiding automatically freezes reactive subscriptions or cancels all `$scope` tasks.
 
@@ -309,7 +311,7 @@ For a disposable child, a parent condition such as `<heavy-panel v-if="panelOpen
 
 - **Who removes DOM owns the dispose**: before externally removing an element that hosts vhtml content (instances / bindings), call `disposeNode(el)` (exported from `vhtml/component-instance.js`). It cleans the whole subtree and is idempotent (returns `false` when there was nothing to clean).
 - The framework handles disposal at all its own removal points (`v-for` / `v-if` / `:vsrc` / `v-html` / page destroy). An external `el.remove()` without `disposeNode` is still cleaned up automatically, but logs a dev warning (`disposed via observer fallback`) — treat that warning as a bug in the removing code and switch to `disposeNode`. The warning only fires for DOM created from vhtml templates; foreign DOM (e.g. elements owned by third-party libraries) is cleaned up silently.
-- Route-cached pages survive DOM removal via the instance field `keepOnDetach` (managed by the router).
+- Route-cached pages survive in the DOM as parked subtrees (`content-visibility:hidden` + `inert`, or `display:none` on unsupported browsers); the instance field `keepOnDetach` still guards staged/legacy detach paths.
 
 ## Refs and Parent-to-Child Calls
 
@@ -556,7 +558,7 @@ vhtml check --json               # findings as a JSON array (agent consumption)
 
 ## Reactivity Contract & Pitfalls
 
-Nested plain objects and arrays are reactive — no manual wrapping is needed in component data. Updates are batched: multiple writes within the same task collapse into one refresh. Keep watch getters and binding expressions free of writes: mutations made during dependency collection do not notify subscribers.
+Nested plain objects and arrays are reactive — no manual wrapping is needed in component data. Updates are batched: multiple writes within the same task collapse into one refresh. Component mounting additionally cooperates with the browser's input scheduling: after 50ms of continuous compilation the loader yields once (`scheduler.yield()`, `setTimeout(0)` fallback) before compiling the next component, so large page mounts do not become one long task. Single-component compilation and `flushSync()` stay synchronous. Keep watch getters and binding expressions free of writes: mutations made during dependency collection do not notify subscribers.
 
 **Change gate**: a watcher callback fires only when the value actually changed (`Object.is` comparison). Pass `{ equality: null }` to `$watch` for an always-run subscription. A getter returning a fresh array/object on every evaluation passes this gate each time; return a scalar or stable reference when that expresses the dependency you need. `v-for` additionally compares the collected keys, order and values before updating rows.
 
@@ -579,7 +581,7 @@ v-for tracks items automatically; there is no `:key` attribute (it compiles as a
 | primitive items (string/number) | array position | value changes patch in place, DOM kept |
 | the same object twice in one list | separate occurrences sharing one record | both rows render and receive shared field updates; repeated occurrences can reuse by position, so do not use them to represent independent editable records |
 
-Structural edits (insert / remove / reorder): either in-place mutators (`splice` / `unshift` / `sort`) or copy-then-assign (`slice()` / spread + assign back) — both are safe; kept items retain identity, so their DOM is preserved and physically re-ordered.
+Structural edits (insert / remove / reorder): either in-place mutators (`splice` / `unshift` / `sort`) or copy-then-assign (`slice()` / spread + assign back) — both are safe; kept items retain identity, so their DOM is preserved and physically re-ordered. Where `Node.moveBefore()` is available, row reordering uses it instead of disconnect/reinsert, preserving focus, iframe/media playback and custom-element internal state (`connectedMoveCallback`); other browsers keep the previous fragment-reinsert behavior.
 
 For example, inside a component:
 

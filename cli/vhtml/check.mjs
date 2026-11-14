@@ -49,7 +49,7 @@ const add = (file, line, col, severity, kind, message) =>
 
 const vforRegex = /^\s*(?:\((\w+)\s*,\s*(\w+)\)|(\w+))\s+in\s+(.+?)\s*$/
 const KNOWN_V = new Set([
-  'v-if', 'v-else-if', 'v-else', 'v-for', 'v-show', 'v-html',
+  'v-if', 'v-else-if', 'v-else', 'v-for', 'v-show', 'v-html', 'v-defer',
   'vslot', 'vslot-inherit', 'vref', 'vrefof', 'vsrc', 'no-vhtml',
   'single',
 ])
