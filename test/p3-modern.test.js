@@ -1,9 +1,8 @@
 /*
  * p3-modern.test.js — P3 现代化改造回归
  *
- * 1. v-defer：屏外重内容 content-visibility:auto + 占位尺寸
- * 2. v-for 重排：支持 moveBefore 时走原生移动（保状态），不拆解范围
- * 3. scheduling：连续编译超过 50ms 才让出主线程，不让每次挂载都多一跳
+ * 1. v-for 重排：支持 moveBefore 时走原生移动（保状态），不拆解范围
+ * 2. scheduling：连续编译超过 50ms 才让出主线程，不让每次挂载都多一跳
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -27,29 +26,6 @@ async function mount(template, data) {
   await flush()
   return { app, host }
 }
-
-test('v-defer: default estimated size + attribute removed', async () => {
-  const { app, host } = await mount(
-    `<div><div class="row" v-defer>heavy row</div></div>`,
-    {},
-  )
-  const row = host.querySelector('.row')
-  assert.equal(row.style.contentVisibility, 'auto')
-  assert.equal(row.style.containIntrinsicSize, 'auto none auto 150px')
-  assert.equal(row.hasAttribute('v-defer'), false)
-  assert.equal(row.textContent, 'heavy row')
-  app.destroy()
-})
-
-test('v-defer: custom size and full contain-intrinsic-size form', async () => {
-  const { app, host } = await mount(
-    `<div><div class="a" v-defer="240px"></div><div class="b" v-defer="auto none auto 300px"></div></div>`,
-    {},
-  )
-  assert.equal(host.querySelector('.a').style.containIntrinsicSize, 'auto none auto 240px')
-  assert.equal(host.querySelector('.b').style.containIntrinsicSize, 'auto none auto 300px')
-  app.destroy()
-})
 
 test('v-for reorder uses moveBefore when available and keeps row identity', async () => {
   const { app, host } = await mount(

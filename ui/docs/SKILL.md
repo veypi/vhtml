@@ -217,7 +217,6 @@ Do not expect native document, storage, Worker, iframe, SVG foreignObject/SMIL, 
 <button @click.stop.prevent="remove(id)">Delete</button>
 <input v:value="value" />                            <!-- two-way binding -->
 <div v-show="loading">Loading...</div>
-<div v-defer="180px">Offscreen heavy block (content-visibility:auto)</div>
 <div v-if="a">A</div>
 <div v-else-if="b">B</div>
 <div v-else>C</div>
@@ -302,7 +301,6 @@ Only tasks registered through `$scope` are owned automatically; bare/native time
 | --- | --- | --- |
 | `v-if="open"` | when false, the branch DOM, component instances and owned resources are disposed | use for an expensive view that can be recreated; its local state resets on the next mount |
 | `v-show="open"` / CSS hiding | DOM, component state, watchers and tasks remain | use when retaining the mounted view is intentional; hiding alone does not save this work |
-| `v-defer` / `v-defer="180px"` | DOM and state remain; offscreen layout/paint is skipped by the browser (`content-visibility:auto` + `contain-intrinsic-size`, default estimate 150px) | use on large self-contained blocks below the initial fold, especially long-list rows. Do not apply above the fold; always keep the size estimate realistic to avoid scrollbar jumps. Offscreen rows may leave the accessibility tree until scrolled near; verify keyboard navigation |
 | cached route becomes inactive | page DOM stays connected but parked (`content-visibility:hidden` + `inert`, `display:none` fallback); component state and subscriptions remain; `deactive` runs | stop visible-only animation/polling in `deactive`, restart in `active`; dispose is the final release. Parking preserves the browser rendering cache, so re-entry avoids a full layout/paint |
 
 For a disposable child, a parent condition such as `<heavy-panel v-if="panelOpen"></heavy-panel>` is enough; the child does not need its own visibility observer. Framework activation covers route state and document visibility, not arbitrary CSS hiding or a custom host's minimized state. A host that preserves hidden views should pass visibility explicitly and let those views stop their display work. Neither deactivation nor CSS hiding automatically freezes reactive subscriptions or cancels all `$scope` tasks.
