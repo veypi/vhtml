@@ -208,8 +208,14 @@ class TemplateParser {
     }
     descriptor.body.setAttribute('vref', ref)
     normalizeTemplate(descriptor.body)
+    // <template> 的子树在 content（DocumentFragment）里，其它元素用自己的 childNodes。
+    // 不能按真值判断 .content：Chromium 157 给 <canvas> 加了 content getter（返回字符串
+    // "fallback"），<meta> 的 content 是属性字符串，<iframe> 的 content 是 Document ——
+    // 真值判断会让这些元素走错分支，childNodes 变成 undefined，模板标记直接抛错。
     const mark = (node) => {
-      for (const child of (node.content || node).childNodes) {
+      const content = node.content
+      const target = content && content.nodeType === 11 ? content : node
+      for (const child of target.childNodes) {
         if (child.nodeType !== 1) continue
         child.setAttribute('vrefof', ref)
         mark(child)
