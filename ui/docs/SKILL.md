@@ -296,6 +296,15 @@ Only tasks registered through `$scope` are owned automatically; bare/native time
 
 **Scope isolation:** each script block is its own scope — `const` / `let` / `function` declared in one block are **not** visible in any other block of the same file. Cross-block state must go through `$data` (bare assignment in setup) or a module singleton (`$mod.define` or an imported JS module).
 
+### Recommended usage in application pages
+
+- `<script setup>`: state/function initialization only (defaults, helpers). It runs once per instance — a `$router.query` read here is only a snapshot, never the mechanism for route-dependent loading.
+- `<script>` (mounted): one-time logic that needs the mounted DOM — observers, third-party widget setup, external subscriptions. Register release through `$scope`.
+- `<script active>`: idempotent page initialization. Read `$router.params` / `$router.query` fresh on every activation, reconcile page state and (re)load data. It must be safe to run repeatedly: first mount, cached route re-entry (including re-entry with different path/query), and visibility return all land here. Use a route key to dedupe duplicate loads and reset it on failure so re-activation retries.
+- `<script deactive>` / `<script dispose>`: stop visible-only work / final release.
+
+Pages normally do NOT need `$router.onChange`: entering a page always fires `active`, so reading params there covers path/query changes. Drive in-page parameter switches through component state plus `setQuery`/`setParams`, not route listeners. `onChange` remains for router-level infrastructure (e.g. a host writing back a window URL), not page data loading.
+
 ### Choosing visibility and lifetime
 
 | mechanism | what stays alive | application guidance |

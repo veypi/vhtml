@@ -249,7 +249,8 @@ func printStatsTable(totalKeys map[string]bool, translations map[string]map[stri
 		if ok && total > 0 {
 			for key := range totalKeys {
 				if value, exists := items[key]; exists {
-					if v, ok := value.(string); ok && v != "" {
+					// 复数形式（{one, other}）也算已翻译——与 isEmptyValue 同一口径
+					if !isEmptyValue(value) {
 						done++
 					}
 				}

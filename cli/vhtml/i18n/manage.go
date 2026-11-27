@@ -9,12 +9,17 @@ package i18n
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/veypi/vigo/flags"
 )
+
+// errNoAddInput 表示未提供任何翻译数据。
+var errNoAddInput = errors.New("请提供 JSON 数据，可通过管道、-json 参数或位置参数传入，格式: {\"zh-CN\":{\"key\":\"value\"},\"en-US\":{\"key\":\"value\"}}")
 
 // ========== add 命令 ==========
 var addOpts = struct {
@@ -23,35 +28,61 @@ var addOpts = struct {
 	JSON: "",
 }
 
-func runAdd(cmd *flags.Flags) error {
-	config := GetConfig()
-
-	// 读取 JSON 输入
+// readAddInput 按优先级读取 i18n add 的 JSON 输入：
+// 1. -json 参数；2. 位置参数；3. stdin 管道。
+// 显式参数优先于 stdin——否则在 CI / 重定向 / 非 TTY 环境下，
+// stdin 的 EOF 会直接让 -json 与位置参数形式失效。
+func readAddInput(cmd *flags.Flags, stdin *os.File) (map[string]map[string]interface{}, error) {
 	var input map[string]map[string]interface{}
-	var raw string
 
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		// 有管道输入
-		decoder := json.NewDecoder(os.Stdin)
-		if err := decoder.Decode(&input); err != nil {
-			return fmt.Errorf("解析 stdin JSON 失败: %w", err)
-		}
-	} else if addOpts.JSON != "" {
-		raw = addOpts.JSON
-	} else if cmd.NArg() > 0 {
-		// 位置参数形式：vhtml i18n add '{"zh-CN":{...}}'
-		raw = strings.Join(cmd.Args(), " ")
-	}
-
-	if raw != "" {
+	parse := func(raw string) error {
 		if err := json.Unmarshal([]byte(raw), &input); err != nil {
 			return fmt.Errorf("解析 JSON 失败: %w", err)
 		}
+		return nil
+	}
+
+	if addOpts.JSON != "" {
+		if err := parse(addOpts.JSON); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	if cmd.NArg() > 0 {
+		// 位置参数形式：vhtml i18n add '{"zh-CN":{...}}'
+		if err := parse(strings.Join(cmd.Args(), " ")); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	stat, err := stdin.Stat()
+	if err == nil && (stat.Mode()&os.ModeCharDevice) == 0 {
+		// stdin 是管道：空管道按“未提供数据”处理，不报 EOF。
+		decoder := json.NewDecoder(stdin)
+		if err := decoder.Decode(&input); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil, errNoAddInput
+			}
+			return nil, fmt.Errorf("解析 stdin JSON 失败: %w", err)
+		}
+		return input, nil
+	}
+
+	return nil, errNoAddInput
+}
+
+func runAdd(cmd *flags.Flags) error {
+	config := GetConfig()
+
+	input, err := readAddInput(cmd, os.Stdin)
+	if err != nil {
+		return err
 	}
 
 	if len(input) == 0 {
-		return fmt.Errorf("请提供 JSON 数据，可通过管道、-json 参数或位置参数传入，格式: {\"zh-CN\":{\"key\":\"value\"},\"en-US\":{\"key\":\"value\"}}")
+		return errNoAddInput
 	}
 
 	translations, err := LoadTranslations(config.Output)

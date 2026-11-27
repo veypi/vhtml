@@ -30,6 +30,11 @@ function parkStyle(el) {
     el.style.contentVisibility = 'hidden'
     el.style.position = 'absolute'
     el.style.pointerEvents = 'none'
+    // content-visibility:hidden 只跳过子树内容，元素自身的背景/边框仍绘制；
+    // 停放页又是 absolute，绘制顺序压过 static 的活动页 → 不透明背景直接盖住
+    // 活动页（整窗白屏，仅活动页里自身定位的元素漏出）。visibility:hidden 把
+    // 元素自身也一并隐藏，同时保留布局与渲染缓存。
+    el.style.visibility = 'hidden'
   } else {
     el.style.display = 'none'
   }
@@ -42,6 +47,7 @@ function unparkStyle(el) {
   el.style.contentVisibility = ''
   el.style.position = ''
   el.style.pointerEvents = ''
+  el.style.visibility = ''
   el.style.display = ''
 }
 
@@ -301,21 +307,91 @@ export class Page {
   }
 
   /**
-   * 首 mount 失败的降级页（view 侧仅在无在显页面时调用）：不抛穿——错误盒
-   * 页面照常 commit，布局外壳照常挂载。初始 deep link 组件 404 若抛穿杀整个
-   * 应用 = 白屏，即视觉静默空白，违反错误暴露契约；错误仍三处可见：红盒、
-   * console warn、errors 登记表。
+   * 首 mount 失败的降级页（view 侧仅在无在显页面时调用）：不抛穿——错误页
+   * 照常 commit，布局外壳照常挂载。初始 deep link 组件 404 若抛穿杀整个
+   * 应用 = 白屏，即视觉静默空白，违反错误暴露契约；错误仍三处可见：可见
+   * 错误页、console warn、errors 登记表。
+   *
+   * 错误页是整屏浮层（不依赖布局外壳的样式——外壳挂载失败时它就是唯一
+   * 可见物），并给出两个出口：「重试」（原地重挂当前路由）与「重新加载
+   * 页面」（整页刷新）。
+   * options: { stage: 'page' | 'layout', layout: 布局名 }
    */
-  buildError(layoutEntry = null) {
+  buildError(layoutEntry = null, error = null, options = {}) {
     this.dom = document.createElement('div')
     this.dom.setAttribute('vsrc', this.htmlPath)
-    const box = document.createElement('div')
-    box.style.cssText =
-      'display:block;padding:8px 12px;margin:4px 0;' +
-      'background:#fef2f2;border:1px solid #f87171;border-radius:4px;' +
-      'color:#991b1b;font-size:13px;line-height:1.4;'
-    box.textContent = `[Load Error] ${this.htmlPath}`
-    this.dom.appendChild(box)
+    const stage = options.stage === 'layout' ? 'layout' : 'page'
+    const message = error?.message || String(error || '')
+    const overlay = document.createElement('div')
+    overlay.setAttribute('role', 'alert')
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:2147483647;display:flex;' +
+      'align-items:center;justify-content:center;padding:24px;' +
+      'background:rgba(15,23,42,0.97);overflow:auto;'
+    const panel = document.createElement('div')
+    panel.style.cssText =
+      'box-sizing:border-box;max-width:680px;width:100%;padding:24px;' +
+      'border-radius:12px;background:#fff;color:#0f172a;'
+    const title = document.createElement('div')
+    title.style.cssText = 'font-size:16px;font-weight:600;color:#b91c1c;'
+    title.textContent = stage === 'layout' ? '布局加载失败' : '页面加载失败'
+    const path = document.createElement('div')
+    path.style.cssText =
+      'margin-top:6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;' +
+      'color:#64748b;word-break:break-all;'
+    path.textContent =
+      stage === 'layout' && options.layout
+        ? `${options.layout} ← ${this.htmlPath}`
+        : this.htmlPath
+    const detail = document.createElement('pre')
+    detail.style.cssText =
+      'margin:16px 0 0;padding:12px;border-radius:8px;background:#fef2f2;' +
+      'border:1px solid #fecaca;color:#991b1b;white-space:pre-wrap;' +
+      'word-break:break-word;max-height:40vh;overflow:auto;' +
+      'font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;'
+    detail.textContent = message || 'unknown error'
+    const actions = document.createElement('div')
+    actions.style.cssText =
+      'display:flex;gap:10px;align-items:center;margin-top:20px;'
+    const buttonStyle =
+      'font:13px/1 inherit;padding:9px 16px;border-radius:8px;' +
+      'border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;cursor:pointer;'
+    const reloadPage = () => {
+      const loc = globalThis.location
+      if (loc && typeof loc.reload === 'function') loc.reload()
+    }
+    const retry = document.createElement('button')
+    retry.type = 'button'
+    retry.textContent = '重试'
+    retry.style.cssText =
+      buttonStyle + 'background:#0f172a;color:#fff;border-color:#0f172a;'
+    const reload = document.createElement('button')
+    reload.type = 'button'
+    reload.textContent = '重新加载页面'
+    reload.style.cssText = buttonStyle
+    const restore = () => {
+      retry.disabled = false
+      reload.disabled = false
+    }
+    retry.addEventListener('click', () => {
+      retry.disabled = true
+      reload.disabled = true
+      Promise.resolve(this.ownerView?.retryMount?.())
+        .then((ok) => {
+          if (!ok) {
+            reloadPage()
+            return
+          }
+          // 重挂成功则错误页已被销毁；仍挂在树上说明没重挂成，恢复按钮。
+          if (this.dom?.isConnected) restore()
+        })
+        .catch(() => reloadPage())
+    })
+    reload.addEventListener('click', () => reloadPage())
+    actions.append(retry, reload)
+    panel.append(title, path, detail, actions)
+    overlay.appendChild(panel)
+    this.dom.appendChild(overlay)
     this._meta.title = 'Load Error'
     this.layoutEntry = layoutEntry
     return { built: true }
@@ -464,16 +540,11 @@ export class Page {
   }
 
   /**
-   * 缓存页停车：内容移回视图宿主并隐藏（layout 按引用情况一并隐藏）。
-   * 不再从 DOM 拆下——保留渲染缓存，重入 = 两次移动 + 样式翻转。
+   * 缓存页就地停车：内容留在原父节点（同 layout 时仍在 outlet），仅翻转样式。
+   * 不做 connected move：既保留渲染缓存，也避免搬运 content-visibility:hidden 子树。
    */
   parkDom(includeLayout) {
-    if (this.dom) {
-      if (this.dom.parentNode && this.dom.parentNode !== this.node) {
-        moveAppend(this.node, this.dom)
-      }
-      parkStyle(this.dom)
-    }
+    if (this.dom) parkStyle(this.dom)
     if (includeLayout && this.layoutDom) parkStyle(this.layoutDom)
   }
 

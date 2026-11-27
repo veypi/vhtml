@@ -995,6 +995,25 @@ export class RouterView {
     return true
   }
 
+  /**
+   * 重挂当前路由（错误页「重试」用）：销毁在显页后以 replace 重挂，
+   * 与 dropPage(活动页) 同语义（错误页无 cacheKey，不在缓存表里）。
+   * 先置空 activePage：绕过 #navigateTo 的 already-active 短路，
+   * 否则「同目标已在显」会让重挂变成空操作。
+   */
+  async retryMount() {
+    const page = this.#currentPage
+    if (!page) return false
+    const matchedRoute = page.matchedRoute
+    page.deactive()
+    this.activePage = null
+    this.#releaseLayoutIfUnreferenced(page)
+    page.destroy()
+    if (!matchedRoute) return false
+    await this.#navigateTo(matchedRoute, 'replace')
+    return true
+  }
+
   /** LRU 命中提升：Map 插入序即最近使用序 */
   #touchCache(key) {
     const page = this.#pageCache.get(key)
@@ -1207,12 +1226,14 @@ export class RouterView {
     })
     let buildResult
     let layoutEntry = null
+    let layoutReady = false
     try {
       layoutEntry = await this.#ensureLayoutEntry(
         to.layout,
         this.runtime,
         matchedRoute
       )
+      layoutReady = true
       if (!isCurrent()) {
         page.destroy()
         return null
@@ -1239,7 +1260,10 @@ export class RouterView {
           ...this.#logContext(),
           stack: error?.stack || '',
         })
-        page.buildError(layoutEntry)
+        page.buildError(layoutEntry, error, {
+          stage: layoutReady ? 'page' : 'layout',
+          layout: to.layout ? normalizeLayoutUrl(to.layout) : '',
+        })
         return { page, fromCache: false, to, cacheKey: null }
       }
       page.destroy()

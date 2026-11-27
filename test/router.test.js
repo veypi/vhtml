@@ -190,12 +190,83 @@ test('shared layout: same-layout navigation keeps layout DOM identity', async ()
   assert.equal(window.__c.lay1, 1, 'layout not remounted')
   assert.ok(host.querySelector('.pg-y'), 'content y inside layout outlet')
   const outlet = layoutDom.querySelector('[data-vrouter-outlet]')
-  assert.ok(!outlet.querySelector('.pg-x'), 'old content removed from outlet')
-  assert.ok(
-    host.querySelector('.pg-x')?.closest('[inert]'),
-    'old content parked outside outlet'
-  )
+  const xRoot = host.querySelector('.pg-x')?.closest('[vsrc]')
+  assert.ok(xRoot, 'old content kept in DOM')
+  assert.ok(outlet.contains(xRoot), 'old content parked in place inside outlet')
+  assert.equal(xRoot.hasAttribute('inert'), true, 'old content is parked')
   assert.ok(outlet.contains(host.querySelector('.pg-y')), 'y lives in the outlet')
+  app.destroy()
+})
+
+test('cached route parking stays in place without connected moveBefore', async () => {
+  const { app, host, vr, view } = await createRouter('/x')
+  const xRoot = host.querySelector('.pg-x')?.closest('[vsrc]')
+  const outlet = host.querySelector('[data-vrouter-outlet]')
+  assert.ok(xRoot && outlet)
+
+  let moves = 0
+  const trackMoves = (parent) => {
+    parent.moveBefore = function (node, ref) {
+      moves++
+      this.insertBefore(node, ref)
+    }
+  }
+  trackMoves(vr)
+  trackMoves(outlet)
+
+  await view.push('/y')
+  await flush()
+  assert.strictEqual(xRoot.parentNode, outlet, 'x parked in its original outlet')
+  await view.push('/x')
+  await flush()
+  assert.strictEqual(
+    host.querySelector('.pg-x')?.closest('[vsrc]'),
+    xRoot,
+    'cached x restored with the same DOM'
+  )
+  assert.equal(moves, 0, 'route parking and restoration never move a connected page')
+  app.destroy()
+})
+
+test('parked page hides its own box so it cannot cover the active page', async () => {
+  const { app, host, view } = await createRouter('/x')
+  const xRoot = host.querySelector('.pg-x')?.closest('[vsrc]')
+  assert.ok(xRoot)
+  await view.push('/y')
+  await flush()
+  // content-visibility:hidden 只隐藏子树内容，元素自身背景/边框仍绘制；
+  // 停放页 absolute 压过 static 活动页 → 必须连自身盒子也隐藏（白屏回归）。
+  const cvSupported =
+    typeof CSS !== 'undefined' && typeof CSS.supports === 'function' && CSS.supports('content-visibility', 'hidden')
+  if (cvSupported) {
+    assert.equal(xRoot.style.contentVisibility, 'hidden', 'subtree parked')
+    assert.equal(xRoot.style.position, 'absolute', 'parked out of flow')
+    assert.equal(xRoot.style.visibility, 'hidden', 'own background must not paint over the active page')
+  } else {
+    // happy-dom 不支持 content-visibility → 回退 display:none，整盒不绘制，天然安全
+    assert.equal(xRoot.style.display, 'none', 'fallback hides the whole box')
+  }
+  await view.push('/x')
+  await flush()
+  assert.equal(xRoot.style.visibility, '', 'visibility restored on reactivation')
+  assert.equal(xRoot.style.contentVisibility, '', 'content-visibility restored')
+  assert.equal(xRoot.style.position, '', 'position restored')
+  assert.equal(xRoot.hasAttribute('inert'), false, 'inert cleared')
+  app.destroy()
+})
+
+test('cached page round-trip keeps exactly one active page', async () => {
+  const { app, host, view } = await createRouter('/x')
+  const activeCount = () =>
+    [...host.querySelectorAll('[vsrc]')].filter((el) => el.closest('vrouter') && !el.hasAttribute('inert')).length
+  for (let i = 0; i < 3; i++) {
+    await view.push('/y')
+    await flush()
+    assert.equal(activeCount(), 1, `exactly one active page after entering y (round ${i})`)
+    await view.push('/x')
+    await flush()
+    assert.equal(activeCount(), 1, `exactly one active page after returning x (round ${i})`)
+  }
   app.destroy()
 })
 
@@ -557,7 +628,9 @@ test('initial mount to missing page: error-box page committed, no white screen',
   assert.ok(host.querySelector('.lay'), 'layout shell mounted around error box')
   const box = host.querySelector('[vsrc="/pg/missing.html"]')
   assert.ok(box, 'error page committed with vsrc marker')
-  assert.match(box.textContent, /\[Load Error\] \/pg\/missing\.html/, 'error box visible')
+  assert.match(box.textContent, /页面加载失败/, 'error page visible')
+  assert.match(box.textContent, /\/pg\/missing\.html/, 'error page names the failed page')
+  assert.ok(box.querySelector('button'), 'error page offers a retry button')
   assert.equal(view.current.fullPath, '/boot-missing', 'bad deep link URL committed (visible + copyable)')
   const navErr = errorLog.find((e) => e.kind === 'navigation')
   assert.ok(navErr, 'mount failure recorded in registry')

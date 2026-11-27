@@ -1,5 +1,13 @@
 # 更新日志
 
+## [0.13.6] - 2026-11-27
+
+- **setup 静态 import 改并发加载**：`<script setup>` 的静态 import 此前在 `imports.js` 的 `parseImports` 里逐条串行 `await`——N 个 import = N 次串行往返（平台布局 `layout/os.html` 的 setup 有 17 个 import，首屏要串 17 个来回），且任何一次卡顿都会把整页拖住。现在改为并发加载（`Promise.allSettled`），绑定装配仍按语句顺序、报错仍取第一条失败语句（与串行语义一致；`allSettled` 避免其余请求的 rejection 变成未处理拒绝）。首屏少 16 个往返，暴露在网络抖动里的时间窗大幅缩短。新增 `test/import_parallel_retry.test.js` 1 例（并发耗时断言 + 三个绑定都正确）。
+
+- **原生 import 失败重试一次（重试换 URL）**：`importNative` 原先只有 10s 硬超时且不重试——一次丢包 / TCP 重传（1+2+4+8s）就判死刑，整个布局挂载失败、页面停在白屏。现在单次预算 8s，失败后等 300ms 重试一次；重试**换一个 URL**（追加 `__vr=2`）——浏览器模块表按完整 URL 缓存，同一 URL 的 `import()` 会复用同一个在途请求，不换 URL 的重试等于继续等那个卡死的请求。只重试网络类失败（超时 / Failed to fetch 等），模块求值错误与 4xx 不重试；跨源 http(s)（CDN 三方库）不加参数。测试 3 例（超时后重试成功、两次都超时仍报 timeout、缺文件快速失败不重试）。
+
+- **首 mount 失败降级为整屏可见错误页 + 「重试」按钮**：初始 deep link 组件 404 / **布局（layout）挂载失败**此前抛穿成 `navigation error`，整个应用停摆——屏幕上只剩一片空白（视觉静默空白，违反错误暴露契约）；降级页此前只是角落里的 `[Load Error] <path>` 小红盒，用户基本看不见。现在降级页是整屏浮层（深色底 + 白卡），写明失败环节（页面加载失败 / 布局加载失败）、失败路径与原始错误信息，并给两个出口：**「重试」**（新增 `RouterView.retryMount()`——销毁在显页后以 replace 重挂当前路由，与 `dropPage(活动页)` 同语义；先置空 `activePage` 以绕过 `#navigateTo` 的 already-active 短路）与「重新加载页面」。新增 `test/router_error_page.test.js` 2 例（页面失败 → 可见错误页 + 点重试恢复；布局失败 → 错误页指明布局与错误信息），`test/router.test.js` 的错误盒断言同步到新文案。**生效需重新构建 `dist/`（已重建）。**
+
 ## [0.13.5] - 2026-11-12
 
 - **`v-html` 只在 `<div>` 上生效，误用直接报错**：`v-html` 写在 `<span>`/`<li>` 等元素上时指令不会被编译——属性原样留在 DOM 上，内容永远不渲染，且没有任何提示（表现为提示条只剩文字、图标消失、列表项空着）。现在编译期直接抛错并指明改用 `<div v-html>`；`vhtml check` 同步新增静态规则（非 div 上的 `v-html` 报 E 级 directive）。新增 `test/vhtml-directive.test.js` 3 例（普通元素报错、v-for 克隆元素报错、div 正常渲染）。**生效需重新构建 `dist/`。**

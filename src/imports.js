@@ -28,8 +28,52 @@ export function withImportBust(url) {
 }
 
 // All native import sites share transport, cache busting and error propagation.
-export function importNative(url) {
-  return withTimeout(import(withImportBust(url)), 10000, `import ${url}`)
+
+// 单次 import 的超时预算（毫秒）。失败后允许再试一次（仅网络类失败），
+// 总代价 = 2×预算 + 退避，远小于「一次卡顿整页白屏」的代价。
+const IMPORT_TIMEOUT = 8000
+const IMPORT_RETRY_DELAY = 300
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// 只重试网络类失败：模块求值错误（语法错、模块内抛错）重试仍是同样结果；
+// 4xx（404 之类）也是永久失败，不重试。
+function isRetryableImportError(error) {
+  const message = error?.message || ''
+  if (/timeout after/i.test(message)) return true
+  if (/\b4\d\d\b/.test(message)) return false
+  return /Failed to fetch|NetworkError|load failed|fetch failed/i.test(message)
+}
+
+// 重试必须换一个 URL：浏览器模块表按完整 URL 缓存，同一 URL 的 import()
+// 复用同一个在途请求——重试等于继续等那个卡死的请求，等于没重试。
+// __vr 是重试序号（服务端对 query 无感，etag 协商照旧）。跨源 http(s)
+// （CDN 三方库）不加参数：外部资源的失败多半不是网络卡顿，改 URL 还可能
+// 打穿对方的缓存策略。
+function withRetryParam(url, attempt) {
+  if (attempt <= 1) return url
+  if (
+    /^https?:\/\//.test(url) &&
+    typeof window !== 'undefined' &&
+    window.location &&
+    !url.startsWith(window.location.origin)
+  ) {
+    return url
+  }
+  return `${url}${url.includes('?') ? '&' : '?'}__vr=${attempt}`
+}
+
+export function importNative(url, timeout = IMPORT_TIMEOUT) {
+  const attempt = (index) => {
+    const target = withImportBust(withRetryParam(url, index))
+    return withTimeout(import(target), timeout, `import ${url}`).catch((error) => {
+      if (index > 1 || !isRetryableImportError(error)) throw error
+      return delay(IMPORT_RETRY_DELAY).then(() => attempt(index + 1))
+    })
+  }
+  return attempt(1)
 }
 
 export function importModule(specifier, runtime = {}, source = '') {
@@ -47,12 +91,23 @@ export async function parseImports(code, data = {}, runtime = {}, source = '') {
     source || moduleRecord(runtime)?.meta.root || window.location.href,
     { setup: true }
   )
-  for (const statement of compiled.imports) {
-    const namespace = await importModule(statement.source, runtime, source)
+  // 并发加载：串行 import 把 N 个往返拉成 N×RTT，任何一次卡顿都会拖垮整页
+  // （os.html 的 setup 有 17 个 import）。装配仍按语句顺序，报错也取第一条
+  // 失败语句（与串行语义一致）；allSettled 避免其余请求的 rejection 变成
+  // 未处理拒绝。
+  const results = await Promise.allSettled(
+    compiled.imports.map((statement) =>
+      importModule(statement.source, runtime, source)
+    )
+  )
+  const failed = results.findIndex((result) => result.status === 'rejected')
+  if (failed >= 0) throw results[failed].reason
+  compiled.imports.forEach((statement, index) => {
+    const namespace = results[index].value
     for (const binding of statement.bindings) {
       data[binding.local] =
         binding.imported === '*' ? namespace : namespace[binding.imported]
     }
-  }
+  })
   return compiled.source
 }
